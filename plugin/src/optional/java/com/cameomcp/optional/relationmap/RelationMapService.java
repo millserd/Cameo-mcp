@@ -1,5 +1,6 @@
 package com.cameomcp.optional.relationmap;
 
+import com.cameomcp.plugin.cameo.DiagramCompat;
 import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
@@ -731,7 +732,7 @@ public final class RelationMapService implements GsonService {
             return false;
         }
         try {
-            if (!dpe.isDiagramWindowOpen()) {
+            if (!Boolean.TRUE.equals(DiagramCompat.isWindowOpen(dpe))) {
                 dpe.open();
             }
             Object display = display(dpe);
@@ -767,9 +768,15 @@ public final class RelationMapService implements GsonService {
     private static JsonObject displaySummary(DiagramPresentationElement dpe) {
         JsonObject summary = new JsonObject();
         try {
-            summary.addProperty("diagramWindowOpen", dpe.isDiagramWindowOpen());
-            summary.addProperty("diagramWindowActive", dpe.isDiagramWindowActive());
-            if (!dpe.isDiagramWindowOpen()) {
+            Boolean open = DiagramCompat.isWindowOpen(dpe);
+            Boolean active = DiagramCompat.isWindowActive(dpe);
+            if (open != null) {
+                summary.addProperty("diagramWindowOpen", open);
+            }
+            if (active != null) {
+                summary.addProperty("diagramWindowActive", active);
+            }
+            if (Boolean.FALSE.equals(open)) {
                 summary.addProperty("available", false);
                 summary.addProperty("reason", "Relation Map diagram window is not open");
                 return summary;

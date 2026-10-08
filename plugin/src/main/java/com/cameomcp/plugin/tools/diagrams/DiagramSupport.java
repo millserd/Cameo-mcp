@@ -141,22 +141,9 @@ final class DiagramSupport {
         return propertyManager(pe).clone();
     }
 
-    /** {@code AbstractDiagramPresentationElement.layout(boolean)} is 2024x API; absent from the 2026x javadoc. */
+    /** Auto-layout; the API differs between 2024x and 2026x, see {@link com.cameomcp.plugin.cameo.DiagramCompat}. */
     static boolean layout(DiagramPresentationElement dpe) {
-        java.lang.reflect.Method m = findMethod(dpe.getClass(), "layout", boolean.class);
-        if (m == null) {
-            throw new ToolException("UNSUPPORTED", "Automatic layout is not available through the API of this "
-                    + "Cameo version. Use Layout > Quick Diagram Layout in Cameo, or position shapes with cameo_move_shapes.");
-        }
-        try {
-            Object r = m.invoke(dpe, true);
-            return !(r instanceof Boolean) || (Boolean) r;
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            Throwable c = e.getCause() != null ? e.getCause() : e;
-            throw new ToolException("TOOL_FAILED", "Auto-layout failed: " + safeMessage(c));
-        } catch (IllegalAccessException e) {
-            throw new ToolException("UNSUPPORTED", "Automatic layout is not accessible in this Cameo version.");
-        }
+        return com.cameomcp.plugin.cameo.DiagramCompat.layout(dpe);
     }
 
     static Object invokeNoArg(Object target, String name) {

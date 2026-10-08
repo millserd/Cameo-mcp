@@ -31,7 +31,7 @@ dependencies {
     compileOnly 'com.google.code.gson:gson:2.10.1'
     if (useRealCameo) {
         compileOnly fileTree(dir: "${cameoHome}/lib", include: ['**/*.jar'], exclude: ['**/gson-*.jar'])
-        optionalCompileOnly fileTree(dir: "${cameoHome}/plugins", include: ['**/*_api.jar', '**/*api*.jar'])
+        optionalCompileOnly fileTree(dir: "${cameoHome}/plugins", include: ['**/*.jar'])
     } else {
         compileOnly project(':stubs')
     }

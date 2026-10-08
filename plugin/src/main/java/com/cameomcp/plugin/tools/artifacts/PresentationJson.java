@@ -115,14 +115,9 @@ public final class PresentationJson {
         return null;
     }
 
-    /** Re-layout a diagram (layout(boolean) is not documented in the 2026x OpenAPI, so reflective). */
-    public static void layout(DiagramPresentationElement dpe) throws Exception {
-        try {
-            Reflect.invoke(dpe, "layout", Boolean.TRUE);
-        } catch (NoSuchMethodException e) {
-            throw new com.cameomcp.mcp.ToolException("UNSUPPORTED", "Diagram layout is not available through the "
-                    + "API of this Cameo version.");
-        }
+    /** Re-layout a diagram; the API differs between 2024x and 2026x (see DiagramCompat). */
+    public static void layout(DiagramPresentationElement dpe) {
+        com.cameomcp.plugin.cameo.DiagramCompat.layout(dpe);
     }
 
     /** Depth-first list of all presentation elements; fills child-id to parent-id when a map is given. */
