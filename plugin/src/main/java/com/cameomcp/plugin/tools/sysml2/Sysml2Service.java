@@ -228,7 +228,7 @@ final class Sysml2Service {
             Object element = element(project, id, "element_id");
             JsonObject json = Sysml2Model.detail(element, membersLimit);
             if (includeText) {
-                GeneratedText text = generate(project, element);
+                GeneratedText text = textOf(project, element);
                 json.addProperty("text", text.text);
                 if (text.problem != null) {
                     json.addProperty("textWarning", text.problem);
@@ -259,7 +259,7 @@ final class Sysml2Service {
             StringBuilder text = new StringBuilder();
             JsonArray warnings = new JsonArray();
             for (Object target : targets) {
-                GeneratedText t = generate(project, target);
+                GeneratedText t = textOf(project, target);
                 if (t.problem != null) {
                     warnings.add(Sysml2Model.name(target) + ": " + t.problem);
                 }
@@ -287,11 +287,55 @@ final class Sysml2Service {
     static final class GeneratedText {
         final String text;
         final String problem;
+        final Object result;
 
-        GeneratedText(String text, String problem) {
+        GeneratedText(String text, String problem, Object result) {
             this.text = text;
             this.problem = problem;
+            this.result = result;
         }
+    }
+
+    static final String RANGE_TYPE = "com.dassault_systemes.modeler.sysml.textual.core.ElementsRanges$RangeType";
+
+    /**
+     * Text for any element. Cameo 2026x generates text only from a root namespace (for a nested
+     * element it reports the element as untransformed), so a nested element's text is cut out of
+     * its root namespace's text using the element range the generator records.
+     */
+    static GeneratedText textOf(Project project, Object element) {
+        Object root = element;
+        for (Object o = Sysml2Model.owner(element); o != null && Sysml2Model.isElement(o); o = Sysml2Model.owner(o)) {
+            root = o;
+        }
+        if (root == element) {
+            return generate(project, element);
+        }
+        GeneratedText whole = generate(project, root);
+        Object range = null;
+        try {
+            Object ranges = Sysml2Model.quiet(whole.result, "getElementsRanges");
+            Class<?> rangeType = optionalClass(RANGE_TYPE);
+            if (ranges != null && rangeType != null) {
+                @SuppressWarnings({"unchecked", "rawtypes"})
+                Object full = Enum.valueOf((Class<? extends Enum>) rangeType.asSubclass(Enum.class), "FULL");
+                range = ranges.getClass().getMethod("getRange", requireClass(Sysml2Model.KERML_ELEMENT), rangeType)
+                        .invoke(ranges, element, full);
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            range = null;
+        }
+        Object start = Sysml2Model.quiet(range, "getStartIndex");
+        Object end = Sysml2Model.quiet(range, "getEndIndex");
+        if (start instanceof Integer && end instanceof Integer) {
+            String slice = Sysml2Model.slice(whole.text, (Integer) start, (Integer) end);
+            if (!slice.isEmpty()) {
+                return new GeneratedText(slice, null, whole.result);
+            }
+        }
+        String problem = "Cameo gave no text range for this element, so the text of its whole root namespace is "
+                + "returned" + (whole.problem != null ? "; " + whole.problem : "");
+        return new GeneratedText(whole.text, problem, whole.result);
     }
 
     static GeneratedText generate(Project project, Object element) {
@@ -315,7 +359,7 @@ final class Sysml2Service {
             if (error != null && Boolean.TRUE.equals(Sysml2Model.quiet(error, "isError"))) {
                 problem = (problem == null ? "" : problem + "; ") + "generator reported: " + error;
             }
-            return new GeneratedText(text == null ? "" : text.toString(), problem);
+            return new GeneratedText(text == null ? "" : text.toString(), problem, result);
         } catch (InvocationTargetException e) {
             throw failure("SysML v2 text generation", e.getCause());
         } catch (ReflectiveOperationException e) {

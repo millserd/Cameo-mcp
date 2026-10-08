@@ -304,6 +304,60 @@ final class Sysml2Model {
         }
     }
 
+    /**
+     * The part of {@code text} between two generator indexes, widened to the closing ';' or '}' when
+     * the end index is inclusive, with the indentation of nested lines removed.
+     */
+    static String slice(String text, int start, int end) {
+        if (text == null || start < 0 || start >= text.length() || end <= start) {
+            return "";
+        }
+        int stop = Math.min(end, text.length());
+        String body = text.substring(start, stop);
+        if (stop < text.length()) {
+            char next = text.charAt(stop);
+            String trimmed = body.trim();
+            boolean unclosed = count(body, '{') > count(body, '}');
+            if ((next == '}' && unclosed)
+                    || (next == ';' && !unclosed && !trimmed.endsWith(";") && !trimmed.endsWith("}"))) {
+                body = text.substring(start, stop + 1);
+            }
+        }
+        int lineStart = text.lastIndexOf('\n', start - 1) + 1;
+        int indent = 0;
+        while (lineStart + indent < start && Character.isWhitespace(text.charAt(lineStart + indent))) {
+            indent++;
+        }
+        if (indent == 0) {
+            return body.trim();
+        }
+        StringBuilder out = new StringBuilder();
+        String[] lines = body.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (i > 0) {
+                int cut = 0;
+                while (cut < indent && cut < line.length() && Character.isWhitespace(line.charAt(cut))) {
+                    cut++;
+                }
+                line = line.substring(cut);
+                out.append('\n');
+            }
+            out.append(line);
+        }
+        return out.toString().trim();
+    }
+
+    private static int count(String s, char c) {
+        int n = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == c) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     // ------------------------------------------------------------------ traversal
 
     /** Element with this id or KerML elementId under the given roots, or null. */

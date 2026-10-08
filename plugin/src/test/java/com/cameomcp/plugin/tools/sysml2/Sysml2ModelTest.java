@@ -110,6 +110,20 @@ class Sysml2ModelTest {
     }
 
     @Test
+    void sliceCutsNestedTextAndDedents() {
+        String text = "package P {\n    part def Engine {\n        attribute power;\n    }\n    part def Wheel;\n}\n";
+        int start = text.indexOf("part def Engine");
+        int end = text.indexOf("}", start) + 1;
+        assertEquals("part def Engine {\n    attribute power;\n}", Sysml2Model.slice(text, start, end));
+        // inclusive end index: the closing brace is pulled in
+        assertEquals("part def Engine {\n    attribute power;\n}", Sysml2Model.slice(text, start, end - 1));
+        int wheel = text.indexOf("part def Wheel");
+        assertEquals("part def Wheel;", Sysml2Model.slice(text, wheel, text.indexOf(";", wheel)));
+        assertEquals("", Sysml2Model.slice(text, -1, 4));
+        assertEquals("", Sysml2Model.slice(text, 5, 5));
+    }
+
+    @Test
     void everySysml2SpecIsBoundAndWellFormed() {
         ToolRegistry r = new ToolRegistry().addSpecs(Sysml2Tools.specs());
         Sysml2Bindings.bind(r);
