@@ -1,0 +1,500 @@
+package com.cameomcp.plugin.tools.advanced;
+
+import com.cameomcp.mcp.ToolException;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * Cameo-free requirements import/export logic: CSV and JSON parsing, row normalization and
+ * validation, CSV writing, and file path checks. Unit-tested without Cameo.
+ */
+final class RequirementsCodec {
+
+    /** Largest import source file accepted. */
+    static final long MAX_SOURCE_BYTES = 20L * 1024 * 1024;
+
+    /** Default CSV export columns. */
+    static final List<String> EXPORT_COLUMNS = Collections.unmodifiableList(Arrays.asList(
+            "id", "name", "requirementId", "text", "documentation", "qualifiedName", "ownerId", "stereotypes", "type"));
+
+    private static final List<String> NAME_KEYS = Arrays.asList("name", "title", "requirementname");
+    private static final List<String> EXTERNAL_ID_KEYS = Arrays.asList(
+            "externalid", "requirementid", "reqid", "key", "id");
+    private static final List<String> TEXT_KEYS = Arrays.asList("text", "requirementtext", "description");
+    private static final List<String> DOC_KEYS = Collections.singletonList("documentation");
+
+    private RequirementsCodec() {
+    }
+
+    // ------------------------------------------------------------------ CSV reading
+
+    /** Parse CSV text with a header row into rows keyed by header. Quoted fields may span lines. */
+    static List<Map<String, String>> parseCsv(String text) {
+        List<Map<String, String>> rows = new ArrayList<>();
+        if (text == null) {
+            return rows;
+        }
+        String body = text.startsWith("﻿") ? text.substring(1) : text;
+        char delimiter = detectDelimiter(body);
+        List<List<String>> records = parseRecords(body, delimiter);
+        List<String> headers = null;
+        for (List<String> cells : records) {
+            if (isBlank(cells)) {
+                continue;
+            }
+            if (headers == null) {
+                headers = new ArrayList<>();
+                for (String h : cells) {
+                    headers.add(h.trim());
+                }
+                continue;
+            }
+            Map<String, String> row = new LinkedHashMap<>();
+            for (int i = 0; i < Math.min(headers.size(), cells.size()); i++) {
+                if (!headers.get(i).isEmpty()) {
+                    row.put(headers.get(i), cells.get(i));
+                }
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Comma by default; semicolon or tab when the header line uses those and no commas. */
+    static char detectDelimiter(String text) {
+        int end = text.indexOf('\n');
+        String header = end < 0 ? text : text.substring(0, end);
+        if (header.indexOf(',') >= 0) {
+            return ',';
+        }
+        if (header.indexOf('\t') >= 0) {
+            return '\t';
+        }
+        if (header.indexOf(';') >= 0) {
+            return ';';
+        }
+        return ',';
+    }
+
+    static List<List<String>> parseRecords(String text, char delimiter) {
+        List<List<String>> records = new ArrayList<>();
+        List<String> cells = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean quoted = false;
+        int n = text.length();
+        for (int i = 0; i < n; i++) {
+            char ch = text.charAt(i);
+            if (quoted) {
+                if (ch == '"') {
+                    if (i + 1 < n && text.charAt(i + 1) == '"') {
+                        current.append('"');
+                        i++;
+                    } else {
+                        quoted = false;
+                    }
+                } else {
+                    current.append(ch);
+                }
+            } else if (ch == '"') {
+                quoted = true;
+            } else if (ch == delimiter) {
+                cells.add(current.toString());
+                current.setLength(0);
+            } else if (ch == '\r' || ch == '\n') {
+                if (ch == '\r' && i + 1 < n && text.charAt(i + 1) == '\n') {
+                    i++;
+                }
+                cells.add(current.toString());
+                current.setLength(0);
+                records.add(cells);
+                cells = new ArrayList<>();
+            } else {
+                current.append(ch);
+            }
+        }
+        if (quoted) {
+            throw ToolException.invalid("CSV text has an unterminated quoted field.");
+        }
+        if (current.length() > 0 || !cells.isEmpty()) {
+            cells.add(current.toString());
+            records.add(cells);
+        }
+        return records;
+    }
+
+    private static boolean isBlank(List<String> cells) {
+        for (String c : cells) {
+            if (c != null && !c.trim().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ------------------------------------------------------------------ JSON reading
+
+    /** Rows from an array of objects; scalar values are kept as strings, nested values ignored. */
+    static List<Map<String, String>> rowsFromJsonArray(JsonArray array, String what) {
+        List<Map<String, String>> rows = new ArrayList<>();
+        if (array == null) {
+            return rows;
+        }
+        int index = 0;
+        for (JsonElement item : array) {
+            if (item == null || !item.isJsonObject()) {
+                throw ToolException.invalid("Every entry of '" + what + "' must be an object (entry " + index + ").");
+            }
+            rows.add(rowFromObject(item.getAsJsonObject()));
+            index++;
+        }
+        return rows;
+    }
+
+    static Map<String, String> rowFromObject(JsonObject object) {
+        Map<String, String> row = new LinkedHashMap<>();
+        for (String key : object.keySet()) {
+            JsonElement value = object.get(key);
+            if (value != null && !value.isJsonNull() && value.isJsonPrimitive()) {
+                row.put(key, value.getAsString());
+            }
+        }
+        return row;
+    }
+
+    /** JSON document: an array of rows, or an object with a "requirements" or "rows" array. */
+    static List<Map<String, String>> parseJsonText(String text) {
+        JsonElement root;
+        try {
+            root = JsonParser.parseString(text == null ? "" : text.trim());
+        } catch (JsonParseException e) {
+            throw ToolException.invalid("Source is not valid JSON: " + e.getMessage());
+        }
+        if (root.isJsonArray()) {
+            return rowsFromJsonArray(root.getAsJsonArray(), "source");
+        }
+        if (root.isJsonObject()) {
+            JsonObject o = root.getAsJsonObject();
+            for (String key : new String[]{"requirements", "rows", "sourceRows"}) {
+                if (o.has(key) && o.get(key).isJsonArray()) {
+                    return rowsFromJsonArray(o.getAsJsonArray(key), key);
+                }
+            }
+        }
+        throw ToolException.invalid("JSON source must be an array of requirement objects or an object with a "
+                + "'requirements' or 'rows' array.");
+    }
+
+    // ------------------------------------------------------------------ files
+
+    /** Read requirement rows from a .csv/.tsv/.txt or .json file (format sniffed when the extension is unknown). */
+    static List<Map<String, String>> readSourceFile(String path) {
+        File file = checkInputPath(path);
+        String text;
+        try {
+            text = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new ToolException("TOOL_FAILED", "Could not read '" + file + "': " + e.getMessage());
+        }
+        String lower = file.getName().toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".json")) {
+            return parseJsonText(text);
+        }
+        if (lower.endsWith(".csv") || lower.endsWith(".tsv") || lower.endsWith(".txt")) {
+            return parseCsv(text);
+        }
+        String trimmed = text.startsWith("﻿") ? text.substring(1).trim() : text.trim();
+        if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+            return parseJsonText(trimmed);
+        }
+        return parseCsv(text);
+    }
+
+    static File checkInputPath(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            throw ToolException.invalid("source_path is empty.");
+        }
+        File file = new File(path.trim());
+        if (!file.isAbsolute()) {
+            throw ToolException.invalid("source_path must be an absolute path (got '" + path + "').");
+        }
+        if (!file.exists()) {
+            throw new ToolException("NOT_FOUND", "Source file '" + file + "' does not exist.");
+        }
+        if (!file.isFile()) {
+            throw ToolException.invalid("source_path '" + file + "' is not a regular file.");
+        }
+        if (file.length() > MAX_SOURCE_BYTES) {
+            throw ToolException.invalid("Source file '" + file + "' is larger than " + (MAX_SOURCE_BYTES / (1024 * 1024))
+                    + " MB; split it into smaller imports.");
+        }
+        return file;
+    }
+
+    /** Non-throwing description of an output path, for previews. */
+    static JsonObject describeOutputPath(String path) {
+        JsonObject o = new JsonObject();
+        o.addProperty("outputPath", path);
+        if (path == null || path.trim().isEmpty()) {
+            o.addProperty("ok", false);
+            o.addProperty("problem", "No output path given.");
+            return o;
+        }
+        File file = new File(path.trim());
+        o.addProperty("absolute", file.isAbsolute());
+        o.addProperty("exists", file.exists());
+        o.addProperty("isDirectory", file.isDirectory());
+        File parent = file.getAbsoluteFile().getParentFile();
+        o.addProperty("parentExists", parent != null && parent.isDirectory());
+        String problem = null;
+        if (!file.isAbsolute()) {
+            problem = "Output path must be absolute.";
+        } else if (file.isDirectory()) {
+            problem = "Output path is a directory; give a file name.";
+        }
+        o.addProperty("ok", problem == null);
+        if (problem != null) {
+            o.addProperty("problem", problem);
+        } else if (file.exists()) {
+            o.addProperty("warning", "File exists and would be overwritten only with the explicit overwrite flag.");
+        }
+        return o;
+    }
+
+    /**
+     * Validate an output file path. Refuses relative paths, directories and existing files unless
+     * {@code overwrite} is true; creates the parent folder when missing.
+     */
+    static File checkOutputPath(String path, boolean overwrite, String flagName) {
+        if (path == null || path.trim().isEmpty()) {
+            throw ToolException.invalid("output_path is empty.");
+        }
+        File file = new File(path.trim());
+        if (!file.isAbsolute()) {
+            throw ToolException.invalid("output_path must be an absolute path (got '" + path + "').");
+        }
+        if (file.isDirectory()) {
+            throw ToolException.invalid("output_path '" + file + "' is a directory; give a file name.");
+        }
+        if (file.exists() && !overwrite) {
+            throw new ToolException("CONFLICT", "File '" + file + "' already exists. Choose another output_path or pass "
+                    + flagName + "=true to replace it.");
+        }
+        File parent = file.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+            throw new ToolException("TOOL_FAILED", "Could not create output directory '" + parent + "'.");
+        }
+        return file;
+    }
+
+    // ------------------------------------------------------------------ normalization
+
+    static String value(Map<String, String> row, List<String> keys) {
+        Map<String, String> lower = new HashMap<>();
+        for (Map.Entry<String, String> e : row.entrySet()) {
+            if (e.getKey() != null) {
+                lower.putIfAbsent(e.getKey().trim().toLowerCase(Locale.ROOT).replace("_", "").replace(" ", ""),
+                        e.getValue());
+            }
+        }
+        for (String k : keys) {
+            String v = lower.get(k);
+            if (v != null && !v.trim().isEmpty()) {
+                return v.trim();
+            }
+        }
+        return null;
+    }
+
+    static String externalId(Map<String, String> row) {
+        return value(row, EXTERNAL_ID_KEYS);
+    }
+
+    /** Element name: the name column, else the external id (reference precedence name, id, externalId, key). */
+    static String name(Map<String, String> row) {
+        String n = value(row, NAME_KEYS);
+        return n != null ? n : externalId(row);
+    }
+
+    static String text(Map<String, String> row) {
+        return value(row, TEXT_KEYS);
+    }
+
+    static String documentation(Map<String, String> row) {
+        return value(row, DOC_KEYS);
+    }
+
+    /** One normalized row: name, externalId, text, documentation, plus the row index and raw values. */
+    static JsonObject normalize(Map<String, String> row, int index) {
+        JsonObject o = new JsonObject();
+        o.addProperty("row", index);
+        addIfNotNull(o, "name", name(row));
+        addIfNotNull(o, "externalId", externalId(row));
+        addIfNotNull(o, "text", text(row));
+        addIfNotNull(o, "documentation", documentation(row));
+        JsonObject raw = new JsonObject();
+        for (Map.Entry<String, String> e : row.entrySet()) {
+            raw.addProperty(e.getKey(), e.getValue());
+        }
+        o.add("raw", raw);
+        return o;
+    }
+
+    private static void addIfNotNull(JsonObject o, String key, String value) {
+        if (value != null) {
+            o.addProperty(key, value);
+        }
+    }
+
+    /** Row-level checks: missing name/id (error), duplicate external ids and names (warning). */
+    static JsonObject validate(List<Map<String, String>> rows) {
+        JsonArray issues = new JsonArray();
+        Map<String, Integer> seenIds = new HashMap<>();
+        Map<String, Integer> seenNames = new HashMap<>();
+        int errors = 0;
+        int warnings = 0;
+        for (int i = 0; i < rows.size(); i++) {
+            Map<String, String> row = rows.get(i);
+            String name = name(row);
+            if (name == null) {
+                issues.add(issue(i, "error", "MISSING_NAME", "Row needs name, id, externalId, or key."));
+                errors++;
+                continue;
+            }
+            String ext = externalId(row);
+            if (ext != null) {
+                Integer prev = seenIds.put(ext, i);
+                if (prev != null) {
+                    issues.add(issue(i, "warning", "DUPLICATE_EXTERNAL_ID",
+                            "External id '" + ext + "' also appears in row " + prev + "."));
+                    warnings++;
+                }
+            }
+            Integer prevName = seenNames.put(name.toLowerCase(Locale.ROOT), i);
+            if (prevName != null) {
+                issues.add(issue(i, "warning", "DUPLICATE_NAME", "Name '" + name + "' also appears in row " + prevName + "."));
+                warnings++;
+            }
+            if (text(row) == null && documentation(row) == null) {
+                issues.add(issue(i, "info", "NO_TEXT", "Row has no text/documentation/description column value."));
+            }
+        }
+        JsonObject o = new JsonObject();
+        o.addProperty("rowCount", rows.size());
+        o.addProperty("errorCount", errors);
+        o.addProperty("warningCount", warnings);
+        o.addProperty("valid", errors == 0 && !rows.isEmpty());
+        o.add("issues", issues);
+        return o;
+    }
+
+    private static JsonObject issue(int row, String severity, String code, String message) {
+        JsonObject o = new JsonObject();
+        o.addProperty("row", row);
+        o.addProperty("severity", severity);
+        o.addProperty("code", code);
+        o.addProperty("message", message);
+        return o;
+    }
+
+    // ------------------------------------------------------------------ export
+
+    /** Flatten an element JSON (ElementJson.toJson shape) into an export row. */
+    static Map<String, String> exportRow(JsonObject element) {
+        Map<String, String> row = new LinkedHashMap<>();
+        row.put("id", str(element, "id"));
+        row.put("name", str(element, "name"));
+        JsonObject tags = element.has("taggedValues") && element.get("taggedValues").isJsonObject()
+                ? element.getAsJsonObject("taggedValues") : new JsonObject();
+        row.put("requirementId", flat(tags.get("Id")));
+        row.put("text", flat(tags.get("Text")));
+        row.put("documentation", str(element, "documentation"));
+        row.put("qualifiedName", str(element, "qualifiedName"));
+        row.put("ownerId", str(element, "ownerId"));
+        row.put("stereotypes", flat(element.get("stereotypes")));
+        row.put("type", str(element, "type"));
+        return row;
+    }
+
+    private static String str(JsonObject o, String key) {
+        return o.has(key) && !o.get(key).isJsonNull() ? flat(o.get(key)) : "";
+    }
+
+    static String flat(JsonElement e) {
+        if (e == null || e.isJsonNull()) {
+            return "";
+        }
+        if (e.isJsonPrimitive()) {
+            return e.getAsString();
+        }
+        if (e.isJsonArray()) {
+            StringBuilder sb = new StringBuilder();
+            for (JsonElement item : e.getAsJsonArray()) {
+                String s = flat(item);
+                if (!s.isEmpty()) {
+                    if (sb.length() > 0) {
+                        sb.append("; ");
+                    }
+                    sb.append(s);
+                }
+            }
+            return sb.toString();
+        }
+        JsonObject o = e.getAsJsonObject();
+        for (String k : new String[]{"value", "name", "id", "string"}) {
+            if (o.has(k) && o.get(k).isJsonPrimitive()) {
+                return o.get(k).getAsString();
+            }
+        }
+        return o.toString();
+    }
+
+    static String toCsv(List<String> columns, List<Map<String, String>> rows) {
+        StringBuilder sb = new StringBuilder();
+        appendCsvLine(sb, columns);
+        for (Map<String, String> row : rows) {
+            List<String> cells = new ArrayList<>();
+            for (String c : columns) {
+                String v = row.get(c);
+                cells.add(v == null ? "" : v);
+            }
+            appendCsvLine(sb, cells);
+        }
+        return sb.toString();
+    }
+
+    private static void appendCsvLine(StringBuilder sb, List<String> cells) {
+        for (int i = 0; i < cells.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(csvCell(cells.get(i)));
+        }
+        sb.append("\r\n");
+    }
+
+    static String csvCell(String value) {
+        if (value == null) {
+            return "";
+        }
+        boolean quote = value.indexOf(',') >= 0 || value.indexOf('"') >= 0 || value.indexOf('\n') >= 0
+                || value.indexOf('\r') >= 0 || (!value.isEmpty()
+                && (Character.isWhitespace(value.charAt(0)) || Character.isWhitespace(value.charAt(value.length() - 1))));
+        return quote ? '"' + value.replace("\"", "\"\"") + '"' : value;
+    }
+}

@@ -1,0 +1,91 @@
+// The Cameo plugin: hosts the MCP server inside Cameo, adds the MCP menu and status window.
+//
+// Compiles against a real Cameo install when -PcameoHome=<dir> (or CAMEO_HOME) is set,
+// otherwise against the compile-only API stubs in :stubs.
+
+def cameoHome = project.findProperty('cameoHome') ?: System.getenv('CAMEO_HOME')
+def useRealCameo = cameoHome != null && file("${cameoHome}/lib").isDirectory()
+if (cameoHome != null && !useRealCameo) {
+    logger.warn("cameoHome '${cameoHome}' has no lib/ folder; compiling against stubs instead")
+}
+
+sourceSets {
+    // Code that needs APIs from optional Cameo plugins (Dependency Matrix, Generic Table,
+    // Relation Map). It ships as a separate jar loaded at runtime through a bridging class
+    // loader, so the plugin still loads when those plugins are absent or versioned differently.
+    optional {
+        java { srcDirs = ['src/optional/java'] }
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    bundled
+    optionalCompileOnly.extendsFrom compileOnly
+}
+
+dependencies {
+    implementation project(':core')
+    bundled 'com.google.code.gson:gson:2.10.1'
+    compileOnly 'com.google.code.gson:gson:2.10.1'
+    if (useRealCameo) {
+        compileOnly fileTree(dir: "${cameoHome}/lib", include: ['**/*.jar'], exclude: ['**/gson-*.jar'])
+        optionalCompileOnly fileTree(dir: "${cameoHome}/plugins", include: ['**/*_api.jar', '**/*api*.jar'])
+    } else {
+        compileOnly project(':stubs')
+    }
+    testImplementation project(':core')
+    testImplementation 'com.google.code.gson:gson:2.10.1'
+    testImplementation(useRealCameo ? fileTree(dir: "${cameoHome}/lib", include: ['**/*.jar']) : project(':stubs'))
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.3'
+}
+
+def pluginId = 'com.cameomcp.plugin'
+
+processResources {
+    inputs.property('version', project.version)
+}
+
+jar {
+    archiveFileName = 'cameo-mcp-plugin.jar'
+    dependsOn ':core:jar'
+    from { project(':core').sourceSets.main.output }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes('Implementation-Title': 'Cameo MCP', 'Implementation-Version': project.version) }
+}
+
+tasks.register('optionalJar', Jar) {
+    archiveFileName = 'cameo-mcp-optional.jar'
+    from sourceSets.optional.output
+}
+
+tasks.register('assemblePlugin', Copy) {
+    group = 'distribution'
+    description = 'Lays out the installable plugin folder under build/plugin-dist.'
+    dependsOn jar, optionalJar, ':stdio:jar'
+    def out = layout.buildDirectory.dir("plugin-dist/${pluginId}")
+    into(out)
+    from('plugin.xml') { expand(version: project.version) }
+    from(jar)
+    from(tasks.named('optionalJar'))
+    // The stdio launcher ships inside the plugin folder so the status window can print its exact path.
+    from(project(':stdio').tasks.named('jar'))
+    from(rootProject.file('README.md'))
+    from(rootProject.file('docs/AGENT-GUIDE.md'))
+    into('lib') { from configurations.bundled }
+    doFirst { delete out }
+}
+
+tasks.register('deploy', Copy) {
+    group = 'distribution'
+    description = 'Copies the plugin into <cameoHome>/plugins. Restart Cameo afterwards.'
+    dependsOn assemblePlugin
+    doFirst {
+        if (cameoHome == null) throw new GradleException('Pass -PcameoHome=<Cameo install dir> or set CAMEO_HOME')
+        delete "${cameoHome}/plugins/${pluginId}"
+    }
+    from(layout.buildDirectory.dir("plugin-dist/${pluginId}"))
+    into("${cameoHome ?: 'unset'}/plugins/${pluginId}")
+}

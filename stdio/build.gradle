@@ -1,0 +1,14 @@
+// Dependency-free stdio <-> HTTP launcher for MCP clients that only speak stdio.
+dependencies {
+    implementation project(':core')
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.3'
+}
+
+jar {
+    archiveFileName = 'cameo-mcp-stdio.jar'
+    manifest { attributes('Main-Class': 'com.cameomcp.stdio.StdioLauncher', 'Implementation-Version': project.version) }
+    dependsOn ':core:jar'
+    from { project(':core').sourceSets.main.output }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

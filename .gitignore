@@ -1,0 +1,8 @@
+build/
+.gradle/
+*.class
+out/
+.idea/
+*.iml
+.DS_Store
+stubs/READY

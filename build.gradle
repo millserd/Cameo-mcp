@@ -1,0 +1,43 @@
+// Cameo MCP: one Gradle build producing the Cameo plugin, the stdio launcher and the release zip.
+//
+//   gradle dist                       -> build/dist/cameo-mcp-<version>.zip (compiled against stubs)
+//   gradle dist -PcameoHome=<CAMEO>   -> same, compiled against a real Cameo install
+//   gradle deploy -PcameoHome=<CAMEO> -> copies the plugin into <CAMEO>/plugins
+//   gradle test                       -> unit + protocol tests (no Cameo needed)
+
+allprojects {
+    group = 'com.cameomcp'
+    version = rootProject.version
+    repositories { mavenCentral() }
+}
+
+subprojects {
+    apply plugin: 'java'
+    tasks.withType(JavaCompile).configureEach {
+        options.release = 17
+        options.encoding = 'UTF-8'
+        options.compilerArgs += ['-Xlint:-options']
+    }
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+        testLogging { events 'failed'; exceptionFormat 'full' }
+    }
+}
+
+tasks.register('dist', Zip) {
+    group = 'distribution'
+    description = 'Builds the portable release zip (plugin + stdio launcher + docs + installers).'
+    dependsOn ':core:generateToolDocs', ':plugin:assemblePlugin', ':stdio:jar'
+    archiveFileName = "cameo-mcp-${project.version}.zip"
+    destinationDirectory = layout.buildDirectory.dir('dist')
+    into("cameo-mcp-${project.version}") {
+        from('README.md')
+        from('LICENSE')
+        from('NOTICE')
+        from('CHANGELOG.md')
+        into('plugin') { from(project(':plugin').layout.buildDirectory.dir('plugin-dist')) }
+        into('launcher') { from(project(':stdio').tasks.named('jar')) }
+        into('install') { from('install') }
+        into('docs') { from('docs') }
+    }
+}
