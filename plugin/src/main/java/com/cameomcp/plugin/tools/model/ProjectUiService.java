@@ -3,6 +3,7 @@ package com.cameomcp.plugin.tools.model;
 import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
+import com.cameomcp.plugin.cameo.ProjectKind;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.nomagic.magicdraw.core.Application;
@@ -41,10 +42,16 @@ final class ProjectUiService {
             json.addProperty("filePath", fileName != null ? fileName : "");
             json.addProperty("isRemote", project.isRemote());
             json.addProperty("isDirty", project.isDirty());
+            String kind = ProjectKind.of(project);
+            json.addProperty("projectKind", kind);
             Package primary = project.getPrimaryModel();
             if (primary != null) {
                 json.addProperty("primaryModelId", primary.getID());
                 json.addProperty("primaryModelName", primary.getName() != null ? primary.getName() : "");
+            }
+            if (ProjectKind.SYSML2.equals(kind)) {
+                json.addProperty("hint", "SysML v2 project: use the cameo_sysml2_* tools (cameo_sysml2_list_roots, "
+                        + "cameo_sysml2_get_text, cameo_sysml2_create_from_text). UML / SysML v1 tools do not apply.");
             }
             return json;
         });
@@ -146,6 +153,7 @@ final class ProjectUiService {
             warnings.add("Project file path unavailable");
         }
         try {
+            json.addProperty("projectKind", ProjectKind.of(project));
             Element primary = project.getPrimaryModel();
             if (primary != null) {
                 json.addProperty("primaryModelId", primary.getID());

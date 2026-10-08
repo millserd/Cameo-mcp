@@ -57,6 +57,12 @@ public final class ToolResult {
         return this;
     }
 
+    /** Flags a result whose payload already describes a failure (for example a failed script run). */
+    public ToolResult markError() {
+        this.error = true;
+        return this;
+    }
+
     public ToolResult structured(Map<String, Object> value) {
         this.structured = value;
         return this;

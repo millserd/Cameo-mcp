@@ -305,21 +305,31 @@ public final class ServerBindings {
             } catch (NoSuchMethodException e) {
                 throw ToolException.unsupported("Undo/redo is not available through the API of this Cameo version.");
             }
-            String can = undo ? "canUndo" : "canRedo";
-            String act = undo ? "undo" : "redo";
-            Method canM = history.getClass().getMethod(can);
-            Method actM = history.getClass().getMethod(act);
+            Method actM = history.getClass().getMethod(undo ? "undo" : "redo");
             int done = 0;
             for (int i = 0; i < steps; i++) {
-                if (!Boolean.TRUE.equals(canM.invoke(history))) {
+                if (!canUndoRedo(history, undo)) {
                     break;
                 }
                 actM.invoke(history);
                 done++;
             }
             return Json.obj(undo ? "undone" : "redone", done, "requested", steps,
-                    "more", Boolean.TRUE.equals(canM.invoke(history)));
+                    "more", canUndoRedo(history, undo));
         }, 60);
+    }
+
+    /**
+     * 2024x has {@code canUndo()}/{@code canRedo()}; 2026x removed them and exposes
+     * {@code getCommandForUndo()}/{@code getCommandForRedo()}, which return null when there is nothing to do.
+     */
+    private static boolean canUndoRedo(Object history, boolean undo) throws Exception {
+        try {
+            return Boolean.TRUE.equals(history.getClass().getMethod(undo ? "canUndo" : "canRedo").invoke(history));
+        } catch (NoSuchMethodException e) {
+            Method next = history.getClass().getMethod(undo ? "getCommandForUndo" : "getCommandForRedo");
+            return next.invoke(history) != null;
+        }
     }
 
     static Map<String, Object> log(Args a) {

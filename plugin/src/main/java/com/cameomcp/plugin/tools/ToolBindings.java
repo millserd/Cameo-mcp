@@ -20,7 +20,8 @@ public final class ToolBindings {
             "com.cameomcp.plugin.tools.diagrams.DiagramBindings",
             "com.cameomcp.plugin.tools.artifacts.ArtifactBindings",
             "com.cameomcp.plugin.tools.advanced.AdvancedBindings",
-            "com.cameomcp.plugin.tools.analysis.AnalysisBindings");
+            "com.cameomcp.plugin.tools.analysis.AnalysisBindings",
+            "com.cameomcp.plugin.tools.sysml2.Sysml2Bindings");
 
     private ToolBindings() {
     }

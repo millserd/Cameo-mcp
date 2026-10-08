@@ -1,6 +1,7 @@
 package com.cameomcp.plugin.tools.model;
 
 import com.cameomcp.mcp.ToolException;
+import com.cameomcp.plugin.cameo.ProjectKind;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.nomagic.magicdraw.core.Project;
@@ -35,7 +36,7 @@ final class ModelSupport {
         }
         BaseElement found = project.getElementByID(id.trim());
         if (!(found instanceof Element)) {
-            throw new ToolException("NOT_FOUND", "Element '" + id + "' (" + param + ") not found. Use "
+            throw ProjectKind.notUmlElement(found, "Element '" + id + "' (" + param + ") not found. Use "
                     + "cameo_query_elements or cameo_list_containment_children to find valid IDs.");
         }
         return (Element) found;
@@ -63,11 +64,7 @@ final class ModelSupport {
         if (id != null && !id.trim().isEmpty()) {
             return element(project, id, param);
         }
-        Package primary = project.getPrimaryModel();
-        if (primary == null) {
-            throw new ToolException("NO_PROJECT", "The open project has no primary model.");
-        }
-        return primary;
+        return ProjectKind.primaryModel(project);
     }
 
     // ------------------------------------------------------------------ naming

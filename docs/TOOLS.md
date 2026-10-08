@@ -1,6 +1,6 @@
 # Cameo MCP tool reference
 
-173 tools.
+183 tools.
 
 ## server
 
@@ -62,7 +62,7 @@ Write a message to Cameo's Notification window and log file, so the human watchi
 
 ### `cameo_get_project` (read)
 
-Get the open project: name, filePath, isRemote (Teamwork Cloud), isDirty (unsaved changes), primaryModelId and primaryModelName. primaryModelId is the usual root for cameo_list_containment_children and the default parent for new packages.
+Get the open project: name, filePath, isRemote (Teamwork Cloud), isDirty (unsaved changes), projectKind, primaryModelId and primaryModelName. primaryModelId is the usual root for cameo_list_containment_children and the default parent for new packages. projectKind is 'uml' (UML / SysML v1) or 'sysml2' (a Cameo 2026x SysML v2 project, which has no primary model: use the cameo_sysml2_* tools there).
 
 ### `cameo_save_project` (side-effect)
 
@@ -340,7 +340,7 @@ Set a state's entry / do / exit behaviors as OpaqueBehaviors with body text. An 
 
 ### `cameo_execute_macro` (write)
 
-Escape hatch: run a Groovy script inside Cameo's JVM on the UI thread, for operations no structured tool covers. Bound variables: project, application, primaryModel, ef (ElementsFactory). No editing session is opened for you: wrap model changes in SessionManager.getInstance().createSession(project, 'name') ... closeSession(project) and cancelSession on error. A stale session found before the run is cancelled; a session the script leaves open is closed on success and cancelled on failure (reported in warnings). Returns success, result (toString of the last expression), output (println), errors, and error/stackTrace on failure. Return JSON text for structured results. The script keeps running in Cameo if the timeout expires.
+Escape hatch: run a Groovy script inside Cameo's JVM on the UI thread, for operations no structured tool covers. Bound variables: project, application, primaryModel (null in a SysML v2 project), projectKind ('uml' or 'sysml2'), ef (ElementsFactory). No editing session is opened for you: wrap model changes in SessionManager.getInstance().createSession(project, 'name') ... closeSession(project) and cancelSession on error. A stale session found before the run is cancelled; a session the script leaves open is closed on success and cancelled on failure (reported in warnings). Returns success, result (toString of the last expression), output (println), errors, and error/stackTrace on failure (a failed run is flagged as a tool error). Return JSON text for structured results. The script keeps running in Cameo if the timeout expires.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -1665,4 +1665,95 @@ Plan or assemble a PowerPoint + PDF review package from the methodology-required
 | `pptx_name` | string |  | PPTX file name (default: <slugified title>.pptx). |
 | `pdf_name` | string |  | PDF file name (default: <slugified title>.pdf). |
 | `export_format` | string |  | Image format of the exported diagrams. One of: [png, jpeg, jpg, webp]. Default: `png`. |
+
+## sysml2
+
+### `cameo_sysml2_status` (read)
+
+Check SysML v2 support: whether this Cameo has the SysML v2 plugin (2026x and later), whether the open project is a SysML v2 project (projectKind 'sysml2'), how many root namespaces it has, and which SysML v2 operations (model access, text export, text import) are available. Call this before the other cameo_sysml2_* tools.
+
+### `cameo_sysml2_list_roots` (read)
+
+List the root namespaces of the open SysML v2 project with their top-level members (packages, part definitions, ...): id, elementId, name, type (SysML v2 metaclass such as Package, PartDefinition, PartUsage), qualifiedName and childCount. This is the SysML v2 counterpart of cameo_get_project's primaryModelId.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `include_libraries` | boolean |  | Also list the standard library roots (large). Default: `false`. |
+| `members_limit` | integer |  | Top-level members listed per root (0-500). Default: `100`. |
+
+### `cameo_sysml2_list_children` (read)
+
+List the elements a SysML v2 element owns (its members), paged, with id, elementId, name, type, qualifiedName and childCount. Walk the model tree with it, starting from the ids cameo_sysml2_list_roots returns.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `element_id` | string | yes | Element id from cameo_sysml2_list_roots, cameo_sysml2_list_children or cameo_sysml2_query (the 'id' field; the SysML v2 'elementId' UUID is accepted too). |
+| `limit` | integer |  | Page size (1-1000). Default: `200`. |
+| `offset` | integer |  | Index of the first child to return. Default: `0`. |
+
+### `cameo_sysml2_get_element` (read)
+
+Get one SysML v2 element: id, elementId, name, declaredName, shortName, type, humanType, qualifiedName, owner, documentation, isLibraryElement, and its first owned members. With include_text=true also returns the element as SysML v2 textual notation.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `element_id` | string | yes | Element id from cameo_sysml2_list_roots, cameo_sysml2_list_children or cameo_sysml2_query (the 'id' field; the SysML v2 'elementId' UUID is accepted too). |
+| `include_text` | boolean |  | Also return the element's SysML v2 textual notation. Default: `false`. |
+| `members_limit` | integer |  | Owned members listed (0-500). Default: `50`. |
+
+### `cameo_sysml2_query` (read)
+
+Search the SysML v2 model by name and/or metaclass, depth-first from the project roots or from scope_id. type matches the SysML v2 metaclass name case-insensitively (for example PartDefinition, PartUsage, RequirementDefinition, RequirementUsage, AttributeUsage, PortDefinition, ActionDefinition, Package). name is a case-insensitive substring. Paged with limit/offset; hasMore tells you to page.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string |  | Case-insensitive substring of the element name. |
+| `type` | string |  | SysML v2 metaclass name, e.g. PartDefinition or PartUsage. |
+| `scope_id` | string |  | Only search under this element. Element id from cameo_sysml2_list_roots, cameo_sysml2_list_children or cameo_sysml2_query (the 'id' field; the SysML v2 'elementId' UUID is accepted too). |
+| `include_libraries` | boolean |  | Also search the standard libraries. Default: `false`. |
+| `limit` | integer |  | Page size (1-1000). Default: `100`. |
+| `offset` | integer |  | Index of the first match to return. Default: `0`. |
+
+### `cameo_sysml2_get_text` (read)
+
+Export SysML v2 textual notation generated by Cameo, for one element (and everything it owns) or, without element_id, for every root namespace of the project. Use it to read a whole SysML v2 model at once, review changes, or round-trip text through cameo_sysml2_validate_text and cameo_sysml2_create_from_text.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `element_id` | string |  | Element to export. Omit to export the whole project. Element id from cameo_sysml2_list_roots, cameo_sysml2_list_children or cameo_sysml2_query (the 'id' field; the SysML v2 'elementId' UUID is accepted too). |
+| `max_chars` | integer |  | Truncate the text after this many characters (1000-2000000). Default: `200000`. |
+
+### `cameo_sysml2_validate_text` (read)
+
+Parse SysML v2 textual notation with Cameo's SysML v2 compiler without changing the model. Returns valid, diagnostics (severity ERROR / WARNING / INFO / HINT, line, column, message) and the top-level elements the text declares. Names resolve against the open project and the standard libraries, so the text may reference existing elements and library types (for example ScalarValues::Real). Run it before cameo_sysml2_create_from_text.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `text` | string | yes | SysML v2 textual notation, e.g. package Vehicle { part def Engine; } |
+
+### `cameo_sysml2_create_from_text` (write)
+
+Create model content from SysML v2 textual notation: Cameo compiles the text and adds it to the open SysML v2 project as a new root namespace, as one undoable step (like importing a .sysml file). Text with ERROR diagnostics is rejected and nothing changes. Returns the new root's id and the created top-level elements with their ids. To change existing content, export it with cameo_sysml2_get_text, edit the text, delete the old element with cameo_sysml2_delete_element and create it again.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `text` | string | yes | SysML v2 textual notation to add. |
+| `allow_warnings` | boolean |  | Create even when the compiler reports warnings. Default: `true`. |
+
+### `cameo_sysml2_rename_element` (write)
+
+Rename a SysML v2 element (sets its declared name) as one undoable step. Returns the element with its new name and qualifiedName.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `element_id` | string | yes | Element id from cameo_sysml2_list_roots, cameo_sysml2_list_children or cameo_sysml2_query (the 'id' field; the SysML v2 'elementId' UUID is accepted too). |
+| `name` | string | yes | New declared name. |
+
+### `cameo_sysml2_delete_element` (destructive)
+
+Delete a SysML v2 element and everything it owns, as one undoable step (cameo_undo restores it). Library elements and read-only elements cannot be deleted. Deleting a root namespace removes everything created from one text.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `element_id` | string | yes | Element id from cameo_sysml2_list_roots, cameo_sysml2_list_children or cameo_sysml2_query (the 'id' field; the SysML v2 'elementId' UUID is accepted too). |
 

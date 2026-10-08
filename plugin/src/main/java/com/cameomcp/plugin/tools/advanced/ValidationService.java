@@ -337,8 +337,7 @@ final class ValidationService {
 
     private static Collection<Element> scopeElements(Project project, List<String> ids) {
         if (ids == null || ids.isEmpty()) {
-            Element root = project.getPrimaryModel();
-            return root == null ? Collections.emptyList() : Collections.singletonList(root);
+            return Collections.singletonList(com.cameomcp.plugin.cameo.ProjectKind.primaryModel(project));
         }
         List<Element> elements = new ArrayList<>();
         for (String id : ids) {

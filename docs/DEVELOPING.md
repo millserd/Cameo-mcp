@@ -26,7 +26,7 @@ install/  Installers for Windows / macOS / Linux.
 3. **Implementation**: services in the same package (or `src/optional/java/com/cameomcp/optional/...`
    for optional-plugin APIs, reached via `OptionalModules.call(serviceClass, op, params)`).
 
-Families: `server`, `model`, `diagrams`, `artifacts`, `advanced`, `analysis`
+Families: `server`, `model`, `diagrams`, `artifacts`, `advanced`, `analysis`, `sysml2`
 (`Catalog.FAMILIES`, `ToolBindings.BINDERS`). Families never import each other's packages.
 A composite tool that needs another tool's result calls it through
 `Internal.call("cameo_other_tool", args)` - the same public contract an MCP client sees.

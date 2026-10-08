@@ -65,7 +65,8 @@ final class DiagramSupport {
         if (o instanceof Element) {
             return (Element) o;
         }
-        throw new ToolException("NOT_FOUND", label + " '" + id + "' not found. Use cameo_query_elements to find valid IDs.");
+        throw com.cameomcp.plugin.cameo.ProjectKind.notUmlElement(o, label + " '" + id + "' not found. Use "
+                + "cameo_query_elements to find valid IDs.");
     }
 
     /** Find a presentation element by ID anywhere in the symbol tree. */

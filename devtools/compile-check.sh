@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fast compile check without Gradle, for one tool family at a time.
 #   devtools/compile-check.sh <family> [--tests]
-# family: server | model | diagrams | artifacts | advanced | analysis | all
+# family: server | model | diagrams | artifacts | advanced | analysis | sysml2 | all
 # Compiles core + stubs + shared plugin code + the family's catalog and plugin package
 # (and the optional source set for 'artifacts'), into /tmp/cameo-mcp-check-<family>.
 # With --tests, also compiles that family's tests and runs them with the JUnit console.
@@ -12,8 +12,8 @@ LIB="$ROOT/devtools/lib"
 OUT="/tmp/cameo-mcp-check-$FAMILY"
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/test-classes"
 
-declare -A CATALOG=( [server]=ServerTools [model]=ModelTools [diagrams]=DiagramTools [artifacts]=ArtifactTools [advanced]=AdvancedTools [analysis]=AnalysisTools )
-ALL_FAMILIES=(server model diagrams artifacts advanced analysis)
+declare -A CATALOG=( [server]=ServerTools [model]=ModelTools [diagrams]=DiagramTools [artifacts]=ArtifactTools [advanced]=AdvancedTools [analysis]=AnalysisTools [sysml2]=Sysml2Tools )
+ALL_FAMILIES=(server model diagrams artifacts advanced analysis sysml2)
 
 srcs=()
 while IFS= read -r f; do srcs+=("$f"); done < <(find "$ROOT/stubs/src/main/java" -name '*.java')

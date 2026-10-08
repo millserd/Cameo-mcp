@@ -26,7 +26,8 @@ public final class Catalog {
             "com.cameomcp.catalog.DiagramTools",
             "com.cameomcp.catalog.ArtifactTools",
             "com.cameomcp.catalog.AdvancedTools",
-            "com.cameomcp.catalog.AnalysisTools"));
+            "com.cameomcp.catalog.AnalysisTools",
+            "com.cameomcp.catalog.Sysml2Tools"));
 
     /** Tools that run arbitrary script code; blocked when the user turns macros off. */
     private static final Set<String> SCRIPT_TOOLS = new HashSet<>(Arrays.asList(
@@ -35,6 +36,7 @@ public final class Catalog {
     public static final String INSTRUCTIONS = String.join("\n",
             "Cameo MCP drives a running Cameo Systems Modeler / CATIA Magic (2024x or 2026x) through its Java API.",
             "Start with cameo_status (is Cameo up, is a project open?) and cameo_get_project (root model id).",
+            "If cameo_get_project reports projectKind 'sysml2' (a Cameo 2026x SysML v2 project), use the cameo_sysml2_* tools: they read and write the model as SysML v2 textual notation.",
             "Find elements with cameo_query_elements or cameo_list_containment_children; every write tool takes element ids from those results.",
             "Each write is one undoable Cameo step. Writes are serialized: run them one at a time, not in parallel.",
             "Prefer compact views and paging (limit/offset) on large models; request full detail only for the elements you need.",

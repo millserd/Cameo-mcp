@@ -155,6 +155,7 @@ final class MacroService {
         ctx.setAttribute("project", project, ScriptContext.ENGINE_SCOPE);
         ctx.setAttribute("application", Application.getInstance(), ScriptContext.ENGINE_SCOPE);
         ctx.setAttribute("primaryModel", project.getPrimaryModel(), ScriptContext.ENGINE_SCOPE);
+        ctx.setAttribute("projectKind", com.cameomcp.plugin.cameo.ProjectKind.of(project), ScriptContext.ENGINE_SCOPE);
         ctx.setAttribute("ef", project.getElementsFactory(), ScriptContext.ENGINE_SCOPE);
 
         JsonObject response = new JsonObject();

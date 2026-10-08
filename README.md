@@ -20,13 +20,14 @@ so there is nothing else to install or keep in sync:
 
 ## What you get
 
-- **173 tools** in six families: server (status, diagnostics, undo/redo), model (elements,
+- **183 tools** in seven families: server (status, diagnostics, undo/redo), model (elements,
   stereotypes, relationships, specifications, state-machine semantics, bulk create, Groovy macros),
   diagrams (create, populate, layout, images, labels, compartments, routing), artifacts (native
   dependency matrices, generic tables, relation maps, traceability graphs, snapshots), advanced
   (native validation, Report Wizard, requirements import/export, simulation, Teamwork Cloud,
   DataHub, criteria, profiles, variants, typed diagrams) and analysis (semantic verification,
-  remediation plans, proofing, OOSEM methodology, review packets, PPTX/PDF assembly).
+  remediation plans, proofing, OOSEM methodology, review packets, PPTX/PDF assembly) and sysml2
+  (SysML v2 projects in 2026x: browse the model, export and import SysML v2 textual notation).
   Feature parity with [ajhcs/cameo-mcp-bridge](https://github.com/ajhcs/cameo-mcp-bridge), plus
   diagram delete/rename, file export, element move, stereotype removal, bulk creation, undo/redo.
 - **An MCP menu in Cameo** with a status window: server state, endpoint and port, connected

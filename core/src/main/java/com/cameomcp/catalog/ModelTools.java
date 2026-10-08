@@ -39,8 +39,10 @@ public final class ModelTools {
                 // ---------------------------------------------------------------- project
                 tool("cameo_get_project", FAMILY).readOnly()
                         .desc("Get the open project: name, filePath, isRemote (Teamwork Cloud), isDirty (unsaved "
-                                + "changes), primaryModelId and primaryModelName. primaryModelId is the usual root for "
-                                + "cameo_list_containment_children and the default parent for new packages."),
+                                + "changes), projectKind, primaryModelId and primaryModelName. primaryModelId is the usual "
+                                + "root for cameo_list_containment_children and the default parent for new packages. "
+                                + "projectKind is 'uml' (UML / SysML v1) or 'sysml2' (a Cameo 2026x SysML v2 project, "
+                                + "which has no primary model: use the cameo_sysml2_* tools there)."),
                 tool("cameo_save_project", FAMILY).sideEffect()
                         .desc("Save the open project to its existing location (same as File > Save). Call after a "
                                 + "batch of changes you want to keep. Fails for a project that was never saved to a "
@@ -310,13 +312,14 @@ public final class ModelTools {
                 // ---------------------------------------------------------------- macros
                 tool("cameo_execute_macro", FAMILY).write().openWorld().timeout(600)
                         .desc("Escape hatch: run a Groovy script inside Cameo's JVM on the UI thread, for operations "
-                                + "no structured tool covers. Bound variables: project, application, primaryModel, ef "
-                                + "(ElementsFactory). No editing session is opened for you: wrap model changes in "
+                                + "no structured tool covers. Bound variables: project, application, primaryModel (null "
+                                + "in a SysML v2 project), projectKind ('uml' or 'sysml2'), ef (ElementsFactory). No editing session is opened for you: wrap model changes in "
                                 + "SessionManager.getInstance().createSession(project, 'name') ... closeSession(project) "
                                 + "and cancelSession on error. A stale session found before the run is cancelled; a "
                                 + "session the script leaves open is closed on success and cancelled on failure "
                                 + "(reported in warnings). Returns success, result (toString of the last expression), "
-                                + "output (println), errors, and error/stackTrace on failure. Return JSON text for "
+                                + "output (println), errors, and error/stackTrace on failure (a failed run is flagged "
+                                + "as a tool error). Return JSON text for "
                                 + "structured results. The script keeps running in Cameo if the timeout expires.")
                         .str("script", "Script source.", REQUIRED)
                         .str("engine", "javax.script engine name; falls back to groovy, then JavaScript engines. See "

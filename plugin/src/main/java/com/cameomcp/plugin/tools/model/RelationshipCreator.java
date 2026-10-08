@@ -385,11 +385,7 @@ final class RelationshipCreator {
                 return (Package) cur;
             }
         }
-        Package model = project.getPrimaryModel();
-        if (model == null) {
-            throw ToolException.invalid("Could not find a package to own the " + what + "; pass owner_id.");
-        }
-        return model;
+        return com.cameomcp.plugin.cameo.ProjectKind.primaryModel(project);
     }
 
     /** Nearest package at or above the context element (owner_id or the source). */
@@ -401,10 +397,6 @@ final class RelationshipCreator {
             }
             context = context.getOwner();
         }
-        Package model = project.getPrimaryModel();
-        if (model == null) {
-            throw ToolException.invalid("Could not find a package to own the " + what + "; pass a package owner_id.");
-        }
-        return model;
+        return com.cameomcp.plugin.cameo.ProjectKind.primaryModel(project);
     }
 }

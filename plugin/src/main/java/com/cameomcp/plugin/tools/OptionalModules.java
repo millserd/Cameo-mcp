@@ -42,6 +42,20 @@ public final class OptionalModules {
         return service(serviceClass).call(operation, params);
     }
 
+    /**
+     * Loads a class from Cameo or from any loaded Cameo plugin, for APIs of plugins this one does
+     * not declare as required (such as SysML v2 in 2026x).
+     */
+    public static Class<?> cameoClass(String name) throws ClassNotFoundException {
+        try {
+            return Class.forName(name, true, loader());
+        } catch (ClassNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ClassNotFoundException(name, e);
+        }
+    }
+
     public static GsonService service(String serviceClass) {
         GsonService s = SERVICES.get(serviceClass);
         if (s != null) {

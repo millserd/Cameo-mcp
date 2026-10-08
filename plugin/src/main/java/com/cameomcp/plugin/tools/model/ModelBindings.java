@@ -1,6 +1,7 @@
 package com.cameomcp.plugin.tools.model;
 
 import com.cameomcp.mcp.ToolRegistry;
+import com.cameomcp.mcp.ToolResult;
 import com.cameomcp.plugin.cameo.Gs;
 import com.google.gson.JsonObject;
 
@@ -53,7 +54,11 @@ public final class ModelBindings {
         bind(r, "cameo_get_state_behaviors", StateMachineService::getBehaviors);
         bind(r, "cameo_set_state_behaviors", StateMachineService::setBehaviors);
 
-        bind(r, "cameo_execute_macro", MacroService::execute);
+        r.bind("cameo_execute_macro", (a, c) -> {
+            JsonObject out = MacroService.execute(a);
+            ToolResult result = ToolResult.of(Gs.fromGson(out));
+            return out.has("success") && !out.get("success").getAsBoolean() ? result.markError() : result;
+        });
         bind(r, "cameo_list_macro_engines", a -> MacroService.listEngines());
     }
 }

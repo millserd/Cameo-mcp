@@ -159,8 +159,8 @@ public final class ArtifactSupport {
         if (o instanceof Element) {
             return (Element) o;
         }
-        throw new ToolException("NOT_FOUND", label + " '" + id + "' not found. Use cameo_query_elements to find "
-                + "valid element IDs.");
+        throw com.cameomcp.plugin.cameo.ProjectKind.notUmlElement(o, label + " '" + id + "' not found. Use "
+                + "cameo_query_elements to find valid element IDs.");
     }
 
     public static List<Element> elements(Project project, List<String> ids, String label) {

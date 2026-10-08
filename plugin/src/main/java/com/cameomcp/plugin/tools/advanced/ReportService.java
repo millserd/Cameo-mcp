@@ -251,7 +251,7 @@ final class ReportService {
             Support.requireElement(project, id, "Scope element");
         }
         if (scopeIds.isEmpty()) {
-            scopeIds.add(project.getPrimaryModel().getID());
+            scopeIds.add(com.cameomcp.plugin.cameo.ProjectKind.primaryModel(project).getID());
         }
         invokeIfPresent(selection, "setPackageIds", toStringArray(scopeIds));
         invokeIfPresent(selection, "setSelectRecursive", firstBoolean(body, parameters, "recursive", true));

@@ -15,7 +15,10 @@ always-current parameter reference is the resource `cameo://tools` (or call `cam
      `NO_PROJECT` until they do.
    - The call fails with `CAMEO_NOT_RUNNING` → Cameo is closed or the MCP server inside it is
      stopped. Ask the user to start Cameo and check **MCP > MCP Server Status**.
-2. `cameo_get_project` — project name, file, and `primaryModelId` (the root package id).
+2. `cameo_get_project` — project name, file, `projectKind` and `primaryModelId` (the root
+   package id). If `projectKind` is `sysml2`, the user has a Cameo 2026x **SysML v2** project:
+   it has no `primaryModelId`, the UML / SysML v1 tools do not apply, and you work through the
+   `cameo_sysml2_*` tools instead (section 7).
 3. Orient yourself with `cameo_list_containment_children` (start at the root, page with
    `limit`/`offset`) or search with `cameo_query_elements` (`type`, `name`, `stereotype`,
    `package_id`).
@@ -137,6 +140,8 @@ what to do next. Common codes:
 | `UNSUPPORTED` | Feature/plugin not in this Cameo | Use another route or tell the user |
 | `MACROS_DISABLED` | User turned scripts off | Use structured tools or ask the user |
 | `API_INCOMPATIBLE` | This Cameo version lacks an API | Report it; use another route |
+| `SYSML2_PROJECT` / `SYSML2_ELEMENT` | A UML / SysML v1 tool was used on a SysML v2 project or element | Use the `cameo_sysml2_*` tools |
+| `NOT_SYSML2_PROJECT` | A `cameo_sysml2_*` tool was used on a UML / SysML v1 project | Use the UML / SysML v1 tools |
 
 `cameo_probe_bridge` runs a connection self-test (HTTP endpoint, UI thread responsiveness,
 open sessions). `cameo_undo` / `cameo_redo` step through Cameo's undo history.
@@ -144,7 +149,8 @@ open sessions). `cameo_undo` / `cameo_redo` step through Cameo's undo history.
 ## 6. Macros (escape hatch)
 
 `cameo_execute_macro` runs Groovy inside Cameo with `project`, `application`, `primaryModel`
-and `ef` (ElementsFactory) predefined. Prefer structured tools; use macros for gaps.
+(null in a SysML v2 project), `projectKind` and `ef` (ElementsFactory) predefined. A script that
+throws comes back as a tool error with `error` and `stackTrace`. Prefer structured tools; use macros for gaps.
 Scripts that change the model must manage their own session:
 
 ```groovy
@@ -162,7 +168,40 @@ try {
 If a macro dies mid-session, call `cameo_reset_session`. The user can disable macros in
 **MCP > MCP Server Status > Settings**.
 
-## 7. Tool families
+## 7. SysML v2 projects (Cameo 2026x)
+
+Cameo 2026x can hold **SysML v2** projects (KerML-based, created with the SysML v2 plugin). They
+are a different model from UML / SysML v1, so they have their own tools, built on SysML v2
+**textual notation**. Check with `cameo_sysml2_status` (`available`, `projectKind`, `operations`).
+
+- **Read:** `cameo_sysml2_list_roots` (root namespaces and their top-level members),
+  `cameo_sysml2_list_children` (walk the tree), `cameo_sysml2_query` (by `name` and/or
+  SysML v2 metaclass `type`, such as `PartDefinition`, `PartUsage`, `RequirementDefinition`),
+  `cameo_sysml2_get_element`, and `cameo_sysml2_get_text`, which returns the element or the
+  whole project as SysML v2 text. Reading the text is usually the fastest way to understand a
+  SysML v2 model.
+- **Write:** draft SysML v2 text, check it with `cameo_sysml2_validate_text` (diagnostics with
+  line and column; names resolve against the project and the standard libraries), then
+  `cameo_sysml2_create_from_text`, which adds it as a new root namespace in one undoable step.
+  Text with errors is rejected and nothing changes.
+- **Edit:** `cameo_sysml2_rename_element`, `cameo_sysml2_delete_element`. To restructure, export
+  with `cameo_sysml2_get_text`, edit the text, delete the old element and create it again.
+- `cameo_undo` / `cameo_redo` work for SysML v2 changes too.
+
+```
+package Vehicle {
+    part def Vehicle {
+        attribute mass;
+        part engine : Engine;
+    }
+    part def Engine;
+}
+```
+
+On Cameo 2024x, or a UML / SysML v1 project, these tools return `UNSUPPORTED` or
+`NOT_SYSML2_PROJECT`.
+
+## 8. Tool families
 
 | Family | What it covers |
 |---|---|
@@ -172,3 +211,4 @@ If a macro dies mid-session, call `cameo_reset_session`. The user can disable ma
 | artifacts | native matrices, generic tables, relation maps, traceability graphs, snapshots and diffs, read-only probes |
 | advanced | native validation, Report Wizard, requirements import/export, simulation, Teamwork Cloud, DataHub, criteria expressions, profiles, variants, safety/cyber extensions, typed diagrams |
 | analysis | diagram/matrix verification, semantic checks, cross-diagram remediation plans, proofing, OOSEM methodology packs, review packets, PPTX/PDF assembly |
+| sysml2 | SysML v2 projects (2026x): roots, tree, query, element detail, export as textual notation, validate text, create from text, rename, delete |

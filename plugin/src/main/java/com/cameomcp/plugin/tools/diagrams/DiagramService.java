@@ -108,10 +108,7 @@ final class DiagramService {
                 }
                 parent = (Namespace) p;
             } else {
-                parent = project.getPrimaryModel();
-                if (parent == null) {
-                    throw new ToolException("PRECONDITION_FAILED", "The project has no primary model.");
-                }
+                parent = com.cameomcp.plugin.cameo.ProjectKind.primaryModel(project);
             }
             boolean relationMap = DiagramTypes.isRelationMap(candidates.get(0));
             if (relationMap && rm.hasConfiguration()) {
