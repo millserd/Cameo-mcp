@@ -75,3 +75,5 @@ gradle test dist                              # full build: build/dist/cameo-mcp
 
 Tests live in `core/src/test/java` or `plugin/src/test/java/com/cameomcp/plugin/tools/<family>/`.
 Logic that does not touch Cameo (analysis, parsing, planning) must have unit tests.
+To check a build inside a running Cameo, use the scenarios in `devtools/livetest` (see its README);
+`gradle dist -PcameoHome=<Cameo install>` compiles against that install's real jars first.

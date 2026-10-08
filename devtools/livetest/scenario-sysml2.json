@@ -1,0 +1,335 @@
+[
+ {
+  "name": "status",
+  "tool": "cameo_status"
+ },
+ {
+  "name": "log_start",
+  "tool": "cameo_log",
+  "args": {
+   "message": "SysML v2 live test started"
+  }
+ },
+ {
+  "name": "get_project",
+  "tool": "cameo_get_project",
+  "expect": {
+   "projectKind": "sysml2"
+  }
+ },
+ {
+  "name": "sysml2_status",
+  "tool": "cameo_sysml2_status",
+  "expect": {
+   "available": true,
+   "projectKind": "sysml2",
+   "operations.textImport": true
+  }
+ },
+ {
+  "name": "list_roots_before",
+  "tool": "cameo_sysml2_list_roots"
+ },
+ {
+  "name": "validate_good",
+  "tool": "cameo_sysml2_validate_text",
+  "args": {
+   "text": "package McpLiveTestV2 {\n    doc /* Created by the Cameo MCP SysML v2 live test. Safe to delete. */\n    part def Vehicle {\n        attribute mass;\n        part engine : Engine;\n        part wheels : Wheel[4];\n    }\n    part def Engine {\n        attribute power;\n    }\n    part def Wheel;\n    requirement def MassLimit {\n        doc /* The vehicle mass shall not exceed 2000 kg. */\n        subject vehicle : Vehicle;\n    }\n    part vehicle1 : Vehicle;\n}\n"
+  },
+  "expect": {
+   "valid": true
+  }
+ },
+ {
+  "name": "validate_library_ref",
+  "tool": "cameo_sysml2_validate_text",
+  "args": {
+   "text": "package McpLibRef {\n    private import ScalarValues::*;\n    part def Battery { attribute capacity : Real; }\n}\n"
+  },
+  "expect": {
+   "valid": true
+  }
+ },
+ {
+  "name": "validate_bad",
+  "tool": "cameo_sysml2_validate_text",
+  "args": {
+   "text": "package Broken {\n    part def Engine {\n        attribute power : ;\n    }\n"
+  },
+  "expect": {
+   "valid": false
+  }
+ },
+ {
+  "name": "validate_unresolved_name",
+  "tool": "cameo_sysml2_validate_text",
+  "args": {
+   "text": "package McpUnresolved {\n    part p : NoSuchType;\n}\n"
+  },
+  "allowError": true
+ },
+ {
+  "name": "create_bad_rejected",
+  "tool": "cameo_sysml2_create_from_text",
+  "args": {
+   "text": "package Broken {\n    part def Engine {\n        attribute power : ;\n    }\n"
+  },
+  "expectError": true
+ },
+ {
+  "name": "create_from_text",
+  "tool": "cameo_sysml2_create_from_text",
+  "args": {
+   "text": "package McpLiveTestV2 {\n    doc /* Created by the Cameo MCP SysML v2 live test. Safe to delete. */\n    part def Vehicle {\n        attribute mass;\n        part engine : Engine;\n        part wheels : Wheel[4];\n    }\n    part def Engine {\n        attribute power;\n    }\n    part def Wheel;\n    requirement def MassLimit {\n        doc /* The vehicle mass shall not exceed 2000 kg. */\n        subject vehicle : Vehicle;\n    }\n    part vehicle1 : Vehicle;\n}\n"
+  },
+  "expect": {
+   "created": true
+  },
+  "save": {
+   "root": "rootId",
+   "pkg": "elements.0.id"
+  }
+ },
+ {
+  "name": "list_roots_after",
+  "tool": "cameo_sysml2_list_roots"
+ },
+ {
+  "name": "list_children",
+  "tool": "cameo_sysml2_list_children",
+  "args": {
+   "element_id": "${pkg}"
+  }
+ },
+ {
+  "name": "query_part_defs",
+  "tool": "cameo_sysml2_query",
+  "args": {
+   "type": "PartDefinition",
+   "scope_id": "${pkg}"
+  },
+  "expect": {
+   "count": 3,
+   "elements.0.name": "Vehicle"
+  },
+  "save": {
+   "veh": "elements.0.id",
+   "eng": "elements.1.id"
+  }
+ },
+ {
+  "name": "query_by_name",
+  "tool": "cameo_sysml2_query",
+  "args": {
+   "name": "wheel",
+   "scope_id": "${pkg}"
+  }
+ },
+ {
+  "name": "query_requirements",
+  "tool": "cameo_sysml2_query",
+  "args": {
+   "type": "RequirementDefinition",
+   "scope_id": "${pkg}"
+  },
+  "expect": {
+   "count": 1,
+   "elements.0.name": "MassLimit"
+  }
+ },
+ {
+  "name": "get_element",
+  "tool": "cameo_sysml2_get_element",
+  "args": {
+   "element_id": "${veh}",
+   "include_text": true
+  },
+  "expect": {
+   "name": "Vehicle",
+   "type": "PartDefinition"
+  },
+  "expectContains": {
+   "text": "engine"
+  }
+ },
+ {
+  "name": "get_text_package",
+  "tool": "cameo_sysml2_get_text",
+  "args": {
+   "element_id": "${pkg}"
+  },
+  "expectContains": {
+   "text": "part def Engine"
+  }
+ },
+ {
+  "name": "get_text_project",
+  "tool": "cameo_sysml2_get_text",
+  "args": {},
+  "expectContains": {
+   "text": "McpLiveTestV2"
+  }
+ },
+ {
+  "name": "validate_ref_to_model",
+  "tool": "cameo_sysml2_validate_text",
+  "args": {
+   "text": "package McpRefCheck {\n    part myVehicle : McpLiveTestV2::Vehicle;\n}\n"
+  },
+  "expect": {
+   "valid": true
+  }
+ },
+ {
+  "name": "rename",
+  "tool": "cameo_sysml2_rename_element",
+  "args": {
+   "element_id": "${veh}",
+   "name": "Car"
+  },
+  "expect": {
+   "name": "Car",
+   "previousName": "Vehicle"
+  }
+ },
+ {
+  "name": "text_after_rename",
+  "tool": "cameo_sysml2_get_text",
+  "args": {
+   "element_id": "${pkg}"
+  },
+  "expectContains": {
+   "text": "part def Car"
+  }
+ },
+ {
+  "name": "undo_rename",
+  "tool": "cameo_undo",
+  "expect": {
+   "undone": 1
+  }
+ },
+ {
+  "name": "name_after_undo",
+  "tool": "cameo_sysml2_get_element",
+  "args": {
+   "element_id": "${veh}"
+  },
+  "expect": {
+   "name": "Vehicle"
+  }
+ },
+ {
+  "name": "redo_rename",
+  "tool": "cameo_redo",
+  "expect": {
+   "redone": 1
+  }
+ },
+ {
+  "name": "name_after_redo",
+  "tool": "cameo_sysml2_get_element",
+  "args": {
+   "element_id": "${veh}"
+  },
+  "expect": {
+   "name": "Car"
+  }
+ },
+ {
+  "name": "uml_tool_on_v2_element",
+  "tool": "cameo_get_element",
+  "args": {
+   "element_id": "${veh}"
+  },
+  "expectError": true,
+  "expectContains": {
+   "code": "SYSML2"
+  }
+ },
+ {
+  "name": "uml_tree_on_v2_project",
+  "tool": "cameo_list_containment_children",
+  "args": {},
+  "expectError": true,
+  "expectContains": {
+   "code": "SYSML2"
+  }
+ },
+ {
+  "name": "macro_project_kind",
+  "tool": "cameo_execute_macro",
+  "args": {
+   "script": "projectKind"
+  },
+  "expect": {
+   "result": "sysml2"
+  }
+ },
+ {
+  "name": "delete_engine",
+  "tool": "cameo_sysml2_delete_element",
+  "args": {
+   "element_id": "${eng}"
+  }
+ },
+ {
+  "name": "engine_gone",
+  "tool": "cameo_sysml2_get_element",
+  "args": {
+   "element_id": "${eng}"
+  },
+  "expectError": true
+ },
+ {
+  "name": "undo_delete",
+  "tool": "cameo_undo",
+  "expect": {
+   "undone": 1
+  }
+ },
+ {
+  "name": "engine_back",
+  "tool": "cameo_sysml2_query",
+  "args": {
+   "type": "PartDefinition",
+   "scope_id": "${pkg}"
+  },
+  "expect": {
+   "count": 3
+  }
+ },
+ {
+  "name": "bad_id",
+  "tool": "cameo_sysml2_get_element",
+  "args": {
+   "element_id": "no-such-element"
+  },
+  "expectError": true
+ },
+ {
+  "name": "delete_package",
+  "tool": "cameo_sysml2_delete_element",
+  "args": {
+   "element_id": "${pkg}"
+  }
+ },
+ {
+  "name": "delete_root",
+  "tool": "cameo_sysml2_delete_element",
+  "args": {
+   "element_id": "${root}"
+  }
+ },
+ {
+  "name": "list_roots_end",
+  "tool": "cameo_sysml2_list_roots"
+ },
+ {
+  "name": "log_end",
+  "tool": "cameo_log",
+  "args": {
+   "message": "SysML v2 live test finished"
+  }
+ }
+]
