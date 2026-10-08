@@ -12,6 +12,8 @@ import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
 
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -226,7 +228,7 @@ final class Sysml2Service {
             Object element = element(project, id, "element_id");
             JsonObject json = Sysml2Model.detail(element, membersLimit);
             if (includeText) {
-                GeneratedText text = generate(element);
+                GeneratedText text = generate(project, element);
                 json.addProperty("text", text.text);
                 if (text.problem != null) {
                     json.addProperty("textWarning", text.problem);
@@ -257,7 +259,7 @@ final class Sysml2Service {
             StringBuilder text = new StringBuilder();
             JsonArray warnings = new JsonArray();
             for (Object target : targets) {
-                GeneratedText t = generate(target);
+                GeneratedText t = generate(project, target);
                 if (t.problem != null) {
                     warnings.add(Sysml2Model.name(target) + ": " + t.problem);
                 }
@@ -292,12 +294,17 @@ final class Sysml2Service {
         }
     }
 
-    static GeneratedText generate(Object element) {
+    static GeneratedText generate(Project project, Object element) {
         Class<?> builderType = requireClass(TEXT_GENERATOR);
         Class<?> elementType = requireClass(Sysml2Model.KERML_ELEMENT);
         try {
             Object builder = builderType.getConstructor().newInstance();
             builderType.getMethod("setRootElement", elementType).invoke(builder, element);
+            Method setContext = contextSetter(builderType);
+            Method factory = setContext == null ? null : contextFactory(setContext.getParameterTypes()[0]);
+            if (factory != null) {
+                setContext.invoke(builder, factory.invoke(null, project));
+            }
             Object result = builderType.getMethod("build").invoke(builder);
             Object text = Sysml2Model.call(result, "getText");
             String problem = null;
@@ -314,6 +321,93 @@ final class Sysml2Service {
         } catch (ReflectiveOperationException e) {
             throw unsupported();
         }
+    }
+
+    private static volatile Method contextFactory;
+    private static volatile boolean contextFactorySearched;
+
+    private static Method contextSetter(Class<?> builderType) {
+        for (Method m : builderType.getMethods()) {
+            if ("setContext".equals(m.getName()) && m.getParameterCount() == 1) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The generator needs a per-project context (without it, 2026x fails with a NullPointerException).
+     * Cameo builds it with a static factory taking the project, in an obfuscated class whose name may
+     * change between releases, so the factory is found by signature: first in the class 2026x HF2
+     * uses, then anywhere in the context type's package.
+     */
+    static Method contextFactory(Class<?> contextType) {
+        if (contextFactorySearched) {
+            return contextFactory;
+        }
+        synchronized (Sysml2Service.class) {
+            if (!contextFactorySearched) {
+                Class<?> mep = requireClass(MODEL_ELEMENT_PROJECT);
+                ClassLoader cl = contextType.getClassLoader();
+                String pkg = contextType.getPackage() != null ? contextType.getPackage().getName()
+                        : contextType.getName().substring(0, contextType.getName().lastIndexOf('.'));
+                Method found = factoryIn(pkg + ".n", cl, contextType, mep);
+                if (found == null) {
+                    for (String name : classesInPackage(contextType, pkg)) {
+                        found = factoryIn(name, cl, contextType, mep);
+                        if (found != null) {
+                            break;
+                        }
+                    }
+                }
+                if (found == null) {
+                    CameoLog.warn("SysML v2 text generator context factory not found; text export may fail.");
+                }
+                contextFactory = found;
+                contextFactorySearched = true;
+            }
+        }
+        return contextFactory;
+    }
+
+    private static Method factoryIn(String className, ClassLoader cl, Class<?> contextType, Class<?> mep) {
+        try {
+            Class<?> c = Class.forName(className, false, cl);
+            for (Method m : c.getDeclaredMethods()) {
+                if (Modifier.isStatic(m.getModifiers()) && m.getReturnType() == contextType
+                        && m.getParameterCount() == 1 && m.getParameterTypes()[0] == mep) {
+                    m.setAccessible(true);
+                    return m;
+                }
+            }
+        } catch (ClassNotFoundException | LinkageError | RuntimeException ignored) {
+            // not here
+        }
+        return null;
+    }
+
+    private static List<String> classesInPackage(Class<?> member, String pkg) {
+        List<String> out = new ArrayList<>();
+        try {
+            java.net.URL location = member.getProtectionDomain().getCodeSource().getLocation();
+            java.io.File file = new java.io.File(location.toURI());
+            if (!file.isFile()) {
+                return out;
+            }
+            String prefix = pkg.replace('.', '/') + "/";
+            try (java.util.jar.JarFile jar = new java.util.jar.JarFile(file)) {
+                java.util.Enumeration<java.util.jar.JarEntry> entries = jar.entries();
+                while (entries.hasMoreElements()) {
+                    String n = entries.nextElement().getName();
+                    if (n.startsWith(prefix) && n.endsWith(".class") && n.indexOf('/', prefix.length()) < 0) {
+                        out.add(n.substring(0, n.length() - 6).replace('/', '.'));
+                    }
+                }
+            }
+        } catch (Exception | LinkageError ignored) {
+            // no jar to scan
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ text compile and import
