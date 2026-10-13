@@ -14,8 +14,10 @@ import static com.cameomcp.mcp.ToolSpec.tool;
  */
 public final class AnalysisTools {
 
+    // Family name used in docs and in cameo_list_tools filters.
     public static final String FAMILY = "analysis";
 
+    // Parameter help shared by the methodology and comparison tools.
     private static final String PACK_ID = "Methodology pack id: \"oosem\" or \"uaf\" (see cameo_list_methodology_packs).";
     private static final String RECIPE_ID = "Recipe id from the pack, e.g. \"use_case_model\", \"system_requirements_package\", "
             + "\"logical_activity_flow\", \"logical_port_bdd\" (see cameo_get_methodology_pack).";
@@ -31,6 +33,10 @@ public final class AnalysisTools {
     private AnalysisTools() {
     }
 
+    /**
+     * The family's specs, in the order clients see them. Descriptions and parameter help are the
+     * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     */
     public static List<ToolSpec> specs() {
         return Arrays.asList(
                 // ---------------------------------------------------------- verification

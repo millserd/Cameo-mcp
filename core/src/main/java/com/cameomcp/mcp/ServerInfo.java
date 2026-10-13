@@ -7,6 +7,10 @@ public final class ServerInfo {
     private final String version;
     private final String instructions;
 
+    /**
+     * @param instructions text clients may add to the agent's system prompt; the plugin passes
+     *                     {@code Catalog.INSTRUCTIONS}, a short "how to start" summary
+     */
     public ServerInfo(String name, String version, String instructions) {
         this.name = name;
         this.version = version;

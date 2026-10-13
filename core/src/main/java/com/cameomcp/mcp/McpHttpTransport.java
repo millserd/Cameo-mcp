@@ -37,15 +37,18 @@ import java.util.function.Supplier;
  */
 public final class McpHttpTransport {
 
+    // Generous because bulk-create and import tools take large payloads; larger bodies get 413.
     public static final int MAX_BODY_BYTES = 64 * 1024 * 1024;
 
     private final McpServer server;
     private final String host;
     private final int port;
     private final String token;
+    // Builds the /status payload; the plugin supplies Cameo and project state.
     private final Supplier<Map<String, Object>> status;
     private HttpServer http;
     private ExecutorService executor;
+    // Counters and last error feed the status window's diagnostics.
     private volatile long startedMillis;
     private final AtomicLong httpRequests = new AtomicLong();
     private volatile String lastError;
@@ -62,12 +65,19 @@ public final class McpHttpTransport {
         this.status = status;
     }
 
+    /**
+     * Binds the socket and starts serving. Does nothing if already running.
+     *
+     * @throws IOException if the port is taken or the host cannot be bound
+     */
     public synchronized void start() throws IOException {
         if (http != null) {
             return;
         }
+        // Backlog 64 queues bursts of parallel calls instead of refusing them.
         HttpServer s = HttpServer.create(new InetSocketAddress(InetAddress.getByName(host), port), 64);
         AtomicInteger n = new AtomicInteger();
+        // Eight request threads: plenty for a few local clients. Daemon threads never keep Cameo alive on exit.
         executor = Executors.newFixedThreadPool(8, r -> {
             Thread t = new Thread(r, "cameo-mcp-http-" + n.incrementAndGet());
             t.setDaemon(true);
@@ -77,12 +87,14 @@ public final class McpHttpTransport {
         s.createContext("/mcp", this::handleMcp);
         s.createContext("/status", this::handleStatus);
         s.createContext("/health", this::handleStatus);
+        // Catch-all context: "/" serves a plain-text banner, anything else 404.
         s.createContext("/", this::handleRoot);
         s.start();
         http = s;
         startedMillis = System.currentTimeMillis();
     }
 
+    /** Stops serving, waits briefly for in-flight requests, and ends every session. */
     public synchronized void stop() {
         if (http == null) {
             return;
@@ -112,22 +124,30 @@ public final class McpHttpTransport {
         return host;
     }
 
+    /** True when clients must send the bearer token. */
     public boolean tokenRequired() {
         return token != null;
     }
 
+    /** When the server last started, in epoch milliseconds. */
     public long startedMillis() {
         return startedMillis;
     }
 
+    /** HTTP requests served since start, across every endpoint. */
     public long httpRequests() {
         return httpRequests.get();
     }
 
+    /** The last transport-level failure, or null; shown in the status window. */
     public String lastError() {
         return lastError;
     }
 
+    /**
+     * The URL clients should use. A wildcard bind address is reported as 127.0.0.1, which is
+     * always reachable locally; IPv6 literals get the brackets URLs require.
+     */
     public String endpointUrl() {
         String h = host.equals("0.0.0.0") || host.equals("::") ? "127.0.0.1" : host;
         if (h.contains(":") && !h.startsWith("[")) {
@@ -138,6 +158,10 @@ public final class McpHttpTransport {
 
     // ------------------------------------------------------------------ handlers
 
+    /*
+     * The MCP endpoint. Checks run cheapest and most security-relevant first: path, origin,
+     * CORS preflight, token. Then the HTTP verb picks the action.
+     */
     private void handleMcp(HttpExchange ex) throws IOException {
         httpRequests.incrementAndGet();
         try {
@@ -151,6 +175,7 @@ public final class McpHttpTransport {
             }
             addCors(ex);
             String method = ex.getRequestMethod();
+            // CORS preflight from a local browser page; answered before the token check, as browsers send no credentials here.
             if ("OPTIONS".equals(method)) {
                 ex.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
                 ex.getResponseHeaders().set("Access-Control-Allow-Headers",
@@ -186,15 +211,18 @@ public final class McpHttpTransport {
                 return;
             }
             McpServer.Reply reply = server.handle(body, sessionId);
+            // 404 tells the client to re-initialize; -32001 is a server-defined JSON-RPC code for "no such session".
             if (reply.unknownSession) {
                 sendJson(ex, 404, Json.obj("jsonrpc", "2.0", "id", null, "error",
                         Json.obj("code", -32001, "message", "Session not found or expired; re-initialize.")));
                 return;
             }
+            // The implicit session is internal bookkeeping, not something a client can resume.
             if (reply.sessionId != null && !"implicit".equals(reply.sessionId)) {
                 ex.getResponseHeaders().set("Mcp-Session-Id", reply.sessionId);
             }
             if (reply.body == null) {
+                // A notification or a response from the client: accepted, nothing to send.
                 ex.sendResponseHeaders(202, -1);
                 return;
             }
@@ -210,6 +238,7 @@ public final class McpHttpTransport {
         }
     }
 
+    // Health report for people and scripts. Deliberately unauthenticated: it exposes no model data.
     private void handleStatus(HttpExchange ex) throws IOException {
         httpRequests.incrementAndGet();
         try {
@@ -227,6 +256,7 @@ public final class McpHttpTransport {
         }
     }
 
+    // Plain-text banner for someone who opens the server address in a browser.
     private void handleRoot(HttpExchange ex) throws IOException {
         httpRequests.incrementAndGet();
         try {
@@ -241,6 +271,7 @@ public final class McpHttpTransport {
 
     // ------------------------------------------------------------------ helpers
 
+    // Constant-time comparison so response timing doesn't leak how much of the token matched.
     private boolean authorized(HttpExchange ex) {
         if (token == null) {
             return true;
@@ -258,6 +289,7 @@ public final class McpHttpTransport {
         if (origin == null || origin.isEmpty()) {
             return true;
         }
+        // Sandboxed iframes and file:// pages send the literal origin "null"; never trust it.
         if ("null".equals(origin)) {
             return false;
         }
@@ -277,6 +309,7 @@ public final class McpHttpTransport {
         return isLocalOrigin(ex.getRequestHeaders().getFirst("Origin"));
     }
 
+    // Echo local origins back so browser-based MCP clients can read responses and the session header.
     private static void addCors(HttpExchange ex) {
         String origin = ex.getRequestHeaders().getFirst("Origin");
         if (origin != null && isLocalOrigin(origin)) {
@@ -287,6 +320,7 @@ public final class McpHttpTransport {
         }
     }
 
+    // Reads the whole body, giving up (null) once it passes MAX_BODY_BYTES.
     private static String readBody(HttpExchange ex) throws IOException {
         try (InputStream in = ex.getRequestBody()) {
             ByteArrayOutputStream buf = new ByteArrayOutputStream();

@@ -11,10 +11,13 @@ public final class Version {
     private Version() {
     }
 
+    /** The packaged version such as {@code 1.0.0}, or {@code dev} when running from unbuilt sources. */
     public static String get() {
         return VALUE;
     }
 
+    // Gradle expands ${version} into version.properties at build time; an unexpanded "$"
+    // means the classes came from an IDE or devtools compile, so report "dev" instead.
     private static String load() {
         try (InputStream in = Version.class.getResourceAsStream("/com/cameomcp/version.properties")) {
             if (in != null) {

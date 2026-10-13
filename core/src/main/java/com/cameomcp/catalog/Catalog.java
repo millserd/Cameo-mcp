@@ -33,6 +33,10 @@ public final class Catalog {
     private static final Set<String> SCRIPT_TOOLS = new HashSet<>(Arrays.asList(
             "cameo_execute_macro", "cameo_execute_probe"));
 
+    /**
+     * Short orientation sent to every client in the initialize result. Many clients add it to the
+     * agent's system prompt, so it stays brief and points at the full guide for details.
+     */
     public static final String INSTRUCTIONS = String.join("\n",
             "Cameo MCP drives a running Cameo Systems Modeler / CATIA Magic (2024x or 2026x) through its Java API.",
             "Start with cameo_status (is Cameo up, is a project open?) and cameo_get_project (root model id).",
@@ -47,6 +51,7 @@ public final class Catalog {
     private Catalog() {
     }
 
+    /** True for tools that run user-supplied Groovy; the plugin blocks them when macros are off. */
     public static boolean isScriptTool(String name) {
         return SCRIPT_TOOLS.contains(name);
     }
@@ -66,6 +71,11 @@ public final class Catalog {
         return out;
     }
 
+    /**
+     * Loads one family's specs by calling its static {@code specs()} method.
+     *
+     * @param className fully qualified family class, one of {@link #FAMILIES}
+     */
     @SuppressWarnings("unchecked")
     public static List<ToolSpec> family(String className) {
         try {

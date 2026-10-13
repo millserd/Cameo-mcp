@@ -6,5 +6,14 @@ package com.cameomcp.mcp;
  */
 @FunctionalInterface
 public interface ToolHandler {
+    /**
+     * Runs the tool.
+     *
+     * @param args the {@code arguments} object of the tools/call request, with typed accessors
+     * @param ctx  which tool and session the call belongs to
+     * @return a JSON-shaped value that becomes the structured result, or a {@link ToolResult}
+     * @throws ToolException for failures the agent should read and act on; any other exception is
+     *                       reported as an internal error with its message
+     */
     Object call(Args args, ToolContext ctx) throws Exception;
 }

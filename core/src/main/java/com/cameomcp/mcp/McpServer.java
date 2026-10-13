@@ -23,10 +23,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class McpServer {
 
+    // Newest first: initialize answers with the client's version if listed here, otherwise the first.
     public static final List<String> SUPPORTED_PROTOCOLS =
             Collections.unmodifiableList(Arrays.asList("2025-06-18", "2025-03-26", "2024-11-05"));
     public static final String LATEST_PROTOCOL = SUPPORTED_PROTOCOLS.get(0);
 
+    // Standard JSON-RPC 2.0 error codes.
     public static final int PARSE_ERROR = -32700;
     public static final int INVALID_REQUEST = -32600;
     public static final int METHOD_NOT_FOUND = -32601;
@@ -35,6 +37,8 @@ public final class McpServer {
 
     /** Outcome of handling one HTTP body. {@code body == null} means "202 Accepted, no content". */
     public static final class Reply {
+        // "body" is the JSON to send (null for 202); "sessionId" goes in the Mcp-Session-Id response header;
+        // "unknownSession" asks the transport to answer 404 so the client re-initializes, as the spec says.
         public final String body;
         public final String sessionId;
         public final boolean unknownSession;
@@ -52,15 +56,19 @@ public final class McpServer {
     private final Map<String, McpPrompt> prompts = new LinkedHashMap<>();
     private final Map<String, McpSession> sessions = new ConcurrentHashMap<>();
     private final List<McpListener> listeners = new CopyOnWriteArrayList<>();
+    // Default guard does nothing extra; the plugin installs one that checks project state and timeouts.
     private volatile CallGuard guard = new CallGuard() {
     };
+    // Off by default: some clients never send the session header, so they share an "implicit" session.
     private volatile boolean requireSession;
 
+    /** Creates a server over a registry whose specs (and ideally handlers) are already registered. */
     public McpServer(ServerInfo info, ToolRegistry tools) {
         this.info = info;
         this.tools = tools;
     }
 
+    /** Installs the hook run around every tool call. */
     public McpServer guard(CallGuard g) {
         this.guard = g;
         return this;
@@ -72,16 +80,19 @@ public final class McpServer {
         return this;
     }
 
+    /** Registers a resource; a later one with the same URI replaces it. */
     public McpServer addResource(McpResource r) {
         resources.put(r.uri(), r);
         return this;
     }
 
+    /** Registers a prompt; a later one with the same name replaces it. */
     public McpServer addPrompt(McpPrompt p) {
         prompts.put(p.name(), p);
         return this;
     }
 
+    /** Adds an observer for sessions, requests and log lines. Safe to call while serving. */
     public void addListener(McpListener l) {
         listeners.add(l);
     }
@@ -98,10 +109,12 @@ public final class McpServer {
         return tools;
     }
 
+    /** Live sessions, for the status window. */
     public Collection<McpSession> sessions() {
         return Collections.unmodifiableCollection(sessions.values());
     }
 
+    /** Forgets a session and notifies listeners. Returns false if the id was unknown. */
     public boolean endSession(String id, String reason) {
         McpSession s = id == null ? null : sessions.remove(id);
         if (s != null) {
@@ -113,6 +126,7 @@ public final class McpServer {
         return false;
     }
 
+    /** Ends every session, used when the server stops. */
     public void endAllSessions(String reason) {
         for (String id : new ArrayList<>(sessions.keySet())) {
             endSession(id, reason);
@@ -138,6 +152,7 @@ public final class McpServer {
 
         McpSession session = sessionId == null ? null : sessions.get(sessionId);
         boolean isInitialize = isInitialize(msg);
+        // A session id we don't know (expired or from before a restart): signal 404 so the client starts over.
         if (sessionId != null && session == null && !isInitialize) {
             return new Reply(null, sessionId, true);
         }
@@ -146,9 +161,11 @@ public final class McpServer {
                 return new Reply(Json.write(errorResponse(idOf(msg), INVALID_REQUEST,
                         "Missing Mcp-Session-Id header; call initialize first.", null)), null, false);
             }
+            // Lenient mode: requests without a session id share one implicit session so they are still counted.
             session = sessions.computeIfAbsent("implicit", McpSession::new);
         }
 
+        // Batch: an initialize inside the batch creates the session the rest of the batch runs in.
         if (msg instanceof List) {
             List<Object> out = new ArrayList<>();
             String sid = session == null ? null : session.id();
@@ -169,6 +186,7 @@ public final class McpServer {
         return new Reply(o.response == null ? null : Json.write(o.response), s == null ? null : s.id(), false);
     }
 
+    // True if the message, or any message of a batch, is an initialize request.
     private static boolean isInitialize(Object msg) {
         if (msg instanceof Map) {
             return "initialize".equals(((Map<?, ?>) msg).get("method"));
@@ -187,6 +205,7 @@ public final class McpServer {
         return msg instanceof Map ? ((Map<?, ?>) msg).get("id") : null;
     }
 
+    // Response to one message plus the session an initialize created (null otherwise).
     private static final class HandleOutcome {
         final Map<String, Object> response;
         final McpSession session;
@@ -197,6 +216,10 @@ public final class McpServer {
         }
     }
 
+    /*
+     * Dispatches one JSON-RPC message. Requests get a response map; notifications get null.
+     * Every non-notification is reported to listeners with its duration and any error text.
+     */
     @SuppressWarnings("unchecked")
     private HandleOutcome handleOne(Object raw, McpSession session) {
         if (!(raw instanceof Map)) {
@@ -237,6 +260,7 @@ public final class McpServer {
                     }
                     result = null;
                     break;
+                // Acknowledged and ignored: tool calls run to completion, and we keep no roots or progress state.
                 case "notifications/cancelled":
                 case "notifications/roots/list_changed":
                 case "notifications/progress":
@@ -272,6 +296,7 @@ public final class McpServer {
                 case "prompts/get":
                     result = getPrompt(params);
                     break;
+                // Logging level and completions are accepted for client compatibility but have no effect.
                 case "logging/setLevel":
                     result = new LinkedHashMap<>();
                     break;
@@ -290,6 +315,7 @@ public final class McpServer {
             response = isNotification ? null : errorResponse(id, INTERNAL_ERROR, "Internal error: " + e, null);
         }
 
+        // The session counters feed the status window.
         McpSession s = newSession != null ? newSession : session;
         if (s != null) {
             s.touch();
@@ -308,6 +334,10 @@ public final class McpServer {
 
     // ----------------------------------------------------------------- methods
 
+    /*
+     * Negotiates the protocol version and records the client's name. Capabilities are fixed: the
+     * tool, resource and prompt lists never change at run time, so listChanged is false.
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> initialize(Map<String, Object> params, McpSession session) {
         String requested = params.get("protocolVersion") == null ? null : String.valueOf(params.get("protocolVersion"));
@@ -342,6 +372,10 @@ public final class McpServer {
         return Json.obj("tools", list);
     }
 
+    /*
+     * Runs one tool. Every failure becomes an isError result rather than a JSON-RPC error, so the
+     * agent reads the message. Only a missing name or an unknown tool is a protocol error.
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> callTool(Map<String, Object> params, McpSession session) {
         Object nameObj = params.get("name");
@@ -373,6 +407,7 @@ public final class McpServer {
         } catch (ToolException e) {
             return ToolResult.error(e.code(), e.getMessage(), e.details()).toMcp();
         } catch (Exception e) {
+            // Unwrap executor and reflection wrappers so the agent sees the real cause, not "ExecutionException".
             Throwable root = e;
             while (root.getCause() != null && root.getCause() != root
                     && (root instanceof java.util.concurrent.ExecutionException
@@ -412,6 +447,7 @@ public final class McpServer {
         String uri = String.valueOf(params.get("uri"));
         McpResource r = resources.get(uri);
         if (r == null) {
+            // -32002 is the resource-not-found code defined by the MCP spec.
             throw new RpcError(-32002, "Resource not found: " + uri, Json.obj("uri", uri));
         }
         return Json.obj("contents", Json.arr(Json.obj("uri", uri, "mimeType", r.mimeType(), "text", r.read())));
@@ -455,6 +491,7 @@ public final class McpServer {
         return Json.obj("jsonrpc", "2.0", "id", id, "error", error);
     }
 
+    // An RPC failure that becomes a JSON-RPC error response with this code.
     private static final class RpcError extends RuntimeException {
         final int code;
         final Object data;

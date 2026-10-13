@@ -49,17 +49,31 @@ import java.util.concurrent.TimeUnit;
  */
 public final class StdioLauncher {
 
+    // Plugin endpoint every message is forwarded to, e.g. http://127.0.0.1:18740/mcp.
     private final String endpoint;
     private final String token;
+    // The real stdout, reserved for protocol replies.
     private final PrintStream out;
+    // Local stand-in server used while Cameo is unreachable: full catalog, every tool call fails clearly.
     private final McpServer offline;
+    // Replies come from worker threads; one lock keeps each reply on its own line.
     private final Object writeLock = new Object();
+    // Guards remoteSession so only one thread re-initializes with Cameo at a time.
     private final Object sessionLock = new Object();
+    // The client's own initialize params, replayed when we reconnect so Cameo sees the real client name.
     private volatile Map<String, Object> clientInitParams;
+    // Mcp-Session-Id that Cameo gave us; null until the first successful initialize.
     private volatile String remoteSession;
+    // Last known reachability, so "connected"/"not reachable" is logged only on change.
     private volatile boolean lastOnline;
     private final int readTimeoutMillis;
 
+    /**
+     * @param endpoint          plugin URL to forward to
+     * @param token             bearer token, or null
+     * @param out               where protocol replies are written (stdout in production)
+     * @param readTimeoutMillis longest wait for one reply; tool calls such as reports can take minutes
+     */
     StdioLauncher(String endpoint, String token, PrintStream out, int readTimeoutMillis) {
         this.endpoint = endpoint;
         this.token = token;
@@ -81,6 +95,10 @@ public final class StdioLauncher {
         CatalogPrompts.register(offline);
     }
 
+    /**
+     * Entry point. Options override the CAMEO_MCP_* environment variables, which override the
+     * defaults. Exits with status 2 on an unknown option.
+     */
     public static void main(String[] argv) throws Exception {
         String host = env("CAMEO_MCP_HOST", "127.0.0.1");
         int port = Integer.parseInt(env("CAMEO_MCP_PORT", "18740"));
@@ -121,6 +139,7 @@ public final class StdioLauncher {
         new StdioLauncher(url, token, protocolOut, timeout * 1000).serve(System.in);
     }
 
+    // Help text printed by --help and after an unknown option.
     static String usage() {
         return String.join("\n",
                 "cameo-mcp-stdio " + Version.get() + " - stdio bridge to the Cameo MCP plugin",
@@ -134,6 +153,7 @@ public final class StdioLauncher {
                 "  --version, --help");
     }
 
+    // An environment variable's trimmed value, or dflt when unset or blank.
     private static String env(String name, String dflt) {
         String v = System.getenv(name);
         return v == null || v.trim().isEmpty() ? dflt : v.trim();
@@ -141,6 +161,10 @@ public final class StdioLauncher {
 
     // ------------------------------------------------------------------ serving
 
+    /**
+     * Reads messages from {@code in} until end of input, handling each on a worker thread so a slow
+     * tool call doesn't block pings or other requests. Closes the Cameo session on exit.
+     */
     void serve(InputStream in) throws IOException, InterruptedException {
         log("cameo-mcp-stdio " + Version.get() + " forwarding to " + endpoint);
         ExecutorService pool = Executors.newCachedThreadPool(r -> {
@@ -155,6 +179,7 @@ public final class StdioLauncher {
             if (msg.isEmpty()) {
                 continue;
             }
+            // The cheap contains() check avoids parsing every message just to find initialize.
             if (msg.contains("\"initialize\"") && isMethod(msg, "initialize")) {
                 // Handle initialize synchronously so later messages see the session.
                 handle(msg);
@@ -167,6 +192,7 @@ public final class StdioLauncher {
         closeRemoteSession();
     }
 
+    // True if msg is a JSON-RPC message with the given method.
     private static boolean isMethod(String msg, String method) {
         try {
             Object o = Json.parse(msg);
@@ -176,6 +202,11 @@ public final class StdioLauncher {
         }
     }
 
+    /**
+     * Handles one client message and writes the reply, if any. Remembers initialize params for later
+     * reconnects. Unparseable input is answered by the offline server, which produces the proper
+     * JSON-RPC parse error.
+     */
     @SuppressWarnings("unchecked")
     void handle(String msg) {
         String reply;
@@ -247,6 +278,10 @@ public final class StdioLauncher {
         }
     }
 
+    /*
+     * Opens a Cameo session on demand: after start-up, after Cameo restarted, or when the client sent
+     * its initialize while Cameo was down. Uses the client's initialize params when we have them.
+     */
     private void ensureRemoteSession() throws IOException {
         synchronized (sessionLock) {
             if (remoteSession != null) {
@@ -265,6 +300,7 @@ public final class StdioLauncher {
         }
     }
 
+    // Logs only transitions between reachable and unreachable.
     private void online(boolean now) {
         if (now != lastOnline) {
             log(now ? "Connected to Cameo at " + endpoint : "Cameo not reachable at " + endpoint + " - serving offline catalog");
@@ -272,6 +308,7 @@ public final class StdioLauncher {
         }
     }
 
+    // Best-effort DELETE so Cameo's status window doesn't keep listing a client that has gone.
     private void closeRemoteSession() {
         String s = remoteSession;
         if (s == null) {
@@ -286,6 +323,7 @@ public final class StdioLauncher {
         }
     }
 
+    // A JSON-RPC error for a request; null for a notification, which must get no reply.
     private static String errorReply(Object parsed, String message) {
         Object id = parsed instanceof Map ? ((Map<?, ?>) parsed).get("id") : null;
         if (id == null) {
@@ -296,12 +334,17 @@ public final class StdioLauncher {
 
     // ------------------------------------------------------------------ HTTP
 
+    // Status, body and Mcp-Session-Id header of one HTTP exchange.
     static final class HttpReply {
         int code;
         String body;
         String sessionId;
     }
 
+    /*
+     * Opens a connection to the endpoint. Loopback addresses bypass any system proxy: corporate proxy
+     * settings would otherwise route 127.0.0.1 through the proxy and fail.
+     */
     private HttpURLConnection open(String method) throws IOException {
         URL url = new URL(endpoint);
         boolean loopback;
@@ -314,6 +357,7 @@ public final class StdioLauncher {
         c.setRequestMethod(method);
         c.setConnectTimeout(2000);
         c.setReadTimeout(readTimeoutMillis);
+        // The Streamable HTTP spec requires clients to accept both; this server only ever answers JSON.
         c.setRequestProperty("Accept", "application/json, text/event-stream");
         if (token != null && !token.trim().isEmpty()) {
             c.setRequestProperty("Authorization", "Bearer " + token.trim());
@@ -321,6 +365,7 @@ public final class StdioLauncher {
         return c;
     }
 
+    // Sends one JSON-RPC body and returns the reply. Error statuses still carry a JSON body worth reading.
     HttpReply post(String body, String sessionId) throws IOException {
         HttpURLConnection c = open("POST");
         c.setDoOutput(true);
@@ -338,6 +383,7 @@ public final class StdioLauncher {
         return r;
     }
 
+    // Reads a stream to the end as UTF-8; null stays null.
     private static String read(InputStream in) throws IOException {
         if (in == null) {
             return null;
@@ -353,12 +399,18 @@ public final class StdioLauncher {
         }
     }
 
+    // Logs to stderr, which MCP clients show in their server log; stdout carries only protocol.
     private static void log(String message) {
         System.err.println("[cameo-mcp-stdio] " + message);
     }
 
     // ------------------------------------------------------------------ diagnose
 
+    /**
+     * The --diagnose check: initialize, call cameo_status, print the result, close the session.
+     *
+     * @return process exit code, 0 when Cameo answered
+     */
     static int diagnose(String endpoint, String token) {
         System.out.println("cameo-mcp-stdio " + Version.get());
         System.out.println("Endpoint: " + endpoint);

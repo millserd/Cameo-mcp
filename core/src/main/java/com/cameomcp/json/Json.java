@@ -24,6 +24,12 @@ public final class Json {
 
     // ------------------------------------------------------------------ parse
 
+    /**
+     * Parses one JSON value. Leading and trailing whitespace (and a byte-order mark) is allowed;
+     * anything else after the value is an error.
+     *
+     * @throws JsonException with the character offset of the problem
+     */
     public static Object parse(String text) {
         if (text == null) {
             throw new JsonException("No JSON text");
@@ -38,6 +44,7 @@ public final class Json {
         return value;
     }
 
+    /** Parses text that must be a JSON object, such as a request body or a settings file. */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parseObject(String text) {
         Object v = parse(text);
@@ -47,6 +54,7 @@ public final class Json {
         return (Map<String, Object>) v;
     }
 
+    // Recursive-descent parser over the input string; "i" is the read position.
     private static final class Parser {
         private final String s;
         private int i;
@@ -66,6 +74,7 @@ public final class Json {
         void skipWs() {
             while (i < s.length()) {
                 char c = s.charAt(i);
+                // U+FEFF is the byte-order mark some editors put at the start of saved JSON files.
                 if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '﻿') {
                     i++;
                 } else {
@@ -103,6 +112,7 @@ public final class Json {
             }
         }
 
+        // Consumes a literal keyword (true, false, null) or fails.
         void expect(String word) {
             if (!s.startsWith(word, i)) {
                 throw error("Expected '" + word + "'");
@@ -170,6 +180,7 @@ public final class Json {
             }
         }
 
+        // Copies unescaped runs in one go and only builds a StringBuilder when an escape appears.
         String readString() {
             i++; // opening quote
             StringBuilder sb = null;
@@ -208,6 +219,7 @@ public final class Json {
                                 throw error("Bad unicode escape");
                             }
                             try {
+                                // Surrogate pairs arrive as two consecutive escapes and recombine naturally in UTF-16.
                                 sb.append((char) Integer.parseInt(s.substring(i, i + 4), 16));
                             } catch (NumberFormatException ex) {
                                 throw error("Bad unicode escape");
@@ -224,6 +236,11 @@ public final class Json {
             }
         }
 
+        /*
+         * Scans the number's characters, then converts. Integers that fit in a long stay Long (ids,
+         * counts, coordinates compare cleanly); larger integers and out-of-range decimals keep full
+         * precision as BigDecimal; other decimals become Double.
+         */
         Object readNumber() {
             int start = i;
             if (s.charAt(i) == '-') {
@@ -263,12 +280,14 @@ public final class Json {
 
     // ------------------------------------------------------------------ write
 
+    /** Compact JSON, used on the wire. */
     public static String write(Object value) {
         StringBuilder sb = new StringBuilder();
         write(sb, value, -1, 0);
         return sb.toString();
     }
 
+    /** Two-space indented JSON, used for files and for text shown to people. */
     public static String pretty(Object value) {
         StringBuilder sb = new StringBuilder();
         write(sb, value, 2, 0);
@@ -285,6 +304,7 @@ public final class Json {
         }
     }
 
+    // Writes any JSON-shaped Java value; indent < 0 means compact.
     private static void write(StringBuilder sb, Object v, int indent, int depth) {
         if (v == null) {
             sb.append("null");
@@ -294,8 +314,10 @@ public final class Json {
             sb.append(v.toString());
         } else if (v instanceof Double || v instanceof Float) {
             double d = ((Number) v).doubleValue();
+            // JSON has no NaN or Infinity; null is the conventional stand-in.
             if (Double.isNaN(d) || Double.isInfinite(d)) {
                 sb.append("null");
+            // Whole doubles print without ".0" so 3.0 and 3 look the same to clients.
             } else if (d == Math.rint(d) && Math.abs(d) < 1e15) {
                 sb.append((long) d);
             } else {
@@ -351,11 +373,13 @@ public final class Json {
                 l.add(x);
             }
             write(sb, l, indent, depth);
+        // Unknown types (ids, enums of other APIs, ...) fall back to their string form.
         } else {
             quote(sb, v.toString());
         }
     }
 
+    /** Returns {@code s} as a quoted, escaped JSON string literal. */
     public static String quote(String s) {
         StringBuilder sb = new StringBuilder(s.length() + 2);
         quote(sb, s);
@@ -375,6 +399,7 @@ public final class Json {
                 case '\b': sb.append("\\b"); break;
                 case '\f': sb.append("\\f"); break;
                 default:
+                    // U+2028 and U+2029 are valid in JSON but break JavaScript string literals, so escape them too.
                     if (c < 0x20 || c == ' ' || c == ' ') {
                         sb.append(String.format("\\u%04x", (int) c));
                     } else {
@@ -399,6 +424,7 @@ public final class Json {
         return m;
     }
 
+    /** Builds a mutable JSON array from the given values. */
     public static List<Object> arr(Object... values) {
         List<Object> l = new ArrayList<>(values.length);
         java.util.Collections.addAll(l, values);
