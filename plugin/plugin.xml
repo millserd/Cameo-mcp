@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Cameo MCP plugin descriptor. Works on Cameo / CATIA Magic 2024x and 2026x. -->
+<plugin
+    id="com.cameomcp.plugin"
+    name="Cameo MCP"
+    version="${version}"
+    provider-name="Cameo MCP"
+    class="com.cameomcp.plugin.CameoMcpPlugin">
+    <requires>
+        <api version="1.0"/>
+    </requires>
+    <runtime>
+        <library name="cameo-mcp-plugin.jar"/>
+        <library name="lib/gson-2.10.1.jar"/>
+    </runtime>
+</plugin>

@@ -1,0 +1,6 @@
+// Compile-only stand-ins for the Cameo / MagicDraw OpenAPI.
+// Used only when no Cameo installation is available (CI, cloud dev).
+// They are never packaged: the real classes come from Cameo at runtime.
+plugins { id 'java-library' }
+java { toolchain { } }
+tasks.withType(JavaCompile).configureEach { options.release = 17; options.compilerArgs += ['-Xlint:none', '-nowarn'] }

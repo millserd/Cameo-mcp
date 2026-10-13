@@ -1,0 +1,8 @@
+// Compile-only stub of the Cameo OpenAPI. Not packaged.
+package com.nomagic.uml2.ext.magicdraw.actions.mdbasicactions;
+
+import java.util.*;
+import com.nomagic.uml2.ext.magicdraw.activities.mdfundamentalactivities.ExecutableNode;
+
+public interface Action extends ExecutableNode {
+}

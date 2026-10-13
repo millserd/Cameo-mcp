@@ -1,0 +1,648 @@
+[
+ {
+  "name": "status",
+  "tool": "cameo_status"
+ },
+ {
+  "name": "capabilities",
+  "tool": "cameo_get_capabilities"
+ },
+ {
+  "name": "probe_bridge",
+  "tool": "cameo_probe_bridge"
+ },
+ {
+  "name": "list_tools",
+  "tool": "cameo_list_tools",
+  "args": {}
+ },
+ {
+  "name": "log",
+  "tool": "cameo_log",
+  "args": {
+   "message": "Live test started"
+  }
+ },
+ {
+  "name": "get_project",
+  "tool": "cameo_get_project",
+  "save": {
+   "root": "primaryModelId"
+  },
+  "expect": {
+   "projectKind": "uml"
+  }
+ },
+ {
+  "name": "ui_state",
+  "tool": "cameo_get_ui_state",
+  "args": {
+   "summary_only": true
+  }
+ },
+ {
+  "name": "create_package",
+  "tool": "cameo_create_element",
+  "args": {
+   "type": "Package",
+   "name": "MCP Live Test",
+   "parent_id": "${root}"
+  },
+  "save": {
+   "pkg": "id"
+  }
+ },
+ {
+  "name": "create_elements_bulk",
+  "tool": "cameo_create_elements",
+  "args": {
+   "elements": [
+    {
+     "ref": "veh",
+     "type": "Block",
+     "name": "Vehicle",
+     "parent_id": "${pkg}",
+     "documentation": "Top-level system"
+    },
+    {
+     "ref": "eng",
+     "type": "Block",
+     "name": "Engine",
+     "parent_id": "${pkg}"
+    },
+    {
+     "ref": "whl",
+     "type": "Block",
+     "name": "Wheel",
+     "parent_id": "${pkg}"
+    },
+    {
+     "ref": "engPart",
+     "type": "Property",
+     "name": "engine",
+     "parent_id": "ref:veh",
+     "type_id": "ref:eng",
+     "aggregation": "composite"
+    },
+    {
+     "ref": "comp",
+     "type": "Composition",
+     "source_id": "ref:veh",
+     "target_id": "ref:whl"
+    },
+    {
+     "ref": "req",
+     "type": "Requirement",
+     "name": "Top Speed",
+     "parent_id": "${pkg}",
+     "tagged_values": {
+      "Id": "R1",
+      "Text": "The vehicle shall reach 120 km/h."
+     }
+    },
+    {
+     "ref": "sat",
+     "type": "Satisfy",
+     "source_id": "ref:eng",
+     "target_id": "ref:req"
+    }
+   ]
+  },
+  "save": {
+   "veh": "refs.veh",
+   "eng": "refs.eng",
+   "whl": "refs.whl",
+   "req": "refs.req",
+   "comp": "refs.comp",
+   "sat": "refs.sat"
+  }
+ },
+ {
+  "name": "query_blocks",
+  "tool": "cameo_query_elements",
+  "args": {
+   "type": "Class",
+   "stereotype": "block",
+   "package_id": "${pkg}"
+  }
+ },
+ {
+  "name": "get_element",
+  "tool": "cameo_get_element",
+  "args": {
+   "element_id": "${veh}"
+  }
+ },
+ {
+  "name": "get_relationships",
+  "tool": "cameo_get_relationships",
+  "args": {
+   "element_id": "${veh}"
+  }
+ },
+ {
+  "name": "containment_children",
+  "tool": "cameo_list_containment_children",
+  "args": {
+   "root_id": "${pkg}"
+  }
+ },
+ {
+  "name": "modify_element",
+  "tool": "cameo_modify_element",
+  "args": {
+   "element_id": "${whl}",
+   "documentation": "Road wheel"
+  }
+ },
+ {
+  "name": "get_specification",
+  "tool": "cameo_get_specification",
+  "args": {
+   "element_id": "${eng}"
+  }
+ },
+ {
+  "name": "set_tagged_values",
+  "tool": "cameo_set_tagged_values",
+  "args": {
+   "element_id": "${req}",
+   "stereotype": "Requirement",
+   "values": {
+    "Text": "The vehicle shall reach 120 km/h on level road."
+   }
+  }
+ },
+ {
+  "name": "create_activity",
+  "tool": "cameo_create_elements",
+  "args": {
+   "elements": [
+    {
+     "ref": "act",
+     "type": "Activity",
+     "name": "Drive",
+     "parent_id": "${pkg}"
+    },
+    {
+     "ref": "init",
+     "type": "InitialNode",
+     "name": "start",
+     "parent_id": "ref:act"
+    },
+    {
+     "ref": "a1",
+     "type": "OpaqueAction",
+     "name": "Accelerate",
+     "parent_id": "ref:act"
+    },
+    {
+     "ref": "fin",
+     "type": "ActivityFinalNode",
+     "name": "end",
+     "parent_id": "ref:act"
+    },
+    {
+     "type": "ControlFlow",
+     "source_id": "ref:init",
+     "target_id": "ref:a1",
+     "owner_id": "ref:act"
+    },
+    {
+     "type": "ControlFlow",
+     "source_id": "ref:a1",
+     "target_id": "ref:fin",
+     "owner_id": "ref:act"
+    }
+   ]
+  },
+  "save": {
+   "act": "refs.act"
+  }
+ },
+ {
+  "name": "list_diagram_types",
+  "tool": "cameo_list_diagram_types"
+ },
+ {
+  "name": "create_bdd",
+  "tool": "cameo_create_diagram",
+  "args": {
+   "type": "BDD",
+   "name": "Vehicle Structure",
+   "parent_id": "${pkg}"
+  },
+  "save": {
+   "bdd": "id"
+  }
+ },
+ {
+  "name": "add_vehicle",
+  "tool": "cameo_add_to_diagram",
+  "args": {
+   "diagram_id": "${bdd}",
+   "element_id": "${veh}",
+   "x": 100,
+   "y": 80
+  },
+  "save": {
+   "pVeh": "presentationId"
+  }
+ },
+ {
+  "name": "add_engine",
+  "tool": "cameo_add_to_diagram",
+  "args": {
+   "diagram_id": "${bdd}",
+   "element_id": "${eng}",
+   "x": 40,
+   "y": 320
+  },
+  "save": {
+   "pEng": "presentationId"
+  }
+ },
+ {
+  "name": "add_wheel",
+  "tool": "cameo_add_to_diagram",
+  "args": {
+   "diagram_id": "${bdd}",
+   "element_id": "${whl}",
+   "x": 340,
+   "y": 320
+  },
+  "save": {
+   "pWhl": "presentationId"
+  }
+ },
+ {
+  "name": "add_requirement",
+  "tool": "cameo_add_to_diagram",
+  "args": {
+   "diagram_id": "${bdd}",
+   "element_id": "${req}",
+   "x": 420,
+   "y": 60
+  },
+  "save": {
+   "pReq": "presentationId"
+  }
+ },
+ {
+  "name": "add_paths",
+  "tool": "cameo_add_diagram_paths",
+  "args": {
+   "diagram_id": "${bdd}",
+   "paths": [
+    {
+     "relationshipId": "${comp}",
+     "sourceShapeId": "${pVeh}",
+     "targetShapeId": "${pWhl}"
+    },
+    {
+     "relationshipId": "${sat}",
+     "sourceShapeId": "${pEng}",
+     "targetShapeId": "${pReq}"
+    }
+   ]
+  }
+ },
+ {
+  "name": "list_shapes",
+  "tool": "cameo_list_diagram_shapes",
+  "args": {
+   "diagram_id": "${bdd}"
+  }
+ },
+ {
+  "name": "get_shape_properties",
+  "tool": "cameo_get_shape_properties",
+  "args": {
+   "diagram_id": "${bdd}",
+   "presentation_id": "${pVeh}"
+  }
+ },
+ {
+  "name": "set_shape_properties",
+  "tool": "cameo_set_shape_properties",
+  "args": {
+   "diagram_id": "${bdd}",
+   "presentation_id": "${pVeh}",
+   "properties": {
+    "Fill Color": "#E0F0FF"
+   }
+  }
+ },
+ {
+  "name": "move_shapes",
+  "tool": "cameo_move_shapes",
+  "args": {
+   "diagram_id": "${bdd}",
+   "shapes": [
+    {
+     "presentationId": "${pReq}",
+     "x": 460,
+     "y": 80
+    }
+   ]
+  }
+ },
+ {
+  "name": "auto_layout",
+  "tool": "cameo_auto_layout",
+  "args": {
+   "diagram_id": "${bdd}"
+  }
+ },
+ {
+  "name": "diagram_image_meta",
+  "tool": "cameo_get_diagram_image",
+  "args": {
+   "diagram_id": "${bdd}",
+   "include_image": false
+  }
+ },
+ {
+  "name": "diagram_image",
+  "tool": "cameo_get_diagram_image",
+  "args": {
+   "diagram_id": "${bdd}",
+   "max_width": 900,
+   "format": "png"
+  }
+ },
+ {
+  "name": "export_image",
+  "tool": "cameo_export_diagram_image",
+  "args": {
+   "diagram_id": "${bdd}",
+   "file_path": "${testdir}\\vehicle-bdd.png",
+   "overwrite": true
+  }
+ },
+ {
+  "name": "rename_diagram",
+  "tool": "cameo_rename_diagram",
+  "args": {
+   "diagram_id": "${bdd}",
+   "name": "Vehicle Structure BDD"
+  }
+ },
+ {
+  "name": "dump_diagram_props",
+  "tool": "cameo_dump_diagram_properties",
+  "args": {
+   "diagram_id": "${bdd}",
+   "summary_only": true
+  }
+ },
+ {
+  "name": "verify_diagram_visual",
+  "tool": "cameo_verify_diagram_visual",
+  "args": {
+   "diagram_id": "${bdd}",
+   "expected_element_ids": [
+    "${veh}",
+    "${eng}",
+    "${whl}"
+   ]
+  }
+ },
+ {
+  "name": "list_diagrams",
+  "tool": "cameo_list_diagrams"
+ },
+ {
+  "name": "create_activity_diagram",
+  "tool": "cameo_create_diagram",
+  "args": {
+   "type": "Activity",
+   "name": "Drive Flow",
+   "parent_id": "${act}"
+  },
+  "save": {
+   "actd": "id"
+  }
+ },
+ {
+  "name": "verify_activity",
+  "tool": "cameo_verify_activity_flow_semantics",
+  "args": {
+   "diagram_id": "${actd}"
+  }
+ },
+ {
+  "name": "list_matrix_kinds",
+  "tool": "cameo_list_matrix_kinds"
+ },
+ {
+  "name": "create_matrix",
+  "tool": "cameo_create_matrix",
+  "args": {
+   "kind": "satisfy",
+   "parent_id": "${pkg}",
+   "scope_id": "${pkg}"
+  },
+  "save": {
+   "mx": "id"
+  }
+ },
+ {
+  "name": "get_matrix",
+  "tool": "cameo_get_matrix",
+  "args": {
+   "matrix_id": "${mx}"
+  }
+ },
+ {
+  "name": "verify_matrix",
+  "tool": "cameo_verify_matrix_consistency",
+  "args": {
+   "matrix_id": "${mx}"
+  }
+ },
+ {
+  "name": "list_matrices",
+  "tool": "cameo_list_matrices"
+ },
+ {
+  "name": "create_generic_table",
+  "tool": "cameo_create_generic_table",
+  "args": {
+   "parent_id": "${pkg}",
+   "name": "Blocks Table",
+   "element_types": [
+    "Block"
+   ],
+   "scope_ids": [
+    "${pkg}"
+   ]
+  },
+  "save": {
+   "tbl": "id"
+  }
+ },
+ {
+  "name": "get_generic_table",
+  "tool": "cameo_get_generic_table",
+  "args": {
+   "table_id": "${tbl}"
+  }
+ },
+ {
+  "name": "create_relation_map",
+  "tool": "cameo_create_relation_map",
+  "args": {
+   "parent_id": "${pkg}",
+   "name": "Vehicle Map",
+   "context_element_id": "${veh}",
+   "scope_ids": [
+    "${pkg}"
+   ]
+  },
+  "save": {
+   "rm": "id"
+  }
+ },
+ {
+  "name": "get_relation_map",
+  "tool": "cameo_get_relation_map",
+  "args": {
+   "relation_map_id": "${rm}"
+  }
+ },
+ {
+  "name": "render_relation_map",
+  "tool": "cameo_render_relation_map",
+  "args": {
+   "relation_map_id": "${rm}",
+   "include_image": false
+  }
+ },
+ {
+  "name": "traceability_graph",
+  "tool": "cameo_get_traceability_graph",
+  "args": {
+   "root_element_ids": [
+    "${req}"
+   ]
+  }
+ },
+ {
+  "name": "create_snapshot",
+  "tool": "cameo_create_snapshot",
+  "args": {
+   "target_type": "diagram",
+   "target_id": "${bdd}",
+   "name": "bdd-1"
+  }
+ },
+ {
+  "name": "list_snapshots",
+  "tool": "cameo_list_snapshots"
+ },
+ {
+  "name": "validation_caps",
+  "tool": "cameo_get_validation_capabilities"
+ },
+ {
+  "name": "list_validation_suites",
+  "tool": "cameo_list_validation_suites"
+ },
+ {
+  "name": "run_validation",
+  "tool": "cameo_run_validation",
+  "args": {
+   "scope_element_ids": [
+    "${pkg}"
+   ],
+   "timeout_ms": 60000
+  }
+ },
+ {
+  "name": "report_templates",
+  "tool": "cameo_list_report_templates"
+ },
+ {
+  "name": "requirements_export_preview",
+  "tool": "cameo_export_requirements_preview",
+  "args": {
+   "scope_ids": [
+    "${pkg}"
+   ]
+  }
+ },
+ {
+  "name": "verify_requirement_quality",
+  "tool": "cameo_verify_requirement_quality",
+  "args": {
+   "requirement_ids": [
+    "${req}"
+   ]
+  }
+ },
+ {
+  "name": "simulation_caps",
+  "tool": "cameo_get_simulation_capabilities"
+ },
+ {
+  "name": "teamwork_caps",
+  "tool": "cameo_get_teamwork_capabilities"
+ },
+ {
+  "name": "profile_caps",
+  "tool": "cameo_get_profile_capabilities"
+ },
+ {
+  "name": "typed_diagrams",
+  "tool": "cameo_list_typed_diagrams"
+ },
+ {
+  "name": "methodology_packs",
+  "tool": "cameo_list_methodology_packs"
+ },
+ {
+  "name": "proof_text",
+  "tool": "cameo_proof_model_text",
+  "args": {
+   "root_package_id": "${pkg}",
+   "auto_apply": false
+  }
+ },
+ {
+  "name": "macro",
+  "tool": "cameo_execute_macro",
+  "args": {
+   "script": "return project.getName() + ' / ' + primaryModel.getName()"
+  }
+ },
+ {
+  "name": "undo",
+  "tool": "cameo_undo",
+  "args": {
+   "steps": 1
+  }
+ },
+ {
+  "name": "redo",
+  "tool": "cameo_redo",
+  "args": {
+   "steps": 1
+  }
+ },
+ {
+  "name": "bad_id_error",
+  "tool": "cameo_get_element",
+  "args": {
+   "element_id": "no-such-id"
+  },
+  "expectError": true
+ },
+ {
+  "name": "log_done",
+  "tool": "cameo_log",
+  "args": {
+   "message": "Live test finished"
+  }
+ }
+]

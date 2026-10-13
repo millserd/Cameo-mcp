@@ -1,0 +1,445 @@
+package com.cameomcp.plugin.tools.sysml2;
+
+import com.cameomcp.mcp.ToolException;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Reflective access to SysML v2 (KerML) model elements. The KerML API lives in the SysML v2
+ * plugin of Cameo 2026x, which this plugin cannot require (2024x has no such plugin), and its
+ * implementation classes are not public, so every call goes through the public KerML interfaces.
+ */
+final class Sysml2Model {
+
+    static final String KERML_ELEMENT = "com.dassault_systemes.modeler.kerml.model.kerml.Element";
+
+    /** Upper bound on elements visited by one tree walk. */
+    static final int WALK_LIMIT = 200_000;
+
+    private static final Map<String, Method> METHODS = new ConcurrentHashMap<>();
+    private static final Method MISSING;
+
+    static {
+        try {
+            MISSING = Object.class.getMethod("hashCode");
+        } catch (NoSuchMethodException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private Sysml2Model() {
+    }
+
+    // ------------------------------------------------------------------ reflection
+
+    /** Whether {@code o} implements the KerML Element interface. */
+    static boolean isElement(Object o) {
+        for (Class<?> c = o == null ? null : o.getClass(); c != null; c = c.getSuperclass()) {
+            if (implementsNamed(c, KERML_ELEMENT)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean implementsNamed(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) {
+            if (name.equals(i.getName()) || implementsNamed(i, name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Calls a public no-arg method; null when the method does not exist. */
+    static Object call(Object target, String name) {
+        return callWith(target, name, new Class<?>[0]);
+    }
+
+    static Object callWith(Object target, String name, Class<?>[] types, Object... args) {
+        if (target == null) {
+            return null;
+        }
+        Method m = method(target.getClass(), name, types);
+        if (m == null) {
+            return null;
+        }
+        try {
+            return m.invoke(target, args);
+        } catch (InvocationTargetException e) {
+            Throwable c = e.getCause() != null ? e.getCause() : e;
+            if (c instanceof RuntimeException) {
+                throw (RuntimeException) c;
+            }
+            throw new ToolException("TOOL_FAILED", name + " failed: " + c);
+        } catch (IllegalAccessException e) {
+            throw new ToolException("TOOL_FAILED", "Cannot call " + name + ": " + e.getMessage());
+        }
+    }
+
+    /** Calls a method and swallows failures (for optional, informational properties). */
+    static Object quiet(Object target, String name) {
+        try {
+            return call(target, name);
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
+    }
+
+    /**
+     * The method as declared by a public class or interface, so it can be invoked although the
+     * runtime class is package-private.
+     */
+    static Method method(Class<?> type, String name, Class<?>... types) {
+        StringBuilder key = new StringBuilder(type.getName()).append('#').append(name);
+        for (Class<?> t : types) {
+            key.append(',').append(t.getName());
+        }
+        Method cached = METHODS.get(key.toString());
+        if (cached != null) {
+            return cached == MISSING ? null : cached;
+        }
+        Method found = publicMethod(type, name, types);
+        METHODS.put(key.toString(), found == null ? MISSING : found);
+        return found;
+    }
+
+    private static Method publicMethod(Class<?> type, String name, Class<?>[] types) {
+        Method m;
+        try {
+            m = type.getMethod(name, types);
+        } catch (NoSuchMethodException | LinkageError e) {
+            return null;
+        }
+        if (Modifier.isPublic(m.getDeclaringClass().getModifiers())) {
+            return m;
+        }
+        Method viaInterface = fromInterfaces(type, name, types);
+        if (viaInterface != null) {
+            return viaInterface;
+        }
+        try {
+            m.setAccessible(true);
+            return m;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static Method fromInterfaces(Class<?> type, String name, Class<?>[] types) {
+        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
+            if (c != type && Modifier.isPublic(c.getModifiers())) {
+                try {
+                    return c.getMethod(name, types);
+                } catch (NoSuchMethodException ignored) {
+                    // keep looking
+                }
+            }
+            for (Class<?> i : c.getInterfaces()) {
+                Method m = fromInterface(i, name, types);
+                if (m != null) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Method fromInterface(Class<?> i, String name, Class<?>[] types) {
+        if (Modifier.isPublic(i.getModifiers())) {
+            try {
+                return i.getMethod(name, types);
+            } catch (NoSuchMethodException ignored) {
+                // try super-interfaces
+            }
+        }
+        for (Class<?> s : i.getInterfaces()) {
+            Method m = fromInterface(s, name, types);
+            if (m != null) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ element properties
+
+    static String str(Object target, String name) {
+        Object v = quiet(target, name);
+        return v == null ? null : v.toString();
+    }
+
+    /** The id Cameo resolves with Project.getElementByID, falling back to the KerML elementId. */
+    static String id(Object element) {
+        String id = str(element, "getID");
+        return id != null && !id.isEmpty() ? id : str(element, "getElementId");
+    }
+
+    static String name(Object element) {
+        String n = str(element, "getName");
+        if (n == null) {
+            n = str(element, "getDeclaredName");
+        }
+        return n == null ? "" : n;
+    }
+
+    /** SysML v2 metaclass name, such as PartDefinition. */
+    static String type(Object element) {
+        Object eClass = quiet(element, "eClass");
+        String n = eClass == null ? null : str(eClass, "getName");
+        if (n != null && !n.isEmpty()) {
+            return n;
+        }
+        String simple = element.getClass().getSimpleName();
+        return simple.endsWith("Impl") ? simple.substring(0, simple.length() - 4) : simple;
+    }
+
+    static boolean isLibrary(Object element) {
+        return Boolean.TRUE.equals(quiet(element, "isLibraryElement"));
+    }
+
+    /** Owned elements (members of a namespace, features of a type, ...). */
+    static List<Object> children(Object element) {
+        Object owned = quiet(element, "getOwnedElement");
+        if (!(owned instanceof Collection)) {
+            return Collections.emptyList();
+        }
+        List<Object> out = new ArrayList<>();
+        for (Object o : (Collection<?>) owned) {
+            if (o != null) {
+                out.add(o);
+            }
+        }
+        return out;
+    }
+
+    static Object owner(Object element) {
+        Object o = quiet(element, "getOwner");
+        return o != null ? o : quiet(element, "getOwningNamespace");
+    }
+
+    /** Compact JSON used in every listing. */
+    static JsonObject compact(Object element) {
+        JsonObject json = new JsonObject();
+        json.addProperty("id", id(element));
+        String elementId = str(element, "getElementId");
+        if (elementId != null) {
+            json.addProperty("elementId", elementId);
+        }
+        json.addProperty("name", name(element));
+        json.addProperty("type", type(element));
+        String shortName = str(element, "getShortName");
+        if (shortName != null && !shortName.isEmpty()) {
+            json.addProperty("shortName", shortName);
+        }
+        String qn = str(element, "getQualifiedName");
+        if (qn != null && !qn.isEmpty()) {
+            json.addProperty("qualifiedName", qn);
+        }
+        json.addProperty("childCount", children(element).size());
+        if (isLibrary(element)) {
+            json.addProperty("isLibraryElement", true);
+        }
+        return json;
+    }
+
+    /** Full detail for cameo_sysml2_get_element. */
+    static JsonObject detail(Object element, int membersLimit) {
+        JsonObject json = compact(element);
+        putIfPresent(json, "declaredName", str(element, "getDeclaredName"));
+        putIfPresent(json, "declaredShortName", str(element, "getDeclaredShortName"));
+        putIfPresent(json, "humanType", str(element, "getHumanType"));
+        json.addProperty("isLibraryElement", isLibrary(element));
+        Object editable = quiet(element, "isEditable");
+        if (editable instanceof Boolean) {
+            json.addProperty("isEditable", (Boolean) editable);
+        }
+        Object owner = owner(element);
+        if (owner != null && isElement(owner)) {
+            JsonObject o = new JsonObject();
+            o.addProperty("id", id(owner));
+            o.addProperty("name", name(owner));
+            o.addProperty("type", type(owner));
+            json.add("owner", o);
+        }
+        JsonArray docs = new JsonArray();
+        Object documentation = quiet(element, "getDocumentation");
+        if (documentation instanceof Collection) {
+            for (Object d : (Collection<?>) documentation) {
+                String body = str(d, "getBody");
+                if (body != null) {
+                    docs.add(body);
+                }
+            }
+        }
+        json.add("documentation", docs);
+        List<Object> kids = children(element);
+        JsonArray members = new JsonArray();
+        for (int i = 0; i < kids.size() && i < membersLimit; i++) {
+            members.add(compact(kids.get(i)));
+        }
+        json.add("ownedElements", members);
+        if (kids.size() > membersLimit) {
+            json.addProperty("ownedElementsTruncated", true);
+        }
+        return json;
+    }
+
+    private static void putIfPresent(JsonObject json, String key, String value) {
+        if (value != null && !value.isEmpty()) {
+            json.addProperty(key, value);
+        }
+    }
+
+    /**
+     * The part of {@code text} between two generator indexes, widened to the closing ';' or '}' when
+     * the end index is inclusive, with the indentation of nested lines removed.
+     */
+    static String slice(String text, int start, int end) {
+        if (text == null || start < 0 || start >= text.length() || end <= start) {
+            return "";
+        }
+        int stop = Math.min(end, text.length());
+        String body = text.substring(start, stop);
+        if (stop < text.length()) {
+            char next = text.charAt(stop);
+            String trimmed = body.trim();
+            boolean unclosed = count(body, '{') > count(body, '}');
+            if ((next == '}' && unclosed)
+                    || (next == ';' && !unclosed && !trimmed.endsWith(";") && !trimmed.endsWith("}"))) {
+                body = text.substring(start, stop + 1);
+            }
+        }
+        int lineStart = text.lastIndexOf('\n', start - 1) + 1;
+        int indent = 0;
+        while (lineStart + indent < start && Character.isWhitespace(text.charAt(lineStart + indent))) {
+            indent++;
+        }
+        if (indent == 0) {
+            return body.trim();
+        }
+        StringBuilder out = new StringBuilder();
+        String[] lines = body.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (i > 0) {
+                int cut = 0;
+                while (cut < indent && cut < line.length() && Character.isWhitespace(line.charAt(cut))) {
+                    cut++;
+                }
+                line = line.substring(cut);
+                out.append('\n');
+            }
+            out.append(line);
+        }
+        return out.toString().trim();
+    }
+
+    private static int count(String s, char c) {
+        int n = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == c) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    // ------------------------------------------------------------------ traversal
+
+    /** Element with this id or KerML elementId under the given roots, or null. */
+    static Object findUnder(Collection<?> roots, String id) {
+        Deque<Object> stack = new ArrayDeque<>(roots);
+        int visited = 0;
+        while (!stack.isEmpty() && visited++ < WALK_LIMIT) {
+            Object e = stack.pop();
+            if (id.equals(str(e, "getElementId")) || id.equals(str(e, "getID"))) {
+                return e;
+            }
+            List<Object> kids = children(e);
+            for (int i = kids.size() - 1; i >= 0; i--) {
+                stack.push(kids.get(i));
+            }
+        }
+        return null;
+    }
+
+    /** Depth-first search by name substring and metaclass, paged. */
+    static JsonObject query(Collection<?> roots, String name, String type, boolean includeLibraries, int limit,
+                            int offset) {
+        String needle = name == null || name.trim().isEmpty() ? null : name.trim().toLowerCase(Locale.ROOT);
+        String wanted = type == null || type.trim().isEmpty() ? null : type.trim();
+        JsonArray matches = new JsonArray();
+        int matched = 0;
+        int visited = 0;
+        boolean hasMore = false;
+        boolean truncated = false;
+        Deque<Object> stack = new ArrayDeque<>(roots);
+        while (!stack.isEmpty()) {
+            if (visited++ >= WALK_LIMIT) {
+                truncated = true;
+                break;
+            }
+            Object e = stack.pop();
+            if (!includeLibraries && isLibrary(e)) {
+                continue;
+            }
+            boolean ok = (wanted == null || wanted.equalsIgnoreCase(type(e)))
+                    && (needle == null || name(e).toLowerCase(Locale.ROOT).contains(needle));
+            if (ok) {
+                if (matched >= offset && matches.size() < limit) {
+                    matches.add(compact(e));
+                } else if (matches.size() >= limit) {
+                    hasMore = true;
+                    break;
+                }
+                matched++;
+            }
+            List<Object> kids = children(e);
+            for (int i = kids.size() - 1; i >= 0; i--) {
+                stack.push(kids.get(i));
+            }
+        }
+        JsonObject out = new JsonObject();
+        out.addProperty("count", matches.size());
+        out.addProperty("offset", offset);
+        out.addProperty("hasMore", hasMore);
+        if (hasMore) {
+            out.addProperty("nextOffset", offset + matches.size());
+        }
+        if (truncated) {
+            out.addProperty("truncated", true);
+            out.addProperty("hint", "Search stopped after " + WALK_LIMIT + " elements; narrow it with scope_id.");
+        }
+        out.add("elements", matches);
+        return out;
+    }
+
+    /** Number of elements in the subtree, the root included (bounded by {@link #WALK_LIMIT}). */
+    static int count(Object root) {
+        Deque<Object> stack = new ArrayDeque<>();
+        stack.push(root);
+        int n = 0;
+        while (!stack.isEmpty() && n < WALK_LIMIT) {
+            Object e = stack.pop();
+            n++;
+            for (Object k : children(e)) {
+                stack.push(k);
+            }
+        }
+        return n;
+    }
+}
