@@ -107,7 +107,7 @@ Set in **MCP > MCP Server Status > Settings** (saved to `~/.cameo-mcp/settings.p
 | Bind address | `127.0.0.1` | `0.0.0.0` exposes Cameo to the network; only with a token |
 | Bearer token | off | Clients send `Authorization: Bearer <token>`; launcher: `--token` or `CAMEO_MCP_TOKEN` |
 | Auto-start | on | Start the server when Cameo starts |
-| Allow macro scripts | on | Gates `cameo_execute_macro` and `cameo_execute_probe` |
+| Allow macro scripts | off | Gates `cameo_execute_macro` and `cameo_execute_probe` |
 | Notification window | errors | Which tool calls are echoed to the Notification window (`off`, `errors`, `all`); md.log gets all |
 
 The launcher accepts `--port`, `--host`, `--url`, `--token`, `--timeout` and the matching
@@ -146,8 +146,10 @@ for the code layout and how to add tools.
 ## Security
 
 The server can read and change your model and, with macros on, run arbitrary code inside Cameo.
+Macros are off by default: on a machine shared by several users, anyone logged in can reach
+127.0.0.1, so turn them on only on your own machine or together with a token.
 Keep the default `127.0.0.1` binding; requests from non-local browser origins are rejected.
-If you bind to another address, set a token. Turn macros off if your agents do not need them.
+If you bind to another address, set a token. Leave macros off if your agents do not need them.
 
 ## License and credits
 

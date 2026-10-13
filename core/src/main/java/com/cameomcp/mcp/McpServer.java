@@ -35,6 +35,9 @@ public final class McpServer {
     public static final int INVALID_PARAMS = -32602;
     public static final int INTERNAL_ERROR = -32603;
 
+    // Sessions silent this long are dropped: clients killed without a DELETE would otherwise stay listed forever.
+    public static final long SESSION_IDLE_MILLIS = 60 * 60 * 1000L;
+
     /** Outcome of handling one HTTP body. {@code body == null} means "202 Accepted, no content". */
     public static final class Reply {
         // "body" is the JSON to send (null for 202); "sessionId" goes in the Mcp-Session-Id response header;
@@ -126,6 +129,15 @@ public final class McpServer {
         return false;
     }
 
+    /** Ends sessions idle for longer than {@link #SESSION_IDLE_MILLIS}; a returning client gets 404 and re-initializes. */
+    void expireIdleSessions(long nowMillis) {
+        for (McpSession s : new ArrayList<>(sessions.values())) {
+            if (nowMillis - s.lastSeenMillis() > SESSION_IDLE_MILLIS) {
+                endSession(s.id(), "idle");
+            }
+        }
+    }
+
     /** Ends every session, used when the server stops. */
     public void endAllSessions(String reason) {
         for (String id : new ArrayList<>(sessions.keySet())) {
@@ -142,6 +154,7 @@ public final class McpServer {
      * @param sessionId the {@code Mcp-Session-Id} header value, or null
      */
     public Reply handle(String body, String sessionId) {
+        expireIdleSessions(System.currentTimeMillis());
         Object msg;
         try {
             msg = Json.parse(body);

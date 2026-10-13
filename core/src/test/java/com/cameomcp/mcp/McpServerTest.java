@@ -37,6 +37,17 @@ class McpServerTest {
     }
 
     @Test
+    void idleSessionsExpireAndAnswer404() {
+        McpServer s = server();
+        String sid = s.handle("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}", null).sessionId;
+        s.expireIdleSessions(System.currentTimeMillis() + McpServer.SESSION_IDLE_MILLIS - 60_000);
+        assertEquals(1, s.sessions().size());
+        s.expireIdleSessions(System.currentTimeMillis() + McpServer.SESSION_IDLE_MILLIS + 60_000);
+        assertEquals(0, s.sessions().size());
+        assertTrue(s.handle("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}", sid).unknownSession);
+    }
+
+    @Test
     void initializeNegotiatesProtocolAndCreatesSession() {
         McpServer s = server();
         McpServer.Reply r = s.handle("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":"

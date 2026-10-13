@@ -438,21 +438,9 @@ final class Support {
         return fallback;
     }
 
-    // Reflective zero-arg call that returns null on any failure (missing method, exception, null target).
-    static Object invokeZeroArg(Object target, String methodName) {
-        if (target == null) {
-            return null;
-        }
-        try {
-            return target.getClass().getMethod(methodName).invoke(target);
-        } catch (Throwable e) {
-            return null;
-        }
-    }
-
     // invokeZeroArg rendered as a string, empty when it returned null or failed.
     static String stringGetter(Object target, String methodName) {
-        Object v = invokeZeroArg(target, methodName);
+        Object v = ElementJson.invokeZeroArg(target, methodName);
         return v == null ? "" : String.valueOf(v);
     }
 }

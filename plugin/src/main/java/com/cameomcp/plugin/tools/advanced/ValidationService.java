@@ -194,13 +194,15 @@ final class ValidationService {
     // A positive timeout runs the validation on a daemon worker thread so the call can give up waiting.
     private static JsonObject run(RunOptions o) throws Exception {
         if (o.timeoutMs <= 0) {
-            return Edt.read(project -> execute(project, o));
+            return Edt.read(project -> execute(project, o, UUID.randomUUID().toString()));
         }
         Project project = Edt.project();
+        // Created here so a TIMEOUT can name the run the worker will still store.
+        String runId = UUID.randomUUID().toString();
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
         Thread worker = new Thread(() -> {
             try {
-                future.complete(execute(project, o));
+                future.complete(execute(project, o, runId));
             } catch (Throwable t) {
                 future.completeExceptionally(t);
             }
@@ -211,8 +213,9 @@ final class ValidationService {
             return future.get(o.timeoutMs, TimeUnit.MILLISECONDS);
         // Cameo's validation cannot be cancelled from here: the worker keeps running and its result is still cached later.
         } catch (TimeoutException e) {
-            throw new ToolException("TIMEOUT", "Validation did not finish within " + o.timeoutMs + " ms. It may still be "
-                    + "running in Cameo; narrow the scope (scope_mode=elements with scope_element_ids) or raise timeout_ms.");
+            throw new ToolException("TIMEOUT", "Validation did not finish within " + o.timeoutMs + " ms. It is still "
+                    + "running in Cameo; fetch the result later with cameo_get_validation_result run_id=" + runId
+                    + ", or narrow the scope (scope_mode=elements with scope_element_ids) or raise timeout_ms.");
         // Rethrow the worker's own exception (ToolException etc.) rather than the ExecutionException wrapper.
         } catch (ExecutionException e) {
             Throwable c = e.getCause();
@@ -227,9 +230,8 @@ final class ValidationService {
      * Runs ValidationHelper.validate, caches the full serialized result under a new runId and returns the first page.
      * The settings dialog is disabled so the run never blocks on UI input.
      */
-    private static JsonObject execute(Project project, RunOptions o) {
+    private static JsonObject execute(Project project, RunOptions o, String runId) {
         long started = System.currentTimeMillis();
-        String runId = UUID.randomUUID().toString();
         String taskName = o.name != null && !o.name.trim().isEmpty() ? o.name.trim() : "MCP native validation";
         ValidationRunData runData = buildRunData(project, o, taskName);
         runData.setEnableSettingsDialog(false);

@@ -515,15 +515,16 @@ public final class ElementJson {
         return new JsonPrimitive(String.valueOf(value));
     }
 
-    private static Object invokeZeroArg(Object target, String methodName) {
+    /** Calls a public no-argument method by name; null when the target is null or the call fails in any way. */
+    public static Object invokeZeroArg(Object target, String methodName) {
         if (target == null) {
             return null;
         }
-        // Calls a no-argument method if the object has one; null when missing or failing.
         try {
             Method method = target.getClass().getMethod(methodName);
             return method.invoke(target);
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            // Throwable, not Exception: a class missing in this Cameo release surfaces as a LinkageError.
             return null;
         }
     }

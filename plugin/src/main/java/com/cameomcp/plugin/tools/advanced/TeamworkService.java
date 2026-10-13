@@ -1,6 +1,7 @@
 package com.cameomcp.plugin.tools.advanced;
 
 import com.cameomcp.plugin.cameo.Edt;
+import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -59,7 +60,7 @@ final class TeamworkService {
                     // getURI/getRepresentationString are probed reflectively because not every descriptor type has them;
                     // the getter name is turned into a property key ("getURI" -> "uRI").
                     for (String getter : new String[]{"getURI", "getRepresentationString"}) {
-                        Object v = Support.invokeZeroArg(descriptor, getter);
+                        Object v = ElementJson.invokeZeroArg(descriptor, getter);
                         if (v != null) {
                             d.addProperty(getter.substring(3, 4).toLowerCase() + getter.substring(4), String.valueOf(v));
                         }

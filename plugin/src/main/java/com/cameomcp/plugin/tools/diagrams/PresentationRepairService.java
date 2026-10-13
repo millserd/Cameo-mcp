@@ -124,7 +124,7 @@ final class PresentationRepairService {
     }
 
     /*
-     * cameo_repair_conveyed_item_labels: sets the diagram type's conveyed-item label properties to false
+     * cameo_repair_conveyed_item_labels: sets the diagram type's conveyed-item label properties to true
      * (inverted for "Suppress ..." properties) on paths that have any of them.
      */
     static JsonObject repairConveyedItemLabels(String diagramId, List<String> ids, boolean dryRun,
@@ -133,7 +133,7 @@ final class PresentationRepairService {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
             String type = diagramType(dpe);
             RepairDefaults defaults = PresentationPresets.repairDefaults(type);
-            Map<String, Selection> selections = PresentationPresets.selectionMap(false, defaults.conveyedItemKeys);
+            Map<String, Selection> selections = PresentationPresets.selectionMap(true, defaults.conveyedItemKeys);
             SelectionResult selection = select(dpe.getPresentationElements(), ids,
                     t -> t instanceof PathElement && supportsAny(t, selections),
                     "Presentation element does not support conveyed-item labels");

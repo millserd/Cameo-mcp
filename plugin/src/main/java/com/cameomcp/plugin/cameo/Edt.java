@@ -6,6 +6,7 @@ import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.SessionManager;
 
 import javax.swing.SwingUtilities;
+import java.util.ConcurrentModificationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
@@ -15,7 +16,8 @@ import java.util.concurrent.TimeoutException;
 /**
  * Runs model operations on the right thread.
  * <ul>
- *   <li>{@link #read} runs on the calling thread (model reads are thread-safe in Cameo).</li>
+ *   <li>{@link #read} runs on the calling thread, so it can overlap a write running on the EDT;
+ *       a read that trips over a concurrent change is retried once.</li>
  *   <li>{@link #onEdt} runs on the Swing EDT without a model session (UI, export, save).</li>
  *   <li>{@link #write} runs on the EDT inside a {@link SessionManager} session, so the change is
  *       one undoable step named after the tool; the session is cancelled if the action throws.
@@ -49,9 +51,21 @@ public final class Edt {
         return p;
     }
 
-    /** Runs a read on the calling thread against the open project. */
+    /**
+     * Runs a read on the calling thread against the open project. A write on the EDT can change a
+     * collection the read is walking; that read is retried once, then reported as MODEL_CHANGED.
+     */
     public static <T> T read(ModelAction<T> action) throws Exception {
-        return action.execute(project());
+        try {
+            return action.execute(project());
+        } catch (ConcurrentModificationException first) {
+            try {
+                return action.execute(project());
+            } catch (ConcurrentModificationException again) {
+                throw new ToolException("MODEL_CHANGED", "The model changed while it was being read (another change "
+                        + "was running). Retry the call.");
+            }
+        }
     }
 
     /** Runs an action on the Swing event thread with the default time limit, without a model session. */
@@ -110,6 +124,20 @@ public final class Edt {
      *                       change doesn't finish in time
      */
     public static <T> T write(String sessionName, ModelAction<T> action, long timeoutSeconds) throws Exception {
+        return serialized(sessionName, action, timeoutSeconds, true);
+    }
+
+    /**
+     * Runs a model change on the EDT without opening a session, holding the write permit so it is
+     * serialized with other writes. For Cameo APIs that manage their own undoable transaction.
+     */
+    public static <T> T exclusive(String name, ModelAction<T> action, long timeoutSeconds) throws Exception {
+        return serialized(name, action, timeoutSeconds, false);
+    }
+
+    // Shared body of write and exclusive: take the permit, run on the EDT (inside a session when asked), wait.
+    private static <T> T serialized(String name, ModelAction<T> action, long timeoutSeconds, boolean withSession)
+            throws Exception {
         Project project = project();
         if (!WRITE_PERMIT.tryAcquire(2, TimeUnit.SECONDS)) {
             String active = activeWrite;
@@ -118,7 +146,7 @@ public final class Edt {
                     + (active == null ? "" : " (" + active + ", " + ms + " ms)")
                     + ". Wait for it to finish, then retry.");
         }
-        activeWrite = sessionName;
+        activeWrite = name;
         activeWriteStarted = System.currentTimeMillis();
         CompletableFuture<T> future = new CompletableFuture<>();
         Runnable work = () -> {
@@ -130,11 +158,15 @@ public final class Edt {
                     throw new ToolException("SESSION_OPEN", "A Cameo editing session is already open (another "
                             + "operation or a crashed macro left it). Call cameo_reset_session, then retry.");
                 }
-                sm.createSession(project, "MCP: " + sessionName);
-                created = true;
+                if (withSession) {
+                    sm.createSession(project, "MCP: " + name);
+                    created = true;
+                }
                 T result = action.execute(project);
-                sm.closeSession(project);
-                created = false;
+                if (created) {
+                    sm.closeSession(project);
+                    created = false;
+                }
                 future.complete(result);
             } catch (Throwable e) {
                 if (created) {
@@ -146,42 +178,6 @@ public final class Edt {
                 }
                 future.completeExceptionally(e);
             // The permit is released on the EDT when the work actually ends, not when the caller stops waiting.
-            } finally {
-                activeWrite = null;
-                WRITE_PERMIT.release();
-            }
-        };
-        if (SwingUtilities.isEventDispatchThread()) {
-            work.run();
-        } else {
-            SwingUtilities.invokeLater(work);
-        }
-        return await(future, sessionName, timeoutSeconds, true);
-    }
-
-    /**
-     * Runs a model change on the EDT without opening a session, holding the write permit so it is
-     * serialized with other writes. For Cameo APIs that manage their own undoable transaction.
-     */
-    public static <T> T exclusive(String name, ModelAction<T> action, long timeoutSeconds) throws Exception {
-        Project project = project();
-        if (!WRITE_PERMIT.tryAcquire(2, TimeUnit.SECONDS)) {
-            String active = activeWrite;
-            throw new ToolException("WRITE_IN_PROGRESS", "Another model change is still running"
-                    + (active == null ? "" : " (" + active + ")") + ". Wait for it to finish, then retry.");
-        }
-        activeWrite = name;
-        activeWriteStarted = System.currentTimeMillis();
-        CompletableFuture<T> future = new CompletableFuture<>();
-        Runnable work = () -> {
-            try {
-                if (SessionManager.getInstance().isSessionCreated(project)) {
-                    throw new ToolException("SESSION_OPEN", "A Cameo editing session is already open (another "
-                            + "operation or a crashed macro left it). Call cameo_reset_session, then retry.");
-                }
-                future.complete(action.execute(project));
-            } catch (Throwable e) {
-                future.completeExceptionally(e);
             } finally {
                 activeWrite = null;
                 WRITE_PERMIT.release();

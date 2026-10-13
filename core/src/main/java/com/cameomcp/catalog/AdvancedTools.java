@@ -189,6 +189,8 @@ public final class AdvancedTools {
                                 + "executed=false, capabilityProbe) plus requirementCount, five sampleRows, the CSV columns and an "
                                 + "outputPathCheck. Use cameo_export_requirements to export.")
                         .strArray("scope_ids", "Roots to export from (default: primary model).")
+                        .str("root_id", "Single root element id (combined with scope_ids).")
+                        .str("package_id", "Alias of root_id.")
                         .enumStrDefault("format", "Planned export format.", "csv", "csv", "json", "reqif")
                         .str("output_path", "Planned absolute output path (checked, not written)."),
                 tool("cameo_import_requirements_preview", FAMILY).readOnly()

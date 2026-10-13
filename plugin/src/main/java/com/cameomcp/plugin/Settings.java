@@ -29,7 +29,7 @@ public final class Settings {
     // Start the server when Cameo starts; off means the user starts it from the MCP menu.
     public boolean autoStart = true;
     // When false, cameo_execute_macro and cameo_execute_probe are refused (see Catalog.isScriptTool).
-    public boolean allowMacros = true;
+    public boolean allowMacros = false;
     /** off | errors | all : which tool calls are echoed to the Notification window. */
     public String guiLogLevel = "errors";
 
@@ -69,7 +69,7 @@ public final class Settings {
         s.host = p.getProperty("host", DEFAULT_HOST).trim();
         s.token = p.getProperty("token", "").trim();
         s.autoStart = Boolean.parseBoolean(p.getProperty("autoStart", "true"));
-        s.allowMacros = Boolean.parseBoolean(p.getProperty("allowMacros", "true"));
+        s.allowMacros = Boolean.parseBoolean(p.getProperty("allowMacros", "false"));
         s.guiLogLevel = p.getProperty("guiLogLevel", "errors").trim();
 
         String env = System.getenv("CAMEO_MCP_PORT");
@@ -99,15 +99,35 @@ public final class Settings {
         if (!dir.isDirectory() && !dir.mkdirs()) {
             throw new IOException("Cannot create " + dir);
         }
+        Properties old = new Properties();
+        if (file().isFile()) {
+            try (InputStream in = new FileInputStream(file())) {
+                old.load(in);
+            }
+        }
         Properties p = new Properties();
-        p.setProperty("port", String.valueOf(port));
-        p.setProperty("host", host);
-        p.setProperty("token", token == null ? "" : token);
+        // Values that only come from an environment variable or JVM option stay out of the file (a token must not land on disk).
+        keep(p, old, "port", String.valueOf(port),
+                System.getProperty("cameo.mcp.port", System.getenv("CAMEO_MCP_PORT")));
+        keep(p, old, "host", host, System.getProperty("cameo.mcp.host"));
+        keep(p, old, "token", token == null ? "" : token,
+                System.getProperty("cameo.mcp.token", System.getenv("CAMEO_MCP_TOKEN")));
         p.setProperty("autoStart", String.valueOf(autoStart));
         p.setProperty("allowMacros", String.valueOf(allowMacros));
         p.setProperty("guiLogLevel", guiLogLevel);
         try (OutputStream out = new FileOutputStream(file())) {
             p.store(out, "Cameo MCP settings. Restart the MCP server (MCP menu) after editing by hand.");
+        }
+    }
+
+    // Stores value under key, unless it equals the active override; then the file keeps its previous value (or none).
+    private static void keep(Properties p, Properties old, String key, String value, String override) {
+        if (override != null && !override.trim().isEmpty() && override.trim().equals(value)) {
+            if (old.getProperty(key) != null) {
+                p.setProperty(key, old.getProperty(key));
+            }
+        } else {
+            p.setProperty(key, value);
         }
     }
 

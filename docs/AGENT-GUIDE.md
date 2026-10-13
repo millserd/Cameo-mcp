@@ -138,7 +138,7 @@ what to do next. Common codes:
 | `SESSION_OPEN` | A failed macro left a session open | `cameo_reset_session`, then retry |
 | `TIMEOUT` | Cameo did not answer in time | Often a modal dialog in Cameo; ask the user to look |
 | `UNSUPPORTED` | Feature/plugin not in this Cameo | Use another route or tell the user |
-| `MACROS_DISABLED` | User turned scripts off | Use structured tools or ask the user |
+| `MACROS_DISABLED` | Scripts are off (the default) | Use structured tools or ask the user |
 | `API_INCOMPATIBLE` | This Cameo version lacks an API | Report it; use another route |
 | `SYSML2_PROJECT` / `SYSML2_ELEMENT` | A UML / SysML v1 tool was used on a SysML v2 project or element | Use the `cameo_sysml2_*` tools |
 | `NOT_SYSML2_PROJECT` | A `cameo_sysml2_*` tool was used on a UML / SysML v1 project | Use the UML / SysML v1 tools |

@@ -2,6 +2,7 @@ package com.cameomcp.plugin.tools.advanced;
 
 import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
+import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -217,7 +218,7 @@ final class ReportService {
             throw new ToolException("TOOL_FAILED", "Report Wizard generation threw " + rootMessage(e));
         }
 
-        Object taskException = Support.invokeZeroArg(task, "getException");
+        Object taskException = ElementJson.invokeZeroArg(task, "getException");
         boolean exists = outputFile.isFile();
         long length = exists ? outputFile.length() : 0L;
         // An existing file must have a new timestamp or size, otherwise a silent failure would look like success.
@@ -267,7 +268,7 @@ final class ReportService {
      */
     private static void configureReport(Project project, Object report, JsonObject body, JsonObject parameters, File outputFile)
             throws Exception {
-        Object selection = Support.invokeZeroArg(report, "getSelectedPackage");
+        Object selection = ElementJson.invokeZeroArg(report, "getSelectedPackage");
         if (selection == null) {
             selection = Support.loadClass(PACKAGE_SELECTION_BEAN).getConstructor().newInstance();
             invokeIfPresent(report, "setSelectedPackage", selection);
@@ -284,7 +285,7 @@ final class ReportService {
         invokeIfPresent(selection, "setShowAuxiliary", firstBoolean(body, parameters, "showAuxiliary", false));
         invokeIfPresent(selection, "setShowOnlyPackageElement", firstBoolean(body, parameters, "showOnlyPackageElement", false));
 
-        Object reportProperty = Support.invokeZeroArg(report, "getReportProperty");
+        Object reportProperty = ElementJson.invokeZeroArg(report, "getReportProperty");
         if (reportProperty == null) {
             reportProperty = Support.loadClass(REPORT_PROPERTY_BEAN).getConstructor().newInstance();
             invokeIfPresent(report, "setReportProperty", reportProperty);
@@ -340,7 +341,7 @@ final class ReportService {
     private static Object selectReport(Object template, String reportName) {
         Object report = null;
         if (reportName != null && !reportName.trim().isEmpty()) {
-            for (Object candidate : asCollection(Support.invokeZeroArg(template, "getReportList"))) {
+            for (Object candidate : asCollection(ElementJson.invokeZeroArg(template, "getReportList"))) {
                 if (equalsIgnoreCase(reportName.trim().toLowerCase(Locale.ROOT), Support.stringGetter(candidate, "getName"))) {
                     report = candidate;
                     break;
@@ -348,13 +349,13 @@ final class ReportService {
             }
         }
         if (report == null) {
-            report = Support.invokeZeroArg(template, "getDefaultReport");
+            report = ElementJson.invokeZeroArg(template, "getDefaultReport");
         }
         if (report == null) {
-            report = Support.invokeZeroArg(template, "getSelectedReport");
+            report = ElementJson.invokeZeroArg(template, "getSelectedReport");
         }
         if (report == null) {
-            Collection<?> reports = asCollection(Support.invokeZeroArg(template, "getReportList"));
+            Collection<?> reports = asCollection(ElementJson.invokeZeroArg(template, "getReportList"));
             if (!reports.isEmpty()) {
                 report = reports.iterator().next();
             }
@@ -382,7 +383,7 @@ final class ReportService {
         putGetter(json, template, "enabled", "getEnabled");
         putGetter(json, template, "configFile", "getConfigFile");
         putGetter(json, template, "requiredPlugins", "getRequiredPlugins");
-        Object reportList = Support.invokeZeroArg(template, "getReportList");
+        Object reportList = ElementJson.invokeZeroArg(template, "getReportList");
         if (reportList instanceof Collection) {
             json.addProperty("reportCount", ((Collection<?>) reportList).size());
             JsonArray names = new JsonArray();
@@ -407,7 +408,7 @@ final class ReportService {
 
     // Uses the bean's public clone() when it has one; otherwise the original object is used.
     private static Object cloneIfPossible(Object value) {
-        Object clone = Support.invokeZeroArg(value, "clone");
+        Object clone = ElementJson.invokeZeroArg(value, "clone");
         return clone != null ? clone : value;
     }
 

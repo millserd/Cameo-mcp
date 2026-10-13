@@ -1075,16 +1075,21 @@ public final class Verification {
             }
         }
         Map<String, Object> duplicates = new LinkedHashMap<>();
+        // Same keys as duplicates, but with owner ids: names can repeat across interface blocks.
+        Map<String, Object> duplicateOwnerIds = new LinkedHashMap<>();
         for (Map.Entry<String, List<String>> e : duplicateMap.entrySet()) {
             if (new HashSet<>(e.getValue()).size() > 1 && !allowed.contains(e.getKey())) {
                 Set<String> owners = new TreeSet<>();
+                Set<String> ownerIds = new TreeSet<>();
                 for (String owner : e.getValue()) {
                     if (!owner.isEmpty()) {
                         String label = interfaceNames.get(owner);
                         owners.add(label == null || label.isEmpty() ? owner : label);
+                        ownerIds.add(owner);
                     }
                 }
                 duplicates.put(e.getKey(), new ArrayList<>(owners));
+                duplicateOwnerIds.put(e.getKey(), new ArrayList<>(ownerIds));
             }
         }
         Map<String, Object> conflicts = new LinkedHashMap<>();
@@ -1106,6 +1111,7 @@ public final class Verification {
                 "interfaceCount", interfaceBlocks.size(),
                 "flowPropertyCount", flowProperties.size(),
                 "duplicateFlowProperties", duplicates,
+                "duplicateFlowPropertyOwnerIds", duplicateOwnerIds,
                 "directionConflicts", conflicts,
                 "unnamedPropertyIds", J.sortedNonEmptyList(unnamed),
                 "orphanPropertyIds", J.sortedNonEmptyList(orphans),

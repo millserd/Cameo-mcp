@@ -161,6 +161,8 @@ class AutoRemediationTest {
         assertTrue(((Number) m(result.get("summary")).get("issueCount")).intValue() > 0);
         assertTrue(result.containsKey("findings"));
         assertEquals(List.of(List.of("if-1", "if-2")), bridge.interfaceFlowCalls);
+        Map<String, Object> summary = m(m(result.get("patchPlan")).get("summary"));
+        assertTrue(((Number) summary.get("activityTermCount")).intValue() > 0);
         boolean found = false;
         for (Map<String, Object> r : J.maps(result.get("receipts"))) {
             if ("cross-diagram-traceability".equals(r.get("category")) && "req-1".equals(m(r.get("target")).get("elementId"))) {

@@ -78,6 +78,8 @@ class SemanticValidationTest {
         assertEquals(false, result.get("ok"));
         assertEquals(2, J.list(result.get("interfaceBlocks")).size());
         assertTrue(m(m(result.get("metrics")).get("duplicateFlowProperties")).containsKey("available slots"));
+        assertEquals(List.of("if-1", "if-2"),
+                m(m(result.get("metrics")).get("duplicateFlowPropertyOwnerIds")).get("available slots"));
         assertEquals(List.of(List.of("if-1", "if-2")), bridge.interfaceFlowCalls);
     }
 

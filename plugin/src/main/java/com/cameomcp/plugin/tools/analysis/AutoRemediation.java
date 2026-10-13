@@ -264,12 +264,13 @@ public final class AutoRemediation {
         List<Map<String, Object>> blocks = J.maps(portValidation.get("interfaceBlocks"));
 
         Map<String, Object> duplicates = J.mapOrEmpty(metrics.get("duplicateFlowProperties"));
+        Map<String, Object> duplicateOwnerIds = J.mapOrEmpty(metrics.get("duplicateFlowPropertyOwnerIds"));
         for (Map.Entry<String, Object> e : duplicates.entrySet()) {
             String name = e.getKey();
-            List<Object> owners = J.list(e.getValue());
+            // Prefer the owner ids; older payloads only carry owner labels, which are then used as-is.
+            List<Object> owners = duplicateOwnerIds.containsKey(name)
+                    ? J.list(duplicateOwnerIds.get(name)) : J.list(e.getValue());
             List<Object> ownerNames = new ArrayList<>();
-            // Verification reports owners by interface name (ID only when unnamed), so this ID lookup mostly
-            // misses and the reported label is used as-is.
             for (Object owner : owners) {
                 Map<String, Object> match = null;
                 for (Map<String, Object> b : blocks) {
@@ -756,10 +757,12 @@ public final class AutoRemediation {
                     portTerms.add(name);
                 }
             }
-            // Note: unlike SemanticValidation.crossDiagramTraceability, the term lists are not added to this
-            // trace result, so buildRemediationPlan sees no activityTerms/portTerms/ibdTerms here.
             trace = Verification.verifyCrossDiagramTraceability(activityTerms, portTerms, ibdTerms, links,
                     o.requirementIds, o.architectureElementIds);
+            // buildRemediationPlan reads the term lists from the trace result, as SemanticValidation returns them.
+            trace.put("activityTerms", activityTerms);
+            trace.put("portTerms", portTerms);
+            trace.put("ibdTerms", ibdTerms);
         }
         List<Map<String, Object>> arch = new ArrayList<>();
         for (String id : o.architectureElementIds) {

@@ -234,12 +234,12 @@ final class RequirementsService {
         return response;
     }
 
-    // cameo_export_requirements_preview: count plus five sample CSV rows; only scope_ids is honored for the scope here.
+    // cameo_export_requirements_preview: count plus five sample CSV rows, scoped like cameo_export_requirements.
     static JsonObject exportRequirementsPreview(JsonObject p) throws Exception {
         String format = Gs.str(p, "format", "csv").trim().toLowerCase(Locale.ROOT);
         JsonObject response = FeatureProbes.guardedAction("requirements", "cameo_export_requirements_preview", Support.request(p));
         if (Support.currentProject() != null) {
-            JsonObject collected = Edt.read(project -> collect(project, Gs.strList(p, "scope_ids"), 5000));
+            JsonObject collected = Edt.read(project -> collect(project, scopeIds(p), 5000));
             JsonArray reqs = collected.getAsJsonArray("requirements");
             response.addProperty("requirementCount", reqs.size());
             response.addProperty("truncated", collected.get("truncated").getAsBoolean());
