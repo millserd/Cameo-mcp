@@ -17,6 +17,7 @@ import java.util.Map;
  */
 public final class ModelText {
 
+    // Detail levels accepted by the view parameter of query tools.
     public static final String VIEW_COMPACT = "compact";
     public static final String VIEW_FULL = "full";
     /** Prefix that marks a reference to an earlier entry of cameo_create_elements. */
@@ -27,6 +28,7 @@ public final class ModelText {
     /** Normalized alias -> canonical relationship kind. */
     private static final Map<String, String> RELATIONSHIP_KINDS = new LinkedHashMap<>();
 
+    // Each line: canonical kind first, then every alias key (already normalized by key()) that maps to it.
     static {
         kinds(ELEMENT_KINDS, "package", "package");
         kinds(ELEMENT_KINDS, "profile", "profile");
@@ -91,6 +93,7 @@ public final class ModelText {
     private ModelText() {
     }
 
+    // Registers aliases for one canonical kind.
     private static void kinds(Map<String, String> map, String canonical, String... aliases) {
         for (String a : aliases) {
             map.put(a, canonical);
@@ -115,6 +118,7 @@ public final class ModelText {
         return RELATIONSHIP_KINDS.get(key(type));
     }
 
+    /** The INVALID_PARAMS error listing every element type cameo_create_element supports. */
     public static ToolException unsupportedElementType(String type) {
         return ToolException.invalid("Unsupported element type '" + type + "'. Supported: Package, Profile, Stereotype, "
                 + "Block, Class, UseCase, Activity, Actor, StateMachine, State, Pseudostate, InitialState, Requirement, "
@@ -124,6 +128,7 @@ public final class ModelText {
                 + "InputPin, OutputPin, OpaqueAction.");
     }
 
+    /** The INVALID_PARAMS error listing every relationship type cameo_create_relationship supports. */
     public static ToolException unsupportedRelationshipType(String type) {
         return ToolException.invalid("Unsupported relationship type '" + type + "'. Supported: Association, "
                 + "DirectedAssociation, Composition, Generalization, Dependency, Include, Extend, ControlFlow, "
@@ -306,6 +311,7 @@ public final class ModelText {
         throw ToolException.invalid("view must be either 'compact' or 'full' (got '" + raw + "').");
     }
 
+    /** Opaque paging cursor for an offset; agents pass it back unchanged. */
     public static String cursorToken(int offset) {
         return "offset:" + offset;
     }
@@ -463,6 +469,7 @@ public final class ModelText {
         return out;
     }
 
+    // One value: a "ref:name" becomes its created id; anything else passes through.
     private static Object resolveOne(Object v, Map<String, String> refs, String where, String field) {
         String ref = refName(v);
         if (ref == null) {
@@ -577,6 +584,7 @@ public final class ModelText {
         return body.trim().isEmpty() ? SlotAction.CLEAR : SlotAction.SET;
     }
 
+    /** The behavior language (e.g. "English", "Groovy"); must be non-blank. */
     public static String requireLanguage(String language) {
         if (language == null || language.trim().isEmpty()) {
             throw ToolException.invalid("language must be a non-empty string.");

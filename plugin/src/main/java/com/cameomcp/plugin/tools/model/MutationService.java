@@ -32,6 +32,7 @@ import java.util.Map;
 /** Element, stereotype, profile and relationship changes. Every method is one undoable session. */
 final class MutationService {
 
+    // Upper bound for cameo_create_elements; larger plans risk the EDT timeout and a huge single undo step.
     static final int BULK_MAX_ENTRIES = 500;
 
     private MutationService() {
@@ -39,6 +40,7 @@ final class MutationService {
 
     // ------------------------------------------------------------------ create
 
+    // cameo_create_element: parses and validates the request before opening the session, then creates.
     static JsonObject createElement(Args a) throws Exception {
         ElementCreator.Request r = ElementCreator.Request.from(a);
         return Edt.write("Create " + r.type + " " + r.name, project -> {
@@ -50,6 +52,7 @@ final class MutationService {
         });
     }
 
+    // cameo_create_relationship: same pattern for relationships.
     static JsonObject createRelationship(Args a) throws Exception {
         RelationshipCreator.Request r = RelationshipCreator.Request.from(a);
         return Edt.write("Create " + r.type + " relationship", project -> {
@@ -67,6 +70,7 @@ final class MutationService {
         List<Map<String, Object>> entries = a.maps("elements");
         List<String> refNames = ModelText.validatePlan(entries, BULK_MAX_ENTRIES);
         boolean full = ModelText.VIEW_FULL.equals(ModelText.view(a.str("view")));
+        // Allow roughly half a second per entry on top of 30 s, but never less than the default.
         long timeout = Math.max(Edt.DEFAULT_TIMEOUT_SECONDS, 30 + entries.size() / 2L);
         return Edt.write("Create " + entries.size() + " elements", project -> {
             Map<String, String> refs = new LinkedHashMap<>();
@@ -79,6 +83,7 @@ final class MutationService {
                 Element created;
                 boolean isRelationship;
                 try {
+                    // Earlier entries' "ref:name" values become real ids before this entry is parsed.
                     Map<String, Object> resolved = ModelText.resolveRefs(entries.get(i), refs, where);
                     Args entry = new Args(resolved);
                     isRelationship = ModelText.isRelationshipEntry(resolved);
@@ -94,6 +99,7 @@ final class MutationService {
                         }
                         elements++;
                     }
+                // Rethrowing inside the session makes Edt cancel it, which rolls back every entry created so far.
                 } catch (ToolException e) {
                     throw new ToolException(e.code(), where + " failed: " + e.getMessage()
                             + " Nothing was created (the whole batch was rolled back).", e.details(), e);
@@ -133,6 +139,10 @@ final class MutationService {
         }, timeout);
     }
 
+    /*
+     * Sets an entry's tagged_values. The stereotype that owns the tags is tag_stereotype, else the
+     * entry's stereotype, else the default SysML stereotype of its type (e.g. requirement).
+     */
     private static void applyTaggedValues(Project project, Element created, Args entry, ElementCreator.Request req,
                                           Map<String, Object> tags) {
         String stName = entry.optTrim("tag_stereotype");
@@ -154,6 +164,7 @@ final class MutationService {
         setTags(project, created, st, Gs.toGson(tags));
     }
 
+    // Validates every tag name against the stereotype, coerces each value to the tag's type, and sets it.
     private static int setTags(Project project, Element element, Stereotype st, JsonObject values) {
         List<String> known = TaggedValues.tagNames(st);
         int count = 0;
@@ -171,6 +182,7 @@ final class MutationService {
 
     // ------------------------------------------------------------------ modify / move / delete
 
+    // cameo_modify_element: rename and/or replace documentation; everything else goes through cameo_set_specification.
     static JsonObject modifyElement(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String newName = a.str("name");
@@ -198,6 +210,7 @@ final class MutationService {
         });
     }
 
+    // cameo_delete_element: removes the element and everything it owns; reports what was deleted for the agent's log.
     static JsonObject deleteElement(Args a) throws Exception {
         String id = a.reqStr("element_id");
         return Edt.write("Delete element", project -> {
@@ -224,6 +237,11 @@ final class MutationService {
         });
     }
 
+    /*
+     * cameo_move_element: changes the owner. Guards against cycles and read-only elements, puts states
+     * into a region of the target state machine, and verifies afterwards because Cameo can silently
+     * refuse an incompatible owner.
+     */
     static JsonObject moveElement(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String ownerId = QueryService.alias(a, "new_owner_id", "owner_id", "parent_id");
@@ -286,6 +304,7 @@ final class MutationService {
 
     // ------------------------------------------------------------------ stereotypes / profiles
 
+    // cameo_apply_stereotype: idempotent; re-checks afterwards because Cameo ignores stereotypes that don't fit the metaclass.
     static JsonObject applyStereotype(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String stereotype = a.reqStr("stereotype").trim();
@@ -312,6 +331,7 @@ final class MutationService {
         });
     }
 
+    // cameo_remove_stereotype: removes the first applied stereotype with that name (optionally from a given profile).
     static JsonObject removeStereotype(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String stereotype = a.reqStr("stereotype").trim();
@@ -358,6 +378,7 @@ final class MutationService {
         });
     }
 
+    // cameo_set_tagged_values: sets tags of a stereotype that is already applied to the element.
     static JsonObject setTaggedValues(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String stereotype = a.reqStr("stereotype").trim();
@@ -390,6 +411,7 @@ final class MutationService {
         });
     }
 
+    // cameo_set_stereotype_metaclasses: replaces the metaclasses a custom stereotype extends.
     static JsonObject setStereotypeMetaclasses(Args a) throws Exception {
         String id = a.reqStr("stereotype_id");
         List<String> metaclasses = a.reqStrList("metaclasses");
@@ -422,6 +444,7 @@ final class MutationService {
         });
     }
 
+    // cameo_apply_profile: applies a profile (by id or name) to a package so its stereotypes can be used inside.
     static JsonObject applyProfile(Args a) throws Exception {
         String pkgId = a.reqStr("package_id");
         String profileId = a.optTrim("profile_id");
@@ -471,6 +494,7 @@ final class MutationService {
         });
     }
 
+    // cameo_set_usecase_subject: sets or appends the classifiers a use case applies to (shown as the system boundary).
     static JsonObject setUseCaseSubject(Args a) throws Exception {
         String id = a.reqStr("element_id");
         List<String> subjectIds = a.reqStrList("subject_ids");

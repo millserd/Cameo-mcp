@@ -45,6 +45,7 @@ final class RelationshipCreator {
     private RelationshipCreator() {
     }
 
+    /** Parameters of one relationship creation; validated before any session opens. */
     static final class Request {
         String type;
         String kind;
@@ -80,6 +81,12 @@ final class RelationshipCreator {
         }
     }
 
+    /**
+     * Creates the relationship of the requested kind between source and target, checking that both
+     * ends have the metaclass the kind requires. Each kind is owned where UML (and Cameo's
+     * containment tree) expects it: generalizations under the specific classifier, dependencies
+     * and abstractions in a package, flows in the activity, transitions in the region.
+     */
     static Element create(Project project, Request r) throws Exception {
         Element source = ModelSupport.element(project, r.sourceId, "source_id");
         Element target = ModelSupport.element(project, r.targetId, "target_id");
@@ -144,11 +151,13 @@ final class RelationshipCreator {
         return rel;
     }
 
+    // INVALID_PARAMS naming both ends, so the agent sees which one has the wrong kind.
     private static ToolException wrongEnds(String what, Element source, Element target) {
         return ToolException.invalid(what + ". Got source=" + ModelSupport.describe(source) + ", target="
                 + ModelSupport.describe(target) + ".");
     }
 
+    // source is the specific classifier, target the general one; owned by the source.
     private static Generalization generalization(ElementsFactory ef, Element source, Element target) throws Exception {
         if (!(source instanceof Classifier) || !(target instanceof Classifier)) {
             throw wrongEnds("Generalization requires Classifier source (specific) and target (general)", source, target);
@@ -160,6 +169,7 @@ final class RelationshipCreator {
         return g;
     }
 
+    // source includes target; owned by the including use case.
     private static Include include(ElementsFactory ef, Element source, Element target) throws Exception {
         if (!(source instanceof UseCase) || !(target instanceof UseCase)) {
             throw wrongEnds("Include requires UseCase source (including) and target (addition)", source, target);
@@ -171,6 +181,7 @@ final class RelationshipCreator {
         return inc;
     }
 
+    // source extends target; owned by the extending use case.
     private static Extend extend(ElementsFactory ef, Element source, Element target) throws Exception {
         if (!(source instanceof UseCase) || !(target instanceof UseCase)) {
             throw wrongEnds("Extend requires UseCase source (extension) and target (extended case)", source, target);
@@ -182,6 +193,7 @@ final class RelationshipCreator {
         return ext;
     }
 
+    // source (client) depends on target (supplier); owned by a package.
     private static Dependency dependency(ElementsFactory ef, Project project, Element source, Element target,
                                          String ownerId) throws Exception {
         if (!(source instanceof NamedElement) || !(target instanceof NamedElement)) {
@@ -194,6 +206,11 @@ final class RelationshipCreator {
         return dep;
     }
 
+    /*
+     * An association typed by source and target. Ends: index 0 is typed by the source, index 1 by
+     * the target. Composition makes the source end composite (the whole); "directed" makes the
+     * target end association-owned, so only the source can navigate to it.
+     */
     private static Association association(ElementsFactory ef, Element source, Element target, boolean directed,
                                            boolean composition) throws Exception {
         if (!(source instanceof Type) || !(target instanceof Type)) {
@@ -223,6 +240,7 @@ final class RelationshipCreator {
         return assoc;
     }
 
+    // A control or object flow, owned by the activity that contains the source node unless owner_id says otherwise.
     private static ActivityEdge activityFlow(ElementsFactory ef, Project project, ActivityEdge edge, Element source,
                                              Element target, String guard, String ownerId, String what)
             throws Exception {
@@ -249,6 +267,7 @@ final class RelationshipCreator {
         return edge;
     }
 
+    // A transition inside the shared region of its two vertices; the guard becomes a Constraint with a text spec.
     private static Transition transition(ElementsFactory ef, Element source, Element target, String guard) {
         if (!(source instanceof Vertex) || !(target instanceof Vertex)) {
             throw wrongEnds("Transition requires Vertex source and target (states, pseudostates)", source, target);
@@ -278,6 +297,7 @@ final class RelationshipCreator {
         return t;
     }
 
+    // An information flow in a package, optionally conveying classifiers; ItemFlow adds the SysML stereotype and item property.
     private static InformationFlow informationFlow(ElementsFactory ef, Project project, Element source, Element target,
                                                    Request r, boolean itemFlow) throws Exception {
         if (!(source instanceof NamedElement) || !(target instanceof NamedElement)) {
@@ -312,6 +332,10 @@ final class RelationshipCreator {
         return flow;
     }
 
+    /*
+     * A connector inside the owning block (the IBD context). Each end's role is the part or port;
+     * part_with_port names the part through which a nested port is reached.
+     */
     private static Connector connector(ElementsFactory ef, Project project, Element source, Element target, Request r) {
         if (!(source instanceof ConnectableElement) || !(target instanceof ConnectableElement)) {
             throw wrongEnds("Connector requires ConnectableElement source and target (parts, ports, properties)",
@@ -325,6 +349,7 @@ final class RelationshipCreator {
                 "a StructuredClassifier (block, class, component)");
         Connector connector = ef.createConnectorInstance();
         owner.getOwnedConnector().add(connector);
+        // Cameo may create the two ends with the connector or leave them to us; handle both.
         List<ConnectorEnd> ends = connector.getEnd();
         ConnectorEnd se = ends.size() > 0 ? ends.get(0) : ef.createConnectorEndInstance();
         if (ends.isEmpty()) {
@@ -347,6 +372,7 @@ final class RelationshipCreator {
         return connector;
     }
 
+    // The optional part-with-port for a connector end, or null.
     private static Property partWithPort(Project project, String id, String param) {
         if (id == null) {
             return null;
@@ -354,6 +380,7 @@ final class RelationshipCreator {
         return ModelSupport.typed(project, id, param, Property.class, "a part Property");
     }
 
+    // A SysML stereotyped Abstraction (Satisfy, Verify, Allocate, DeriveReqt, Refine, Trace), owned by a package.
     private static Abstraction abstraction(ElementsFactory ef, Project project, Element source, Element target,
                                            String ownerId, String stereotypeName) throws Exception {
         if (!(source instanceof NamedElement) || !(target instanceof NamedElement)) {

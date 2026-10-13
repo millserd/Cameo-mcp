@@ -55,6 +55,7 @@ final class MacroService {
         return new ArrayList<>(names);
     }
 
+    // cameo_list_macro_engines: every javax.script engine visible to either class loader, deduplicated.
     static JsonObject listEngines() {
         JsonArray engines = new JsonArray();
         Set<String> seen = new LinkedHashSet<>();
@@ -90,6 +91,10 @@ final class MacroService {
         return out;
     }
 
+    /*
+     * cameo_execute_macro: finds an engine (the requested one, then the fallbacks) and runs the script
+     * on the EDT. The script manages its own sessions, so this does not open one (see run()).
+     */
     static JsonObject execute(Args a) throws Exception {
         String script = a.str("script");
         if (script == null || script.isEmpty()) {
@@ -131,6 +136,11 @@ final class MacroService {
         return Edt.onEdt("Execute macro", project -> run(project, finalEngine, engineUsed, script), timeout);
     }
 
+    /*
+     * Runs the script with project, application, primaryModel, projectKind and ef (ElementsFactory)
+     * bound as variables, capturing stdout/stderr. Any session the script leaves open is closed on
+     * success or cancelled on failure, so the next tool call isn't blocked.
+     */
     private static JsonObject run(Project project, ScriptEngine engine, String engineUsed, String script) {
         JsonArray warnings = new JsonArray();
         SessionManager sm = SessionManager.getInstance();
@@ -159,6 +169,7 @@ final class MacroService {
         ctx.setAttribute("ef", project.getElementsFactory(), ScriptContext.ENGINE_SCOPE);
 
         JsonObject response = new JsonObject();
+        // Groovy resolves classes through the context class loader; point it at the engine's loader while it runs.
         ClassLoader previous = Thread.currentThread().getContextClassLoader();
         boolean success;
         try {

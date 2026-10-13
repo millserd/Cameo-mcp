@@ -54,6 +54,10 @@ final class SpecificationService {
 
     // ------------------------------------------------------------------ read
 
+    /*
+     * cameo_get_specification: standard UML properties, documentation, every applied stereotype with
+     * its tagged values, and named owned constraints - roughly what Cameo's Specification window shows.
+     */
     static JsonObject get(Args a) throws Exception {
         String id = a.reqStr("element_id");
         return Edt.read(project -> {
@@ -81,6 +85,7 @@ final class SpecificationService {
         });
     }
 
+    // Reads each standard feature through JMI reflection; features the metaclass lacks throw and are skipped.
     private static JsonObject standardProperties(Element element) {
         JsonObject props = new JsonObject();
         for (String feature : STANDARD_FEATURES) {
@@ -121,6 +126,7 @@ final class SpecificationService {
         return props;
     }
 
+    // Feature value to JSON: elements become {id, name}, collections become arrays, enums their name.
     private static void addValue(JsonObject target, String name, Object value) {
         if (value instanceof Boolean) {
             target.addProperty(name, (Boolean) value);
@@ -147,6 +153,7 @@ final class SpecificationService {
         }
     }
 
+    // Applied stereotypes with their profile and non-empty tag values.
     @SuppressWarnings("rawtypes")
     private static JsonArray appliedStereotypes(Element element) {
         JsonArray result = new JsonArray();
@@ -168,6 +175,7 @@ final class SpecificationService {
                     so.addProperty("profile", profile.getName());
                 }
             } catch (Throwable e) {
+                // Older releases lack Stereotype.getProfile(); this helper finds the owning profile instead.
                 try {
                     com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Package pkg =
                             StereotypesHelper.getProfileForStereotype(st);
@@ -200,6 +208,7 @@ final class SpecificationService {
         return result;
     }
 
+    // Named constraints owned by the element, as name -> body text.
     private static JsonObject ownedConstraints(Element element) {
         JsonObject out = new JsonObject();
         try {
@@ -222,6 +231,7 @@ final class SpecificationService {
         return out;
     }
 
+    /** A constraint's text: the literal string, the first opaque body, or the spec's "value". Null if none. */
     static String constraintBody(Constraint c) {
         try {
             ValueSpecification spec = c.getSpecification();
@@ -248,6 +258,11 @@ final class SpecificationService {
 
     // ------------------------------------------------------------------ write
 
+    /*
+     * cameo_set_specification: each property name is first matched against the tags of the applied
+     * stereotypes, then against the standard UML features. Unknown names are reported back rather
+     * than failing, so one typo doesn't undo the other changes; invalid values do fail the call.
+     */
     static JsonObject set(Args a) throws Exception {
         String id = a.reqStr("element_id");
         Map<String, Object> props = a.map("properties");
@@ -262,6 +277,7 @@ final class SpecificationService {
         return Edt.write("Set specification", project -> {
             Element element = ModelSupport.element(project, id, "element_id");
             ModelSupport.requireEditable(element, "Element");
+            // Tag name -> applied stereotype that defines it; a name defined by several keeps the last one.
             Map<String, Stereotype> tagOwner = new LinkedHashMap<>();
             List<Stereotype> stereotypes = StereotypesHelper.getStereotypes(element);
             if (stereotypes != null) {
@@ -328,6 +344,7 @@ final class SpecificationService {
         });
     }
 
+    // Value as text; JSON null is rejected.
     private static String text(JsonElement value, String name) {
         if (value == null || value.isJsonNull()) {
             throw ToolException.invalid(name + " needs a value.");
@@ -335,6 +352,7 @@ final class SpecificationService {
         return value.isJsonPrimitive() ? value.getAsString() : value.toString();
     }
 
+    // Strict boolean: true/false or their strings only.
     private static boolean bool(JsonElement value, String name) {
         if (value != null && value.isJsonPrimitive()) {
             JsonPrimitive p = value.getAsJsonPrimitive();
@@ -349,6 +367,10 @@ final class SpecificationService {
         throw ToolException.invalid(name + " must be true or false.");
     }
 
+    /*
+     * Sets one standard UML feature with the metaclass check and conversion it needs. Returns false
+     * when the feature doesn't apply to this element, so the caller can report it as unrecognized.
+     */
     private static boolean setStandard(Element element, String name, JsonElement value, Project project)
             throws Exception {
         switch (name) {
@@ -475,6 +497,7 @@ final class SpecificationService {
                 }
                 return false;
             default:
+                // Any other standard feature: let JMI set it with generic coercion.
                 for (String f : STANDARD_FEATURES) {
                     if (f.equals(name)) {
                         element.refSetValue(name, TaggedValues.coerceGeneric(project, value));
@@ -495,6 +518,7 @@ final class SpecificationService {
         return value;
     }
 
+    // type takes an id, {"id": ...} or null (clears the type).
     private static boolean setType(Element element, JsonElement value, Project project) {
         if (!(element instanceof TypedElement)) {
             return false;
@@ -517,6 +541,7 @@ final class SpecificationService {
         return true;
     }
 
+    // Canonical direction keyword to Cameo's enum.
     private static ParameterDirectionKind parameterDirection(String text) {
         switch (ModelText.parameterDirection(text)) {
             case "in":
@@ -530,6 +555,7 @@ final class SpecificationService {
         }
     }
 
+    // Updates the body of the owned constraint with that name, or creates one.
     private static void setOrCreateConstraint(Project project, Element owner, String name, String text)
             throws Exception {
         for (Element child : owner.getOwnedElement()) {
@@ -544,6 +570,7 @@ final class SpecificationService {
         ModelElementsManager.getInstance().addElement(c, owner);
     }
 
+    // Rewrites the constraint text in whatever spec form it already has; new constraints get an OpaqueExpression.
     private static void setConstraintText(Project project, Constraint c, String text) {
         ValueSpecification existing = c.getSpecification();
         if (existing instanceof OpaqueExpression) {

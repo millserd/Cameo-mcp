@@ -34,6 +34,7 @@ final class ProjectUiService {
 
     // ------------------------------------------------------------------ project
 
+    // cameo_get_project: name, file, dirty/remote flags, projectKind and the primary model agents start from.
     static JsonObject getProject() throws Exception {
         return Edt.read(project -> {
             JsonObject json = new JsonObject();
@@ -70,6 +71,7 @@ final class ProjectUiService {
                 throw new ToolException("PRECONDITION_FAILED", "Cannot save: Cameo has no file location for this "
                         + "project (it was never saved). Ask the user to use File > Save As once, then retry.");
             }
+            // true = save silently, without Cameo's confirmation dialogs.
             boolean success = pm.saveProject(descriptor, true);
             JsonObject json = new JsonObject();
             json.addProperty("saved", success);
@@ -85,10 +87,12 @@ final class ProjectUiService {
 
     // ------------------------------------------------------------------ UI state
 
+    // cameo_get_ui_state: reads Swing state, so it must run on the EDT.
     static JsonObject uiState(boolean summaryOnly) throws Exception {
         return Edt.onEdt("Read UI state", project -> buildState(project, summaryOnly), 20);
     }
 
+    // cameo_get_active_diagram: the activeDiagram part of the UI state.
     static JsonObject activeDiagram() throws Exception {
         JsonObject state = uiState(false);
         JsonObject out = new JsonObject();
@@ -97,6 +101,7 @@ final class ProjectUiService {
         return out;
     }
 
+    // cameo_get_ui_selection: only the selection parts of the UI state.
     static JsonObject selection() throws Exception {
         JsonObject state = uiState(false);
         JsonObject out = new JsonObject();
@@ -107,6 +112,7 @@ final class ProjectUiService {
         return out;
     }
 
+    // Assembles the UI snapshot; every API that fails or is missing adds a warning instead of failing the call.
     private static JsonObject buildState(Project project, boolean summaryOnly) {
         JsonArray warnings = new JsonArray();
         JsonObject response = new JsonObject();
@@ -131,6 +137,7 @@ final class ProjectUiService {
         return response;
     }
 
+    // Project facts for the UI snapshot; getFile() exists only in some releases, so getFileName() is the fallback.
     private static JsonObject projectJson(Project project, JsonArray warnings) {
         JsonObject json = new JsonObject();
         json.addProperty("name", project.getName() != null ? project.getName() : "");
@@ -169,6 +176,7 @@ final class ProjectUiService {
         return json;
     }
 
+    // The diagram in the focused editor tab; Application.getActiveDiagram is the fallback for older APIs.
     private static DiagramPresentationElement findActiveDiagram(Project project, JsonArray warnings) {
         try {
             DiagramPresentationElement d = project.getActiveDiagram();
@@ -186,6 +194,7 @@ final class ProjectUiService {
         return null;
     }
 
+    /** {id, name, type, owner} of a diagram. */
     static JsonObject diagramSummary(DiagramPresentationElement dpe) {
         JsonObject json = new JsonObject();
         Diagram diagram = dpe.getDiagram();
@@ -206,6 +215,7 @@ final class ProjectUiService {
         return json;
     }
 
+    /** One selected symbol: presentation id and class, the model element it shows, and its bounds. */
     static JsonObject presentationSummary(PresentationElement pe) {
         JsonObject json = new JsonObject();
         json.addProperty("presentationId", pe.getID());
@@ -241,6 +251,7 @@ final class ProjectUiService {
         return json;
     }
 
+    // Symbols selected on the active diagram; the getter name differs between releases.
     private static JsonArray selectedPresentations(DiagramPresentationElement active, JsonArray warnings) {
         JsonArray array = new JsonArray();
         if (active == null) {
@@ -264,6 +275,7 @@ final class ProjectUiService {
         return array;
     }
 
+    // Elements selected in the containment tree, read through whichever browser API this release offers.
     private static JsonArray browserSelection(Project project, JsonArray warnings) {
         JsonArray array = new JsonArray();
         Object browser = null;
@@ -304,6 +316,7 @@ final class ProjectUiService {
         return array;
     }
 
+    // A tree node wraps its element as the user object (or exposes getElement()).
     private static void addBrowserNode(JsonArray array, Object node) {
         if (node == null) {
             return;
@@ -315,6 +328,7 @@ final class ProjectUiService {
         }
     }
 
+    // Union of diagram and browser selections, deduplicated by element id, diagram first.
     private static JsonArray selectedElements(JsonArray presentations, JsonArray browser) {
         JsonArray array = new JsonArray();
         Set<String> seen = new LinkedHashSet<>();
@@ -336,6 +350,7 @@ final class ProjectUiService {
         return array;
     }
 
+    // The first max entries, used by summary_only to keep big selections small.
     private static JsonArray limit(JsonArray array, int max) {
         JsonArray out = new JsonArray();
         for (int i = 0; i < array.size() && i < max; i++) {

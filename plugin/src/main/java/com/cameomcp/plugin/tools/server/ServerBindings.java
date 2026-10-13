@@ -53,6 +53,7 @@ public final class ServerBindings {
     private ServerBindings() {
     }
 
+    /** Binds the server family's tools; each lambda unpacks arguments and delegates to a method below. */
     public static void bind(ToolRegistry r) {
         r.bind("cameo_status", (a, c) -> status());
         r.bind("cameo_get_capabilities", (a, c) -> capabilities(a));
@@ -64,6 +65,7 @@ public final class ServerBindings {
         r.bind("cameo_log", (a, c) -> log(a));
     }
 
+    // The runtime, or NOT_READY if the plugin hasn't initialized (only possible in tests).
     private static McpRuntime rt() {
         McpRuntime rt = McpRuntime.get();
         if (rt == null) {
@@ -74,6 +76,7 @@ public final class ServerBindings {
 
     // ------------------------------------------------------------------ status
 
+    // cameo_status: the runtime status plus project state and any write in progress.
     static Map<String, Object> status() {
         Map<String, Object> s = rt().status();
         boolean project = CameoInfo.hasProject();
@@ -90,6 +93,10 @@ public final class ServerBindings {
         return s;
     }
 
+    /*
+     * cameo_get_capabilities: tool counts per family, which optional Cameo plugins are loaded
+     * (matched by plugin id fragment), macro setting and Cameo version.
+     */
     static Map<String, Object> capabilities(Args a) {
         McpRuntime rt = rt();
         Map<String, Integer> families = new LinkedHashMap<>();
@@ -130,6 +137,7 @@ public final class ServerBindings {
         return out;
     }
 
+    // Ids of every loaded Cameo plugin, read reflectively since PluginUtils isn't public API in every release.
     private static List<String> loadedPluginIds() {
         List<String> ids = new ArrayList<>();
         try {
@@ -156,6 +164,11 @@ public final class ServerBindings {
 
     // ------------------------------------------------------------------ probe
 
+    /*
+     * cameo_probe_bridge: calls our own HTTP endpoint the way a client would, and checks that the
+     * Swing event thread answers within 5 s. A stuck EDT (usually a modal dialog) is the most
+     * common reason write tools time out.
+     */
     static Map<String, Object> probe() {
         McpRuntime rt = rt();
         Map<String, Object> checks = new LinkedHashMap<>();
@@ -195,6 +208,7 @@ public final class ServerBindings {
         return Json.obj("healthy", healthy, "checks", checks);
     }
 
+    // One timed HTTP request to our own server, with the configured token; the body is cut to 300 characters.
     private static Map<String, Object> httpCheck(String method, String url, String body, McpRuntime rt) {
         long t0 = System.nanoTime();
         try {
@@ -241,6 +255,7 @@ public final class ServerBindings {
 
     // ------------------------------------------------------------------ catalog
 
+    // cameo_list_tools: catalog search by family and/or keyword, with a one-sentence summary per tool.
     static Map<String, Object> listTools(Args a) {
         String family = a.optTrim("family");
         String query = a.optTrim("query");
@@ -264,6 +279,7 @@ public final class ServerBindings {
         return Json.obj("count", tools.size(), "total", rt().registry().size(), "families", families, "tools", tools);
     }
 
+    // Text up to and including the first ". ", or all of it.
     static String firstSentence(String text) {
         int i = text.indexOf(". ");
         return i < 0 ? text : text.substring(0, i + 1);
@@ -271,6 +287,10 @@ public final class ServerBindings {
 
     // ------------------------------------------------------------------ recovery
 
+    /*
+     * cameo_reset_session: cancels (rolls back) a session left open by a crashed macro. If cancel
+     * itself fails, closing the session keeps the partial change but unblocks new writes.
+     */
     static Map<String, Object> resetSession() throws Exception {
         return Edt.onEdt("Reset session", project -> {
             SessionManager sm = SessionManager.getInstance();
@@ -294,6 +314,10 @@ public final class ServerBindings {
         }, 30);
     }
 
+    /*
+     * cameo_undo / cameo_redo: steps through Cameo's command history on the EDT. Refuses while a
+     * session is open, because undo inside a session would corrupt it.
+     */
     static Map<String, Object> undoRedo(boolean undo, int steps) throws Exception {
         return Edt.onEdt(undo ? "Undo" : "Redo", project -> {
             if (SessionManager.getInstance().isSessionCreated(project)) {
@@ -332,6 +356,7 @@ public final class ServerBindings {
         }
     }
 
+    // cameo_log: writes the agent's message to the Notification window, md.log and the activity list.
     static Map<String, Object> log(Args a) {
         String message = a.reqStr("message");
         String level = a.choice("level", "info", "info", "warn", "error");

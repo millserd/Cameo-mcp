@@ -39,6 +39,7 @@ public final class Bind {
         return out;
     }
 
+    // some_name -> someName; a leading underscore is dropped without capitalizing the next letter.
     static String camel(String snake) {
         StringBuilder sb = new StringBuilder();
         boolean up = false;
@@ -53,6 +54,7 @@ public final class Bind {
         return sb.toString();
     }
 
+    // someName -> some_name.
     static String snake(String camel) {
         StringBuilder sb = new StringBuilder();
         for (char c : camel.toCharArray()) {
@@ -65,6 +67,7 @@ public final class Bind {
         return sb.toString();
     }
 
+    /** Adapts a Gson-style tool to a core handler; a null result becomes an empty object. */
     public static ToolHandler gsonHandler(GsonTool tool) {
         return (Args args, com.cameomcp.mcp.ToolContext ctx) -> {
             JsonObject result = tool.call(withAliases(Gs.toGson(args)));

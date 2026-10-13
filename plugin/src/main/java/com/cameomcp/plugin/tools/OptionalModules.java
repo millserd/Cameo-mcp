@@ -26,13 +26,17 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class OptionalModules {
 
+    // Where the plugin is installed; set by CameoMcpPlugin.init, null in tests.
     private static volatile File pluginDirectory;
+    // Built once on first use, because Cameo's plugin list is only complete after start-up.
     private static volatile ClassLoader loader;
+    // One instance per service class, created on first call.
     private static final Map<String, GsonService> SERVICES = new ConcurrentHashMap<>();
 
     private OptionalModules() {
     }
 
+    /** Records the plugin folder so the optional jar can be found next to the main jar. */
     public static void setPluginDirectory(File dir) {
         pluginDirectory = dir;
     }
@@ -56,6 +60,10 @@ public final class OptionalModules {
         }
     }
 
+    /**
+     * The cached service instance for the class, loading it on first use. Any failure to load
+     * (missing jar, missing optional Cameo plugin, linkage error) becomes an UNSUPPORTED tool error.
+     */
     public static GsonService service(String serviceClass) {
         GsonService s = SERVICES.get(serviceClass);
         if (s != null) {
@@ -75,6 +83,11 @@ public final class OptionalModules {
         }
     }
 
+    /*
+     * Builds the loader chain: optional jar -> (this plugin's loader, then every other Cameo
+     * plugin's loader). The custom parent only consults the other plugins when our own loader
+     * can't find a class, so our bundled classes always win.
+     */
     private static synchronized ClassLoader loader() throws Exception {
         if (loader != null) {
             return loader;
@@ -117,6 +130,7 @@ public final class OptionalModules {
         return loader;
     }
 
+    // cameo-mcp-optional.jar next to the plugin jar, or null when running from a build tree.
     private static File locateJar() {
         File dir = pluginDirectory;
         if (dir == null) {
@@ -154,6 +168,7 @@ public final class OptionalModules {
         } catch (Throwable t) {
             CameoLog.fileOnly("Could not enumerate Cameo plugins: " + t);
         }
+        // The context loader catches classes from Cameo's own lib folder that no plugin loader exposes.
         ClassLoader ctx = Thread.currentThread().getContextClassLoader();
         if (ctx != null && !out.contains(ctx)) {
             out.add(ctx);

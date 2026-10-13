@@ -36,6 +36,7 @@ import java.util.Set;
 /** Element queries, containment browsing and relationship listing (all read-only). */
 final class QueryService {
 
+    // Paging and depth limits: defaults keep answers small for agents; maxima cap the work on huge models.
     static final int QUERY_DEFAULT_LIMIT = 200;
     static final int QUERY_MAX_LIMIT = 1000;
     static final int TREE_DEFAULT_DEPTH = 3;
@@ -57,6 +58,7 @@ final class QueryService {
         return null;
     }
 
+    // The limit parameter, capped at max; zero or negative is an error rather than silently "all".
     private static int limit(Args a, int dflt, int max) {
         Long v = a.lng("limit");
         if (v == null) {
@@ -68,6 +70,7 @@ final class QueryService {
         return (int) Math.min(v, max);
     }
 
+    // The offset parameter; negative is an error.
     private static int offset(Args a) {
         Long v = a.lng("offset");
         if (v == null) {
@@ -81,6 +84,7 @@ final class QueryService {
 
     // ------------------------------------------------------------------ get element
 
+    // cameo_get_element: full detail of one element.
     static JsonObject getElement(Args a) throws Exception {
         String id = a.reqStr("element_id");
         return Edt.read(project -> ElementJson.toJson(ModelSupport.element(project, id, "element_id")));
@@ -88,6 +92,10 @@ final class QueryService {
 
     // ------------------------------------------------------------------ query
 
+    /*
+     * cameo_query_elements: finds elements under a scope (default: the primary model) by metaclass,
+     * name and stereotype, sorted by type, name and id so paging is stable between calls.
+     */
     static JsonObject queryElements(Args a) throws Exception {
         String typeFilter = a.optTrim("type");
         String nameFilter = a.optTrim("name");
@@ -110,6 +118,7 @@ final class QueryService {
                 }
             }
             Collection<? extends Element> candidates;
+            // Pick the cheapest Finder for the filters given; the stereotype filter is applied afterwards.
             if (metaclass != null && nameFilter != null) {
                 candidates = recursive ? Finder.byNameAllRecursively().find(scope, metaclass, nameFilter)
                         : Finder.byNameAll().find(scope, metaclass, nameFilter);
@@ -171,12 +180,14 @@ final class QueryService {
         });
     }
 
+    /** Copies plain-JSON paging fields into a Gson response. */
     static void merge(JsonObject target, Map<String, Object> values) {
         for (Map.Entry<String, Object> e : values.entrySet()) {
             target.add(e.getKey(), Gs.toElement(e.getValue()));
         }
     }
 
+    /** The metaclass for a type filter ("Class", "use case", "property"), trying a few spellings; null if unknown. */
     static Class<?> resolveMetaclass(String typeInput) {
         String[] candidates = {ModelText.normalizeTypeName(typeInput), typeInput,
                 typeInput.substring(0, 1).toUpperCase() + typeInput.substring(1)};
@@ -195,6 +206,7 @@ final class QueryService {
 
     // ------------------------------------------------------------------ containment
 
+    // cameo_get_containment_tree: nested owned elements down to the given depth (1-10).
     static JsonObject containmentTree(Args a) throws Exception {
         String rootId = alias(a, "root_id", "parent_id");
         Long d = a.lng("depth");
@@ -212,6 +224,7 @@ final class QueryService {
         });
     }
 
+    // One tree node; at the depth limit only childCount is reported, so agents know where to drill in.
     private static JsonObject treeNode(Element element, int maxDepth, int depth, boolean full) {
         JsonObject node = new JsonObject();
         node.addProperty("id", element.getID());
@@ -239,6 +252,7 @@ final class QueryService {
         return node;
     }
 
+    // cameo_list_containment_children: one level of owned elements, filtered and paged.
     static JsonObject listChildren(Args a) throws Exception {
         String rootId = alias(a, "root_id", "parent_id");
         String typeFilter = a.optTrim("type");
@@ -305,6 +319,11 @@ final class QueryService {
 
     // ------------------------------------------------------------------ relationships
 
+    /*
+     * cameo_get_relationships: everything that touches an element. Directed relationships and
+     * activity edges are split into outgoing and incoming; associations and connectors are listed
+     * as undirected. Each source is read in its own try block so one failing API doesn't hide the rest.
+     */
     static JsonObject relationships(Args a) throws Exception {
         String elementId = a.reqStr("element_id");
         String direction = a.choice("direction", "both", "both", "incoming", "outgoing");
@@ -314,6 +333,7 @@ final class QueryService {
             Element element = ModelSupport.element(project, elementId, "element_id");
             JsonArray outgoing = new JsonArray();
             JsonArray incoming = new JsonArray();
+            // Ids already reported, so an element that is both source and target of a relationship isn't listed twice.
             Set<String> directedIds = new HashSet<>();
             try {
                 Collection<DirectedRelationship> rels = element.get_directedRelationshipOfSource();
@@ -377,6 +397,7 @@ final class QueryService {
             } catch (Exception ignored) {
                 // best effort
             }
+            // Connectors aren't Relationships in UML, so ports and parts need this separate lookup.
             if (element instanceof ConnectableElement) {
                 try {
                     Collection<Connector> connectors = Connectors.collectDirectConnectors((ConnectableElement) element);
@@ -404,12 +425,14 @@ final class QueryService {
         });
     }
 
+    // type and humanType of a relationship.
     private static void typeFields(JsonObject json, Element rel) {
         String type = ModelSupport.typeName(rel);
         json.addProperty("type", type.isEmpty() ? rel.getHumanType() : type);
         json.addProperty("humanType", rel.getHumanType());
     }
 
+    // Name, owner and stereotypes, when present.
     private static void metadata(JsonObject json, Element rel) {
         String name = ModelSupport.name(rel);
         if (!name.isEmpty()) {
@@ -433,6 +456,7 @@ final class QueryService {
         }
     }
 
+    // One directed relationship (Dependency, Satisfy, Generalization, ...) with its sources and targets.
     private static JsonObject directed(DirectedRelationship rel, String direction) {
         JsonObject json = new JsonObject();
         json.addProperty("relationshipId", rel.getID());
@@ -447,6 +471,7 @@ final class QueryService {
         return json;
     }
 
+    // One control or object flow; activity edges are not DirectedRelationships in Cameo's API.
     private static JsonObject activityEdge(ActivityEdge edge, String direction) {
         JsonObject json = new JsonObject();
         json.addProperty("relationshipId", edge.getID());
@@ -466,6 +491,7 @@ final class QueryService {
         return json;
     }
 
+    // One undirected relationship (e.g. Association), listing the other related elements.
     private static JsonObject undirectedRel(Relationship rel, String selfId) {
         JsonObject json = new JsonObject();
         json.addProperty("relationshipId", rel.getID());
@@ -485,6 +511,7 @@ final class QueryService {
         return json;
     }
 
+    // One connector: every end, which ends attach to the queried element, and the information flows it realizes.
     private static JsonObject connector(Connector connector, String selfId) {
         JsonObject json = new JsonObject();
         json.addProperty("relationshipId", connector.getID());
@@ -537,6 +564,7 @@ final class QueryService {
         return json;
     }
 
+    // Conveyed items, realizing connectors and ItemFlow item property of an information flow.
     private static void informationFlow(JsonObject json, InformationFlow flow) {
         try {
             json.add("informationSources", refs(flow.getInformationSource()));
@@ -566,6 +594,7 @@ final class QueryService {
         }
     }
 
+    // Reference JSON for each element; empty when the collection can't be read.
     private static JsonArray refs(Collection<? extends Element> elements) {
         try {
             return elements == null ? new JsonArray() : ElementJson.toJsonReferenceArray(elements);
@@ -574,6 +603,7 @@ final class QueryService {
         }
     }
 
+    // Adds a reference once, skipping the queried element itself.
     private static void addRelated(JsonArray related, Set<String> seen, Element e, String selfId) {
         if (e == null || (selfId != null && selfId.equals(e.getID())) || !seen.add(e.getID())) {
             return;
@@ -585,6 +615,7 @@ final class QueryService {
         return selfId != null && e != null && selfId.equals(e.getID());
     }
 
+    // Calls the first of the named collection getters that exists; getter names differ across releases.
     @SuppressWarnings("unchecked")
     private static Collection<? extends Element> elementCollection(Object target, String... methods) {
         for (String m : methods) {
