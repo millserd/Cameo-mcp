@@ -9,8 +9,7 @@ so there is nothing else to install or keep in sync:
 
 ```
  AI agent / MCP client ──Streamable HTTP──▶ Cameo MCP plugin (inside Cameo's JVM) ──▶ Cameo Java API
- (Claude Code, Cursor,      127.0.0.1:18740/mcp     menu + status window + log
-  VS Code, ...)
+ (Cursor, VS Code, ...)    127.0.0.1:18740/mcp     menu + status window + log
  stdio-only clients ──stdio──▶ cameo-mcp-stdio.jar ──HTTP──▶ (same plugin)
 ```
 
@@ -55,8 +54,7 @@ so there is nothing else to install or keep in sync:
    - **macOS / Linux**: `sh install/install.sh`
 
    The installer finds your Cameo installation (or pass `-CameoHome "C:\Program Files\..."` /
-   `--cameo-home /path`), copies `plugin/com.cameomcp.plugin` into `<Cameo>/plugins/`, and, if the
-   `claude` CLI is present, registers the server with Claude Code.
+   `--cameo-home /path`), copies `plugin/com.cameomcp.plugin` into `<Cameo>/plugins/`.
    Manual install is the same copy: put the folder `plugin/com.cameomcp.plugin` into
    `<Cameo install>/plugins/`.
 
@@ -75,19 +73,13 @@ Uninstall: `install.ps1 -Uninstall` / `install.sh --uninstall`, or delete
 The **Connect a client** tab of the status window shows these snippets with your real port,
 token and paths filled in, ready to copy.
 
-**Claude Code**
-
-```sh
-claude mcp add --transport http cameo http://127.0.0.1:18740/mcp
-```
-
-**Any client with Streamable HTTP support** (Cursor, VS Code, Windsurf, Claude Code `.mcp.json`):
+**Any client with Streamable HTTP support** (Cursor, VS Code, Windsurf, ...):
 
 ```json
 { "mcpServers": { "cameo": { "type": "http", "url": "http://127.0.0.1:18740/mcp" } } }
 ```
 
-**stdio-only clients** (for example Claude Desktop): run the bundled launcher with Cameo's Java.
+**stdio-only clients** (desktop chat apps and other clients without HTTP support): run the bundled launcher with Cameo's Java.
 The jar is in the plugin folder.
 
 ```json

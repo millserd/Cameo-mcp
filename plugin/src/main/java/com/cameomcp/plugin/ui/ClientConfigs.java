@@ -19,17 +19,7 @@ public final class ClientConfigs {
         return t == null || t.isEmpty() ? null : t;
     }
 
-    /** {@code claude mcp add} command for Claude Code (HTTP transport). */
-    public static String claudeCode(McpRuntime rt) {
-        String cmd = "claude mcp add --transport http cameo " + rt.endpointUrl();
-        String t = token(rt);
-        if (t != null) {
-            cmd += " --header \"Authorization: Bearer " + t + "\"";
-        }
-        return cmd;
-    }
-
-    /** Generic mcpServers JSON for clients with HTTP support (Claude Code, Cursor, VS Code, ...). */
+    /** Generic mcpServers JSON for clients with HTTP support (Cursor, VS Code, ...). */
     public static String httpJson(McpRuntime rt) {
         Map<String, Object> server = Json.obj("type", "http", "url", rt.endpointUrl());
         String t = token(rt);

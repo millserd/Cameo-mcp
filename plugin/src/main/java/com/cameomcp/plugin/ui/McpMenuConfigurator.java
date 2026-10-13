@@ -45,11 +45,11 @@ public final class McpMenuConfigurator implements AMConfigurator {
         category.addAction(new Item("CAMEO_MCP_RESTART", "Restart Server", () -> run("Restart", McpRuntime::restart),
                 McpRuntime::isRunning));
         category.addAction(new Item("CAMEO_MCP_TEST", "Test Connection", McpMenuConfigurator::test, rt -> true));
-        category.addAction(new Item("CAMEO_MCP_COPY", "Copy Claude Code Command", () -> {
+        category.addAction(new Item("CAMEO_MCP_COPY", "Copy Client Config (JSON)", () -> {
             McpRuntime rt = McpRuntime.get();
-            String cmd = ClientConfigs.claudeCode(rt);
+            String cmd = ClientConfigs.httpJson(rt);
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(cmd), null);
-            CameoLog.info("Copied to clipboard: " + cmd.replaceAll("Bearer \\S+\"", "Bearer ***\""));
+            CameoLog.info("Copied to clipboard: " + cmd.replaceAll("Bearer [^\"]+", "Bearer ***"));
         }, rt -> true));
     }
 

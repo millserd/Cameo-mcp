@@ -260,7 +260,6 @@ public final class McpStatusWindow extends JDialog {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panel.add(snippet("Claude Code (HTTP)", () -> ClientConfigs.claudeCode(rt)));
         panel.add(snippet("Any MCP client with HTTP support (mcpServers JSON)", () -> ClientConfigs.httpJson(rt)));
         panel.add(snippet("stdio-only clients (uses Cameo's Java to run the launcher)", () -> ClientConfigs.stdioJson(rt)));
         return new JScrollPane(panel);

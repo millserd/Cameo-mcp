@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs (or removes) the Cameo MCP plugin into Cameo Systems Modeler / CATIA Magic 2024x or 2026x.
-#   sh install/install.sh [--cameo-home DIR]... [--all] [--uninstall] [--no-claude] [--port N]
+#   sh install/install.sh [--cameo-home DIR]... [--all] [--uninstall] [--port N]
 set -eu
 PLUGIN_ID=com.cameomcp.plugin
 PKG_ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -8,7 +8,6 @@ SRC="$PKG_ROOT/plugin/$PLUGIN_ID"
 HOMES=""
 ALL=0
 UNINSTALL=0
-NO_CLAUDE=0
 PORT=18740
 
 while [ $# -gt 0 ]; do
@@ -17,7 +16,6 @@ while [ $# -gt 0 ]; do
 $2"; shift 2 ;;
     --all) ALL=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
-    --no-claude) NO_CLAUDE=1; shift ;;
     --port) PORT=$2; shift 2 ;;
     -h|--help) sed -n '2,3p' "$0"; exit 0 ;;
     *) echo "Unknown option $1" >&2; exit 2 ;;
@@ -83,21 +81,11 @@ done <<EOF_HOMES
 $HOMES
 EOF_HOMES
 
-URL="http://127.0.0.1:$PORT/mcp"
-if [ "$NO_CLAUDE" -eq 0 ] && command -v claude >/dev/null 2>&1; then
-  if [ "$UNINSTALL" -eq 1 ]; then
-    claude mcp remove --scope user cameo >/dev/null 2>&1 || true
-  elif claude mcp add --scope user --transport http cameo "$URL" >/dev/null 2>&1; then
-    echo "Registered with Claude Code as 'cameo' -> $URL"
-  else
-    echo "Claude Code already has a 'cameo' server or registration failed; check with: claude mcp list"
-  fi
-fi
-
 if [ "$UNINSTALL" -eq 1 ]; then
   echo "Done. Settings remain in ~/.cameo-mcp (delete that folder to remove them)."
   exit 0
 fi
+URL="http://127.0.0.1:$PORT/mcp"
 echo
 echo "Next steps:"
 echo "  1. Start Cameo. An MCP menu appears; the Notification window shows \"[Cameo MCP] MCP server started\"."
