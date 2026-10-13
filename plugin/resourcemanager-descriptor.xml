@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Resource Manager descriptor: lets Help > Resource/Plugin Manager > Import install the rdzip. -->
+<resourceDescriptor
+    critical="false"
+    date="${date}"
+    description="MCP server inside Cameo so AI agents can read and edit SysML models."
+    group="MagicDraw Plugin"
+    homePage="https://github.com/millserd/cameo-mcp"
+    id="${rdId}"
+    mdVersionMax="higher"
+    mdVersionMin="19.0"
+    name="Cameo MCP"
+    product="MagicDraw"
+    restartMagicdraw="true"
+    type="Plugin">
+    <version human="${version}" internal="${internal}" resource="${internal}"/>
+    <provider name="Cameo MCP" homePage="https://github.com/millserd/cameo-mcp"/>
+    <edition>Reader</edition>
+    <edition>Community</edition>
+    <edition>Standard</edition>
+    <edition>Professional</edition>
+    <edition>Professional Java</edition>
+    <edition>Architect</edition>
+    <edition>Enterprise</edition>
+    <installation>
+        <file from="plugins/${pluginId}/*.*" to="plugins/${pluginId}/*.*"/>
+        <file from="plugins/${pluginId}/lib/*.*" to="plugins/${pluginId}/lib/*.*"/>
+        <file from="${descriptorPath}" to="${descriptorPath}"/>
+    </installation>
+</resourceDescriptor>
