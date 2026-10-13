@@ -36,6 +36,7 @@ final class Support {
 
     // ------------------------------------------------------------------ envelopes
 
+    // Common head of every capability answer: family name, mode label and a snapshot of the open project.
     static JsonObject baseCapabilities(String family, String mode) {
         JsonObject json = new JsonObject();
         json.addProperty("family", family);
@@ -44,6 +45,7 @@ final class Support {
         return json;
     }
 
+    // Null when no project is open, or when the Application singleton is unavailable (e.g. outside Cameo in tests).
     static Project currentProject() {
         try {
             return Application.getInstance().getProject();
@@ -52,6 +54,7 @@ final class Support {
         }
     }
 
+    // Open/name/file/remote/dirty for the active project; getters are guarded so a capability probe never fails on them.
     static JsonObject projectState() {
         JsonObject state = new JsonObject();
         Project project = currentProject();
@@ -69,6 +72,7 @@ final class Support {
         return state;
     }
 
+    // Capability answer for a family that cannot run here, with the reason and what the caller should do next.
     static JsonObject unsupported(String family, String reason, String nextAction) {
         JsonObject json = baseCapabilities(family, "unsupported");
         json.addProperty("available", false);
@@ -78,6 +82,7 @@ final class Support {
         return json;
     }
 
+    // Standard envelope for preview-only tools: echoes the request and states that nothing was written.
     static JsonObject previewAccepted(String family, JsonObject request, String message) {
         JsonObject json = new JsonObject();
         json.addProperty("family", family);
@@ -115,12 +120,17 @@ final class Support {
         return out;
     }
 
+    // Null-to-empty for strings that go into JSON properties or messages.
     static String safe(String value) {
         return value == null ? "" : value;
     }
 
     // ------------------------------------------------------------------ class probes
 
+    /*
+     * Tries to load each class (without initializing it) and reports found/missing plus the jar it came from.
+     * Optional products are detected this way rather than by version number, since their presence varies by install.
+     */
     static JsonObject classProbe(String... classNames) {
         JsonObject probe = new JsonObject();
         JsonArray found = new JsonArray();
@@ -150,6 +160,7 @@ final class Support {
         return probe;
     }
 
+    // Boolean form of classProbe for a single class.
     static boolean classAvailable(String className) {
         try {
             loadClass(className);
@@ -170,6 +181,8 @@ final class Support {
             // not inside Cameo
         }
         loaders.add(ClassLoader.getSystemClassLoader());
+        // Optional products (simulation, report wizard, ...) ship as plugins with their own class loaders,
+        // so a class missing from our loader may still be reachable through one of theirs.
         loaders.addAll(pluginClassLoaders());
         ClassNotFoundException last = null;
         for (ClassLoader loader : loaders) {
@@ -189,6 +202,7 @@ final class Support {
         throw e;
     }
 
+    // Class loaders of every loaded Cameo plugin, fetched reflectively so this also compiles/runs without PluginUtils.
     private static List<ClassLoader> pluginClassLoaders() {
         List<ClassLoader> out = new ArrayList<>();
         try {
@@ -210,6 +224,7 @@ final class Support {
         return out;
     }
 
+    // Jar or folder the class was loaded from; empty when the JVM does not expose it.
     private static String codeSource(Class<?> cls) {
         try {
             CodeSource source = cls.getProtectionDomain().getCodeSource();
@@ -261,6 +276,7 @@ final class Support {
         return matches;
     }
 
+    // Immediate subdirectories of <install>/plugins, or empty when the install root cannot be located.
     private static List<File> pluginFolders() {
         List<File> out = new ArrayList<>();
         File root = installRoot();
@@ -276,6 +292,10 @@ final class Support {
         return out;
     }
 
+    /*
+     * Locates the Cameo install folder: system properties, CAMEO_HOME, CameoInfo, then the working directory.
+     * The first candidate that actually contains a plugins/ folder wins; null if none does.
+     */
     static File installRoot() {
         List<String> candidates = new ArrayList<>();
         candidates.add(System.getProperty("cameo.home"));
@@ -298,6 +318,7 @@ final class Support {
 
     // ------------------------------------------------------------------ model helpers
 
+    // Lenient lookup: null for blank IDs and for IDs that resolve to non-UML objects (e.g. SysML v2 elements).
     static Element element(Project project, String id) {
         if (id == null || id.trim().isEmpty()) {
             return null;
@@ -306,6 +327,7 @@ final class Support {
         return o instanceof Element ? (Element) o : null;
     }
 
+    // Like element() but throws: SYSML2_ELEMENT when the ID is a SysML v2 element, otherwise NOT_FOUND.
     static Element requireElement(Project project, String id, String what) {
         Element e = element(project, id);
         if (e == null) {
@@ -315,6 +337,7 @@ final class Support {
         return e;
     }
 
+    // Element reference JSON that never throws: falls back to just the ID if serialization fails.
     static JsonObject ref(Element element) {
         try {
             return ElementJson.toJsonReference(element);
@@ -354,6 +377,8 @@ final class Support {
         }
         if (value instanceof Collection<?>) {
             JsonArray array = new JsonArray();
+            // Collections and maps are capped at 250 entries and their items are serialized in summary mode,
+            // which keeps dumps of large native structures bounded.
             if (!summaryOnly) {
                 int count = 0;
                 for (Object item : (Collection<?>) value) {
@@ -386,6 +411,7 @@ final class Support {
             }
             return wrapper;
         }
+        // Unknown object: class name and toString, plus (with includeRaw) one level of zero-arg get/is getter values.
         JsonObject fallback = new JsonObject();
         fallback.addProperty("className", value.getClass().getName());
         fallback.addProperty("string", String.valueOf(value));
@@ -412,6 +438,7 @@ final class Support {
         return fallback;
     }
 
+    // Reflective zero-arg call that returns null on any failure (missing method, exception, null target).
     static Object invokeZeroArg(Object target, String methodName) {
         if (target == null) {
             return null;
@@ -423,6 +450,7 @@ final class Support {
         }
     }
 
+    // invokeZeroArg rendered as a string, empty when it returned null or failed.
     static String stringGetter(Object target, String methodName) {
         Object v = invokeZeroArg(target, methodName);
         return v == null ? "" : String.valueOf(v);

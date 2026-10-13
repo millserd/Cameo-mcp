@@ -35,6 +35,10 @@ final class CriteriaExpressions {
     private CriteriaExpressions() {
     }
 
+    /*
+     * The built-in template table, filtered to templates whose comma-separated targetKinds include target
+     * (case-insensitive). The table is rebuilt on every call; it is small and keeps the class stateless.
+     */
     static JsonArray templates(String target) {
         JsonArray all = new JsonArray();
         all.add(template("refine.targetToSource", "Refine target-to-source", "relationMap", "Refine", "targetToSource", true));
@@ -62,6 +66,7 @@ final class CriteriaExpressions {
         return filtered;
     }
 
+    // Template row. The nested expression's verified flag is recomputed from UI_VERIFIED, matching what build()/parse() report.
     private static JsonObject template(String id, String description, String targets, String kind, String direction,
                                        boolean verified) {
         JsonObject json = new JsonObject();
@@ -84,6 +89,7 @@ final class CriteriaExpressions {
         return id != null && UI_VERIFIED.contains(id);
     }
 
+    // "satisfy.both" -> "satisfy"; used when build() gets an id that is not in the table.
     static String relationshipKindFromId(String id) {
         if (id == null || id.isEmpty()) {
             return "";
@@ -97,11 +103,13 @@ final class CriteriaExpressions {
         if (kind == null) {
             return null;
         }
+        // Stereotype-style input such as the guillemet-wrapped name shown in Cameo is accepted.
         String k = kind.trim();
         if (k.startsWith("«") && k.endsWith("»")) {
             k = k.substring(1, k.length() - 1).trim();
         }
         String key = squash(k);
+        // Common synonyms that do not squash to a known kind.
         if ("derive".equals(key) || "derivereqt".equals(key) || "derivereq".equals(key)) {
             return "DeriveReqt";
         }
@@ -116,12 +124,14 @@ final class CriteriaExpressions {
         return k;
     }
 
+    // True when the kind (after canonicalization) is one of KNOWN_KINDS.
     static boolean isKnownKind(String kind) {
         return kind != null && KNOWN_KINDS.contains(canonicalKind(kind));
     }
 
     /** Canonical direction, or null when not recognized. */
     static String canonicalDirection(String direction) {
+        // Blank means "both" (the default); only an unrecognized non-blank value yields null.
         if (direction == null || direction.trim().isEmpty()) {
             return "both";
         }
@@ -147,6 +157,7 @@ final class CriteriaExpressions {
         }
     }
 
+    // Lowercases and drops underscores, hyphens and spaces so "source_to_target" and "Source To Target" compare equal.
     private static String squash(String s) {
         return s.trim().toLowerCase(Locale.ROOT).replace("_", "").replace("-", "").replace(" ", "");
     }
@@ -166,6 +177,7 @@ final class CriteriaExpressions {
         return null;
     }
 
+    // Case-insensitive template id lookup, or null.
     static JsonObject templateById(String id) {
         if (id == null) {
             return null;
@@ -183,6 +195,7 @@ final class CriteriaExpressions {
      * matched against the template table so verified templates are flagged.
      */
     static JsonObject build(String id, String relationshipKind, String direction, String target) {
+        // An unknown id is only fatal when no kind was given to fall back on.
         JsonObject tpl = id != null ? templateById(id) : null;
         if (id != null && tpl == null && relationshipKind == null) {
             throw ToolException.invalid("Unknown criteria template '" + id + "'. Use cameo_list_criteria_templates.");
@@ -193,6 +206,7 @@ final class CriteriaExpressions {
         if (kind == null || kind.isEmpty()) {
             throw ToolException.invalid("relationship_kind is required, e.g. Satisfy, Refine, DeriveReqt, Allocate, Verify, Trace.");
         }
+        // An explicit direction overrides the template's; otherwise the template's direction is used, then "both".
         String dir = direction == null && tpl != null ? tpl.get("direction").getAsString() : canonicalDirection(direction);
         if (dir == null) {
             throw ToolException.invalid("direction must be one of both, sourceToTarget, targetToSource (got '" + direction + "').");
@@ -216,6 +230,7 @@ final class CriteriaExpressions {
         if (!isKnownKind(kind)) {
             warnings.add("Relationship kind '" + kind + "' is not a known UML/SysML relationship; check the spelling.");
         }
+        // Warn (not fail) when the requested target differs from the diagram kinds the template was captured for.
         if (target != null && tpl != null) {
             boolean ok = false;
             for (String tk : tpl.get("targetKinds").getAsString().split(",")) {
@@ -249,6 +264,7 @@ final class CriteriaExpressions {
         String form;
         if (expression.isJsonPrimitive()) {
             String text = expression.getAsString().trim();
+            // A JSON object passed as a string is parsed and handled like the object form.
             if (text.startsWith("{")) {
                 try {
                     return parse(JsonParser.parseString(text));
@@ -265,6 +281,7 @@ final class CriteriaExpressions {
                 if (parts.length == 0 || parts[0].isEmpty()) {
                     throw ToolException.invalid("expression is empty.");
                 }
+                // Dotted input split only by "/", "," or parentheses (no space or colon) is read as kind.direction on the first dot.
                 if (parts.length >= 2 && text.contains(".") && !text.contains(" ") && !text.contains(":")) {
                     String[] dotted = text.split("\\.", 2);
                     kind = dotted[0];
@@ -276,6 +293,7 @@ final class CriteriaExpressions {
                         issues.add("Ignored trailing text after the direction: '" + text + "'.");
                     }
                 }
+                // A single token like "Satisfy.both" also splits on the dot.
                 if (kind.contains(".") && direction == null) {
                     String[] dotted = kind.split("\\.", 2);
                     kind = dotted[0];
@@ -285,6 +303,7 @@ final class CriteriaExpressions {
         } else if (expression.isJsonObject()) {
             form = "object";
             JsonObject o = expression.getAsJsonObject();
+            // Accept the expression itself, or a wrapper such as a previous build()/parse() result.
             JsonObject inner = o.has("criteriaExpression") && o.get("criteriaExpression").isJsonObject()
                     ? o.getAsJsonObject("criteriaExpression")
                     : o.has("expression") && o.get("expression").isJsonObject() ? o.getAsJsonObject("expression") : o;
@@ -315,6 +334,7 @@ final class CriteriaExpressions {
         } else if (!isKnownKind(canon)) {
             issues.add("Relationship kind '" + canon + "' is not a known UML/SysML relationship.");
         }
+        // parsed=true only needs a kind and a direction; an unknown kind is reported in issues but still parses.
         boolean ok = canon != null && !canon.isEmpty() && dir != null;
         if (tpl == null && ok) {
             tpl = matchTemplate(canon, dir);
@@ -344,6 +364,7 @@ final class CriteriaExpressions {
         return out;
     }
 
+    // First non-blank primitive value among the given keys (lets callers send either camelCase or snake_case).
     private static String firstString(JsonObject o, String... keys) {
         for (String k : keys) {
             if (o.has(k) && o.get(k).isJsonPrimitive()) {

@@ -33,7 +33,10 @@ final class RequirementsCodec {
     static final List<String> EXPORT_COLUMNS = Collections.unmodifiableList(Arrays.asList(
             "id", "name", "requirementId", "text", "documentation", "qualifiedName", "ownerId", "stereotypes", "type"));
 
+    // Column aliases, compared after value() lowercases headers and drops underscores and spaces
+    // (so "Requirement ID", "requirement_id" and "requirementId" all match "requirementid").
     private static final List<String> NAME_KEYS = Arrays.asList("name", "title", "requirementname");
+    // Note "id" is the last external-id alias: a bare id column is treated as the external requirement id.
     private static final List<String> EXTERNAL_ID_KEYS = Arrays.asList(
             "externalid", "requirementid", "reqid", "key", "id");
     private static final List<String> TEXT_KEYS = Arrays.asList("text", "requirementtext", "description");
@@ -50,6 +53,7 @@ final class RequirementsCodec {
         if (text == null) {
             return rows;
         }
+        // Strip a leading byte-order mark (U+FEFF), which Excel writes at the start of UTF-8 CSV files.
         String body = text.startsWith("﻿") ? text.substring(1) : text;
         char delimiter = detectDelimiter(body);
         List<List<String>> records = parseRecords(body, delimiter);
@@ -58,6 +62,7 @@ final class RequirementsCodec {
             if (isBlank(cells)) {
                 continue;
             }
+            // The first non-blank record is the header; cells beyond the header width are dropped.
             if (headers == null) {
                 headers = new ArrayList<>();
                 for (String h : cells) {
@@ -92,6 +97,10 @@ final class RequirementsCodec {
         return ',';
     }
 
+    /*
+     * Minimal RFC 4180-style tokenizer: quoted fields may contain the delimiter, doubled quotes and line breaks;
+     * CRLF, LF and lone CR all end a record. An unterminated quote is a user error, not silently accepted.
+     */
     static List<List<String>> parseRecords(String text, char delimiter) {
         List<List<String>> records = new ArrayList<>();
         List<String> cells = new ArrayList<>();
@@ -166,6 +175,7 @@ final class RequirementsCodec {
         return rows;
     }
 
+    // Primitive values become strings (numbers and booleans included); arrays/objects/nulls are dropped.
     static Map<String, String> rowFromObject(JsonObject object) {
         Map<String, String> row = new LinkedHashMap<>();
         for (String key : object.keySet()) {
@@ -225,6 +235,7 @@ final class RequirementsCodec {
         return parseCsv(text);
     }
 
+    // Source files must be absolute, existing regular files no larger than MAX_SOURCE_BYTES.
     static File checkInputPath(String path) {
         if (path == null || path.trim().isEmpty()) {
             throw ToolException.invalid("source_path is empty.");
@@ -304,6 +315,7 @@ final class RequirementsCodec {
 
     // ------------------------------------------------------------------ normalization
 
+    // First non-blank value for any alias key; header names are normalized (case, underscores, spaces) before lookup.
     static String value(Map<String, String> row, List<String> keys) {
         Map<String, String> lower = new HashMap<>();
         for (Map.Entry<String, String> e : row.entrySet()) {
@@ -321,6 +333,7 @@ final class RequirementsCodec {
         return null;
     }
 
+    // External requirement id from any EXTERNAL_ID_KEYS column, or null.
     static String externalId(Map<String, String> row) {
         return value(row, EXTERNAL_ID_KEYS);
     }
@@ -331,6 +344,7 @@ final class RequirementsCodec {
         return n != null ? n : externalId(row);
     }
 
+    // Requirement text from text/requirementText/description columns, or null.
     static String text(Map<String, String> row) {
         return value(row, TEXT_KEYS);
     }
@@ -435,6 +449,7 @@ final class RequirementsCodec {
         return o.has(key) && !o.get(key).isJsonNull() ? flat(o.get(key)) : "";
     }
 
+    // Flattens an exported JSON value to one CSV-friendly string: arrays joined with "; ", objects by their value/name/id.
     static String flat(JsonElement e) {
         if (e == null || e.isJsonNull()) {
             return "";
@@ -464,6 +479,7 @@ final class RequirementsCodec {
         return o.toString();
     }
 
+    // CSV with a header row and CRLF line endings; missing columns become empty cells.
     static String toCsv(List<String> columns, List<Map<String, String>> rows) {
         StringBuilder sb = new StringBuilder();
         appendCsvLine(sb, columns);
@@ -488,6 +504,7 @@ final class RequirementsCodec {
         sb.append("\r\n");
     }
 
+    // Quotes only when needed: delimiter, quote, line break, or leading/trailing whitespace that would otherwise be lost.
     static String csvCell(String value) {
         if (value == null) {
             return "";

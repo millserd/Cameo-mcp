@@ -24,12 +24,14 @@ import java.util.Map;
 /** Typed diagram listing/inspection and gated write previews (reference TypedDiagramHandler). */
 final class TypedDiagramService {
 
+    // Write operations that can be previewed; none of them is executed natively yet.
     static final List<String> OPERATIONS = Arrays.asList(
             "sequence-message", "state-transition", "parametric-binding", "legend-apply");
 
     private TypedDiagramService() {
     }
 
+    // cameo_get_typed_diagram_capabilities: reads use the core diagram API; the class probe is diagnostic only.
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("typedDiagrams", "native-read-plus-preview");
         response.addProperty("available", true);
@@ -43,6 +45,7 @@ final class TypedDiagramService {
         return response;
     }
 
+    // Cameo's diagram type string (e.g. "SysML Block Definition Diagram"); empty when the type cannot be read.
     private static String typeOf(DiagramPresentationElement dpe) {
         try {
             return dpe.getDiagramType() != null ? dpe.getDiagramType().getType() : "";
@@ -51,6 +54,10 @@ final class TypedDiagramService {
         }
     }
 
+    /*
+     * cameo_list_typed_diagrams: every diagram with its type, optionally filtered by a case-insensitive substring of
+     * the type. countsByType is computed over all diagrams, before the filter, so callers see what else exists.
+     */
     static JsonObject list(JsonObject p) throws Exception {
         String typeFilter = Gs.str(p, "diagram_type");
         return Edt.read(project -> {
@@ -82,6 +89,10 @@ final class TypedDiagramService {
         });
     }
 
+    /*
+     * cameo_inspect_typed_diagram: flattened shape/path list of one diagram (up to limit, 1..5000) with owner links,
+     * model element, bounds and per-class counts. Counts and presentationCount always cover the whole diagram.
+     */
     static JsonObject inspect(JsonObject p) throws Exception {
         String diagramId = Gs.reqStr(p, "diagram_id").trim();
         int limit = Math.max(1, Math.min(5000, Gs.integer(p, "limit", 500)));
@@ -89,6 +100,7 @@ final class TypedDiagramService {
             DiagramPresentationElement dpe = null;
             Collection<DiagramPresentationElement> all = project.getDiagrams();
             if (all != null) {
+                // Diagrams are matched by the model Diagram's ID, which is what other tools return, not the presentation ID.
                 for (DiagramPresentationElement candidate : all) {
                     Diagram d = candidate.getDiagram();
                     if (d != null && diagramId.equals(d.getID())) {
@@ -101,6 +113,7 @@ final class TypedDiagramService {
                 throw new ToolException("NOT_FOUND", "Diagram '" + diagramId + "' not found. Use cameo_list_typed_diagrams "
                         + "for diagram IDs.");
             }
+            // Diagrams not yet opened in this session may have no symbols loaded; ensureLoaded populates them.
             dpe.ensureLoaded();
             List<PresentationElement> flat = new ArrayList<>();
             Map<String, String> parentById = new LinkedHashMap<>();
@@ -127,6 +140,7 @@ final class TypedDiagramService {
         });
     }
 
+    // Pre-order flatten of nested symbols, recording each child's enclosing symbol ID.
     private static void collect(List<PresentationElement> elements, List<PresentationElement> sink,
                                 Map<String, String> parentById, String parentId) {
         if (elements == null) {
@@ -141,6 +155,7 @@ final class TypedDiagramService {
         }
     }
 
+    // One symbol: identity, class, linked model element and bounds. Element and bounds are read defensively per symbol.
     private static JsonObject summary(PresentationElement pe, String parentPresentationId) {
         JsonObject json = new JsonObject();
         json.addProperty("presentationId", pe.getID());
@@ -179,6 +194,7 @@ final class TypedDiagramService {
         return json;
     }
 
+    // cameo_preview_typed_diagram_operation: validates operation and payload, then echoes; no diagram is changed.
     static JsonObject preview(JsonObject p) {
         String operation = Gs.reqStr(p, "operation").trim().toLowerCase(Locale.ROOT);
         if (!OPERATIONS.contains(operation)) {

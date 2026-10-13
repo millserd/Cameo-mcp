@@ -14,6 +14,10 @@ final class CriteriaService {
     private CriteriaService() {
     }
 
+    /*
+     * cameo_get_criteria_capabilities: criteria are bridge-owned templates, always available, but no template
+     * write is verified. The native expression classes are probed only for diagnostics; nothing here calls them.
+     */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("criteria", "bridge-owned-plus-ui-diff");
         response.addProperty("available", true);
@@ -30,6 +34,7 @@ final class CriteriaService {
         return response;
     }
 
+    // cameo_list_criteria_templates: the template table, optionally filtered by target kind (relationMap, matrix, table).
     static JsonObject templates(JsonObject p) {
         String target = Gs.str(p, "target");
         JsonArray templates = CriteriaExpressions.templates(target);
@@ -42,6 +47,7 @@ final class CriteriaService {
         return response;
     }
 
+    // cameo_build_criteria_expression: normalizes template id / kind / direction into an expression object; no model write.
     static JsonObject build(JsonObject p) {
         String id = Gs.str(p, "template_id");
         JsonObject expression = CriteriaExpressions.build(id, Gs.str(p, "relationship_kind"), Gs.str(p, "direction"),
@@ -56,6 +62,7 @@ final class CriteriaService {
         return response;
     }
 
+    // cameo_parse_criteria_expression: accepts object, JSON-string or free-text forms and reports issues instead of failing.
     static JsonObject parse(JsonObject p) {
         JsonObject response = CriteriaExpressions.parse(p.get("expression"));
         response.add("request", Support.request(p));
@@ -63,6 +70,10 @@ final class CriteriaService {
         return response;
     }
 
+    /*
+     * cameo_apply_criteria_template: always refused. target_id is still required first so a malformed call reports
+     * the missing argument rather than the gate. Relation Map criteria have their own dedicated tool.
+     */
     static JsonObject apply(JsonObject p) {
         Gs.reqStr(p, "target_id");
         JsonObject response = Support.unsupported("criteria",
@@ -74,6 +85,10 @@ final class CriteriaService {
         throw Support.refusal("UNSUPPORTED", response);
     }
 
+    /*
+     * cameo_capture_criteria_template_from_diff: records a before/after snapshot pair for a criteria edit made in the UI.
+     * The diff is attached when the snapshot tools can compute it; failures become diffEvidenceError, not a tool error.
+     */
     static JsonObject capture(JsonObject p) {
         String before = Gs.reqStr(p, "before_snapshot_id");
         String after = Gs.reqStr(p, "after_snapshot_id");

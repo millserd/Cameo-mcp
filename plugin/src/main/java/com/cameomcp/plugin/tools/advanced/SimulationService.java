@@ -23,12 +23,14 @@ final class SimulationService {
     private static final String SIMULATION_MANAGER = "com.nomagic.magicdraw.simulation.SimulationManager";
     private static final String SIMULATION_RESULT = "com.nomagic.magicdraw.simulation.execution.SimulationResult";
     private static final String SIMULATION_SESSION = "com.nomagic.magicdraw.simulation.execution.SimulationSession";
+    // Caps for configuration discovery: results returned and elements walked.
     private static final int MAX_CONFIGURATIONS = 500;
     private static final int SCAN_LIMIT = 250_000;
 
     private SimulationService() {
     }
 
+    // cameo_get_simulation_capabilities: available only when all three Simulation Toolkit classes load; execution is always off.
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("simulation", "probe-first");
         JsonObject probe = Support.classProbe(SIMULATION_MANAGER, SIMULATION_RESULT, SIMULATION_SESSION);
@@ -42,6 +44,10 @@ final class SimulationService {
         return response;
     }
 
+    /*
+     * cameo_list_simulation_configurations: heuristic list of elements that look like simulation configurations.
+     * Without the toolkit classes it returns an unsupported answer rather than an error, so agents can branch on it.
+     */
     static JsonObject configurations() throws Exception {
         JsonObject caps = capabilities();
         if (!caps.get("available").getAsBoolean()) {
@@ -61,6 +67,7 @@ final class SimulationService {
         });
     }
 
+    // Depth-first walk of the primary model; returns true when the walk or the result list hit its cap.
     private static boolean scan(Project project, JsonArray out) {
         Element root = project.getPrimaryModel();
         if (root == null) {
@@ -91,6 +98,10 @@ final class SimulationService {
         return false;
     }
 
+    /*
+     * Name/type/stereotype keyword heuristic ("simulation", "config", "parametric"). It deliberately over-matches:
+     * the toolkit's configuration stereotype API is not used, so this is discovery, not classification.
+     */
     private static boolean looksSimulationConfiguration(Element element) {
         StringBuilder text = new StringBuilder(element.getClass().getSimpleName()).append(' ');
         if (element instanceof NamedElement) {
@@ -100,6 +111,7 @@ final class SimulationService {
             }
         }
         try {
+            // StereotypesHelper can throw on elements in a half-loaded state; a failure just means no stereotype text.
             List<Stereotype> stereotypes = StereotypesHelper.getStereotypes(element);
             if (stereotypes != null) {
                 for (Stereotype s : stereotypes) {
@@ -115,6 +127,7 @@ final class SimulationService {
         return lower.contains("simulation") || lower.contains("config") || lower.contains("parametric");
     }
 
+    // cameo_run_simulation_preview: echo plus configuration_id resolution; nothing is executed.
     static JsonObject preview(JsonObject p) {
         JsonObject response = Support.previewAccepted("simulation", Support.request(p),
                 "Simulation run preview recorded. No executable model was run.");
@@ -134,6 +147,7 @@ final class SimulationService {
         return response;
     }
 
+    // cameo_run_simulation: always refused with UNSUPPORTED; the refusal payload tells the agent to use the UI.
     static JsonObject run(JsonObject p) {
         JsonObject response = Support.unsupported("simulation",
                 "Simulation execution is disabled until runtime classes and a disposable executable model are validated.",
@@ -143,6 +157,7 @@ final class SimulationService {
         throw Support.refusal("UNSUPPORTED", response);
     }
 
+    // cameo_get_simulation_result: there is no job store, so every run_id is NOT_FOUND.
     static JsonObject result(JsonObject p) {
         String runId = Gs.reqStr(p, "run_id");
         JsonObject response = new JsonObject();
@@ -152,6 +167,7 @@ final class SimulationService {
         throw Support.refusal("NOT_FOUND", response);
     }
 
+    // cameo_terminate_simulation: nothing can be running, so this is NOT_FOUND too.
     static JsonObject terminate(JsonObject p) {
         String runId = Gs.reqStr(p, "run_id");
         JsonObject response = Support.unsupported("simulation",

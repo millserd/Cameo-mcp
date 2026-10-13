@@ -34,6 +34,7 @@ final class ReportService {
     private static final String PACKAGE_SELECTION_BEAN = "com.nomagic.magicdraw.magicreport.ui.bean.PackageSelectionBean";
     private static final String TASK = "com.nomagic.task.Task";
 
+    // Completed generations by jobId (generation is synchronous, so only finished jobs exist); last 50 kept, in memory only.
     private static final Map<String, JsonObject> JOBS = Collections.synchronizedMap(
             new LinkedHashMap<String, JsonObject>() {
                 @Override
@@ -45,6 +46,10 @@ final class ReportService {
     private ReportService() {
     }
 
+    /*
+     * cameo_get_report_capabilities: Report Wizard counts as available when at least two of the three probed classes
+     * load (ReportCommandLine is not used for generation, so it alone may be missing).
+     */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("reportWizard", "native-direct");
         JsonObject classProbe = Support.classProbe(TEMPLATE_HELPER, GENERATE_TASK, REPORT_COMMAND_LINE);
@@ -64,6 +69,7 @@ final class ReportService {
         return response;
     }
 
+    // cameo_list_report_templates: native TemplateHelper.listTemplates(); a template's list index is its stable "id".
     static JsonObject templates() {
         JsonObject response = capabilities();
         JsonArray templates = new JsonArray();
@@ -111,6 +117,10 @@ final class ReportService {
         }
     }
 
+    /*
+     * cameo_generate_report_preview: checks the output path and, if Report Wizard is present, resolves the template
+     * exactly as generation would, so a bad template id is reported before anything is written.
+     */
     static JsonObject preview(JsonObject p) {
         JsonObject body = body(p);
         JsonObject response = Support.previewAccepted("reportWizard", body,
@@ -136,6 +146,10 @@ final class ReportService {
         return response;
     }
 
+    /*
+     * cameo_generate_report: requires allow_write=true and an absolute output file path. Generation runs on the Swing
+     * event thread via Edt.onEdt with a 10..600 s limit, default 120.
+     */
     static JsonObject generate(JsonObject p) throws Exception {
         JsonObject body = body(p);
         JsonObject parameters = Gs.object(body, "parameters");
@@ -172,6 +186,11 @@ final class ReportService {
                 timeoutSeconds);
     }
 
+    /*
+     * Configures a copy of the selected template/report and runs GenerateTask synchronously via
+     * Task.executeTaskOnSameThread. Success is judged by the output file, since the task reports failure
+     * through getException() rather than by throwing.
+     */
     private static JsonObject generateReport(Project project, JsonObject body, JsonObject parameters, File outputFile)
             throws Exception {
         boolean existed = outputFile.isFile();
@@ -180,6 +199,7 @@ final class ReportService {
 
         List<Object> templates = listTemplates();
         Object selectedTemplate = selectTemplate(templates, body, parameters);
+        // Work on clones so the scope/output changes below do not leak into the Report Wizard's shared template beans.
         Object workingTemplate = cloneIfPossible(selectedTemplate);
         Object report = selectReport(workingTemplate, firstString(body, parameters, "reportName", "reportId"));
         configureReport(project, report, body, parameters, outputFile);
@@ -200,6 +220,7 @@ final class ReportService {
         Object taskException = Support.invokeZeroArg(task, "getException");
         boolean exists = outputFile.isFile();
         long length = exists ? outputFile.length() : 0L;
+        // An existing file must have a new timestamp or size, otherwise a silent failure would look like success.
         boolean changed = !existed || outputFile.lastModified() != beforeModified || length != beforeLength;
         if (taskException != null || !exists || length <= 0L || !changed) {
             throw new ToolException("TOOL_FAILED", "Report generation failed for " + outputFile.getAbsolutePath()
@@ -225,6 +246,7 @@ final class ReportService {
         return response;
     }
 
+    // cameo_get_report_job: returns a stored completed job; unknown IDs are refused with NOT_FOUND.
     static JsonObject job(JsonObject p) {
         String jobId = Gs.reqStr(p, "job_id").trim();
         JsonObject job = JOBS.get(jobId);
@@ -239,6 +261,10 @@ final class ReportService {
         return job.deepCopy();
     }
 
+    /*
+     * Fills the report's package selection (scope, defaulting to the primary model) and output properties.
+     * Beans are created when the template has none; setters are called only if this Report Wizard version has them.
+     */
     private static void configureReport(Project project, Object report, JsonObject body, JsonObject parameters, File outputFile)
             throws Exception {
         Object selection = Support.invokeZeroArg(report, "getSelectedPackage");
@@ -270,6 +296,7 @@ final class ReportService {
         invokeIfPresent(report, "setFileName", outputFile.getAbsolutePath());
     }
 
+    // Templates known to the installed Report Wizard, via reflection on TemplateHelper.
     private static List<Object> listTemplates() throws Exception {
         Class<?> helper = Support.loadClass(TEMPLATE_HELPER);
         Object value = helper.getMethod("listTemplates").invoke(null);
@@ -280,6 +307,7 @@ final class ReportService {
         return templates;
     }
 
+    // Picks a template by list index, then by name, path or template file name (case-insensitive); default is the first.
     private static Object selectTemplate(List<Object> templates, JsonObject body, JsonObject parameters) {
         if (templates.isEmpty()) {
             throw new ToolException("NOT_FOUND", "No Report Wizard templates are available.");
@@ -308,6 +336,7 @@ final class ReportService {
                 + "for valid ids (index) and names.");
     }
 
+    // Named report configuration, else the template's default, selected or first one; returned as a clone when possible.
     private static Object selectReport(Object template, String reportName) {
         Object report = null;
         if (reportName != null && !reportName.trim().isEmpty()) {
@@ -336,6 +365,7 @@ final class ReportService {
         return cloneIfPossible(report);
     }
 
+    // Template metadata via whichever getters the installed TemplateBean class has; index < 0 omits the id fields.
     private static JsonObject serializeTemplate(Object template, int index) {
         JsonObject json = new JsonObject();
         if (index >= 0) {
@@ -375,11 +405,13 @@ final class ReportService {
         }
     }
 
+    // Uses the bean's public clone() when it has one; otherwise the original object is used.
     private static Object cloneIfPossible(Object value) {
         Object clone = Support.invokeZeroArg(value, "clone");
         return clone != null ? clone : value;
     }
 
+    // Calls a one-argument setter by name if a compatible overload exists; silently skips null args and missing setters.
     private static void invokeIfPresent(Object target, String methodName, Object arg) throws Exception {
         if (target == null || arg == null) {
             return;
@@ -397,6 +429,7 @@ final class ReportService {
         }
     }
 
+    // The first key found wins; for each key the top-level body is checked before the nested "parameters" object.
     private static String firstString(JsonObject body, JsonObject parameters, String... keys) {
         for (String key : keys) {
             String value = stringValue(body, key);
@@ -422,6 +455,7 @@ final class ReportService {
         return value.getAsString();
     }
 
+    // Same lookup order as firstString; a single string is accepted as a one-item list.
     private static List<String> firstStringList(JsonObject body, JsonObject parameters, String... keys) {
         for (String key : keys) {
             List<String> values = stringList(body, key);
@@ -470,6 +504,7 @@ final class ReportService {
         return Gs.bool(source, key, false);
     }
 
+    // String[] of package IDs for PackageSelectionBean.setPackageIds.
     private static Object toStringArray(List<String> values) {
         Object array = Array.newInstance(String.class, values.size());
         for (int i = 0; i < values.size(); i++) {
@@ -478,6 +513,7 @@ final class ReportService {
         return array;
     }
 
+    // Explicit format, else the output file's extension, else docx.
     static String normalizeFormat(String requested, File outputFile) {
         if (requested != null && !requested.trim().isEmpty()) {
             return requested.trim().toLowerCase(Locale.ROOT);
@@ -498,6 +534,7 @@ final class ReportService {
         return candidate != null && normalizedNeedle.equals(candidate.trim().toLowerCase(Locale.ROOT));
     }
 
+    // Innermost cause's class and message, which is usually the useful part of a reflective failure.
     private static String rootMessage(Throwable t) {
         Throwable c = t;
         while (c.getCause() != null && c.getCause() != c) {
