@@ -93,14 +93,13 @@ tasks.register('deploy', Copy) {
 tasks.register('rdzip', Zip) {
     group = 'distribution'
     description = 'Builds the Resource Manager bundle for Help > Resource/Plugin Manager > Import.'
-    dependsOn assemblePlugin
     def rdId = '18740'
     def descriptorPath = "data/resourcemanager/MDR_Plugin_CameoMCP_${rdId}_descriptor.xml"
     // Resource Manager compares this integer to decide upgrades: 1.2.3 -> 10203.
-    def (major, minor, patch) = project.version.toString().tokenize('.-')*.toInteger()
+    def (major, minor, patch) = project.version.toString().tokenize('.-').take(3)*.toInteger()
     archiveFileName = "cameo-mcp-${project.version}-rdzip.zip"
     destinationDirectory = rootProject.layout.buildDirectory.dir('dist')
-    into("plugins/${pluginId}") { from(layout.buildDirectory.dir("plugin-dist/${pluginId}")) }
+    into("plugins/${pluginId}") { from(assemblePlugin) }
     from('resourcemanager-descriptor.xml') {
         rename { descriptorPath }
         expand(version: project.version, internal: major * 10000 + minor * 100 + patch, rdId: rdId,
