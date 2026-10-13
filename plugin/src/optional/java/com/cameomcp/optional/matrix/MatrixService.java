@@ -56,6 +56,8 @@ public final class MatrixService implements GsonService {
     public MatrixService() {
     }
 
+    // Any LinkageError means the installed Dependency Matrix API differs from the one compiled against;
+    // report it as UNSUPPORTED instead of letting the error escape to the tool dispatcher.
     @Override
     public JsonObject call(String operation, JsonObject params) throws Exception {
         try {
@@ -66,6 +68,7 @@ public final class MatrixService implements GsonService {
         }
     }
 
+    /** Routes the operations bound in ArtifactBindings ("get", "create") for cameo_get_matrix / cameo_create_matrix. */
     private JsonObject dispatch(String operation, JsonObject params) throws Exception {
         switch (operation) {
             case "get":
@@ -78,6 +81,10 @@ public final class MatrixService implements GsonService {
         }
     }
 
+    /**
+     * cameo_create_matrix: creates the native matrix diagram under a Namespace parent and configures its
+     * row/column scopes and types in one undoable session. Scopes fall back to scope_id, then parent_id.
+     */
     private JsonObject create(JsonObject p) throws Exception {
         MatrixKinds kind = MatrixKinds.require(Gs.reqStr(p, "kind"));
         String parentId = Gs.reqStr(p, "parent_id").trim();
@@ -87,6 +94,7 @@ public final class MatrixService implements GsonService {
         List<String> rowTypes = ArtifactSupport.optStrList(p, "row_types");
         List<String> columnTypes = ArtifactSupport.optStrList(p, "column_types");
         String name = ArtifactSupport.optStr(p, "name");
+        // An explicitly empty list is rejected rather than silently replaced by the defaults.
         if (rowTypes != null && rowTypes.isEmpty()) {
             throw ToolException.invalid("row_types must not be empty when provided; omit it for the kind's defaults.");
         }
@@ -94,6 +102,7 @@ public final class MatrixService implements GsonService {
             throw ToolException.invalid("column_types must not be empty when provided; omit it for the kind's "
                     + "defaults.");
         }
+        // Edt.write with a 120 s timeout: diagram creation plus the first matrix build can be slow.
         return Edt.write("Create " + kind.diagramType, project -> {
             Element parent = ArtifactSupport.element(project, parentId, "Parent element");
             if (!(parent instanceof Namespace)) {
@@ -104,6 +113,7 @@ public final class MatrixService implements GsonService {
                     "Row scope element");
             Element columnScope = ArtifactSupport.element(project, firstNonEmpty(columnScopeId, scopeId, parentId),
                     "Column scope element");
+            // Creating by native diagram type name lets Cameo apply the kind's built-in template.
             Diagram diagram = ModelElementsManager.getInstance().createDiagram(kind.diagramType, (Namespace) parent);
             if (diagram == null) {
                 throw new ToolException("TOOL_FAILED", "Cameo did not create the matrix diagram '" + kind.diagramType
@@ -116,6 +126,7 @@ public final class MatrixService implements GsonService {
 
             JsonObject response = new JsonObject();
             response.addProperty("created", true);
+            // Read the new matrix back so the caller gets the same shape as cameo_get_matrix.
             response.add("matrix", serializeMatrix(project, diagram.getID()));
             JsonObject receipt = new JsonObject();
             receipt.addProperty("operation", "createMatrix");
@@ -127,12 +138,17 @@ public final class MatrixService implements GsonService {
         }, 120);
     }
 
+    /**
+     * Writes matrix settings through the Dependency Matrix PersistenceManager: row-to-column direction,
+     * show all elements, scope and element types for each axis (subtypes and custom types included).
+     */
     private void configure(Project project, Diagram diagram, MatrixKinds kind, Element rowScope, Element columnScope,
                            List<String> rowTypes, List<String> columnTypes) {
         PersistenceManager pm = new PersistenceManager(diagram);
         MatrixSettings settings = pm.getMatrixSettings();
         settings.setDirection(MatrixSettings.Direction.ROW_TO_COLUMN);
         settings.setShowElementsOption(MatrixSettings.RelationOption.ALL);
+        // Only the generic Dependency Matrix needs a criterion; the other kinds use the one their native type defines.
         if (kind == MatrixKinds.DEPENDENCY) {
             settings.setDependencyCriteria(Collections.singletonList(UML_DEPENDENCY_CRITERIA));
         }
@@ -141,6 +157,7 @@ public final class MatrixService implements GsonService {
         rows.setScopeDefined(true);
         rows.setTypesIncludeSubtypes(true);
         rows.setTypesIncludeCustomTypes(true);
+        // Type tokens resolve to stereotypes or metaclasses; an unknown token fails the whole write.
         rows.setConvertedElementTypes(ArtifactSupport.resolveTypes(project,
                 rowTypes != null ? rowTypes : kind.defaultRowTypes, "matrix row"));
         FilterSettings columns = pm.getColumnSettings();
@@ -152,6 +169,10 @@ public final class MatrixService implements GsonService {
                 columnTypes != null ? columnTypes : kind.defaultColumnTypes, "matrix column"));
     }
 
+    /**
+     * cameo_get_matrix (also used after create): scopes, types, rows, columns and only the populated
+     * cells with their dependency entries. Fails with invalid-params for diagrams that are not a supported matrix.
+     */
     private JsonObject serializeMatrix(Project project, String matrixId) {
         DiagramPresentationElement dpe = ArtifactSupport.diagram(project, matrixId, "Matrix");
         MatrixKinds kind = MatrixKinds.fromDiagramType(ArtifactSupport.diagramType(dpe));
@@ -161,6 +182,8 @@ public final class MatrixService implements GsonService {
         }
         dpe.ensureLoaded();
         Diagram diagram = dpe.getDiagram();
+        // The matrix data is only computed for an active matrix view, so activate it as an open view would,
+        // and undo that in the finally block.
         DependencyMatrix matrix = MatrixManager.getExistingOrCreate(diagram, dpe);
         matrix.viewCreated();
         matrix.setActive(true);
@@ -179,6 +202,7 @@ public final class MatrixService implements GsonService {
             JsonArray rows = ArtifactSupport.compactArray(rowElements);
             JsonArray columns = ArtifactSupport.compactArray(columnElements);
             JsonArray cells = new JsonArray();
+            // Row x column scan; empty cells are omitted, totalCellCount still reports the full grid size.
             if (rowElements != null && columnElements != null) {
                 for (Element row : rowElements) {
                     for (Element column : columnElements) {
@@ -218,6 +242,7 @@ public final class MatrixService implements GsonService {
         }
     }
 
+    /** First non-null, non-empty candidate, or null. */
     private static String firstNonEmpty(String... candidates) {
         for (String c : candidates) {
             if (c != null && !c.isEmpty()) {

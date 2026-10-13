@@ -48,9 +48,12 @@ import java.util.Map;
 /** Native Relation Maps through the Relation Map plugin API (GraphSettings and the map display). */
 public final class RelationMapService implements GsonService {
 
+    // Swing display class of an open Relation Map; only named for diagnostics in the "attempts" output,
+    // the display itself is reached through RelationMapManager by reflection.
     private static final String DISPLAY_CLASS =
             "com.nomagic.magicdraw.visualization.relationshipmap.ui.diagram.view.AbstractGraphDisplay";
 
+    /** A GraphSettings boolean setter, so applyBool can take method references. */
     @FunctionalInterface
     private interface BooleanSetter {
         void set(boolean value);
@@ -59,6 +62,8 @@ public final class RelationMapService implements GsonService {
     public RelationMapService() {
     }
 
+    // A LinkageError means this Cameo's Relation Map API differs from the compiled one; report UNSUPPORTED
+    // and point to the probe that lists what the installed GraphSettings offers.
     @Override
     public JsonObject call(String operation, JsonObject p) throws Exception {
         try {
@@ -70,6 +75,7 @@ public final class RelationMapService implements GsonService {
         }
     }
 
+    /** Routes every operation bound in ArtifactBindings, plus internal ones used by Snapshots and Probes. */
     private JsonObject dispatch(String operation, JsonObject p) throws Exception {
         switch (operation) {
             case "get": {
@@ -113,12 +119,17 @@ public final class RelationMapService implements GsonService {
         }
     }
 
+    /** The required relation_map_id parameter, trimmed. */
     private static String mapId(JsonObject p) {
         return Gs.reqStr(p, "relation_map_id").trim();
     }
 
     // ------------------------------------------------------------------ create / configure
 
+    /**
+     * cameo_create_relation_map: creates the map under a Namespace parent and applies the same settings
+     * keys as cameo_configure_relation_map; refresh=true also rebuilds the map contents.
+     */
     private JsonObject create(JsonObject p) throws Exception {
         String parentId = Gs.reqStr(p, "parent_id").trim();
         String name = ArtifactSupport.optStr(p, "name");
@@ -147,6 +158,7 @@ public final class RelationMapService implements GsonService {
         }, 120);
     }
 
+    /** cameo_configure_relation_map: applies the given settings keys to an existing map; absent keys are left unchanged. */
     private JsonObject configure(JsonObject p) throws Exception {
         String id = mapId(p);
         boolean refresh = Gs.bool(p, "refresh", false);
@@ -164,10 +176,15 @@ public final class RelationMapService implements GsonService {
         }, 120);
     }
 
+    /**
+     * Writes request keys to GraphSettings. Only keys present in the request are applied, then the
+     * settings are marked initialized so Cameo treats them as configured.
+     */
     private void applySettings(Project project, GraphSettings settings, JsonObject p) {
         String contextId = ArtifactSupport.optStr(p, "context_element_id");
         if (contextId != null) {
             settings.setContextElement(ArtifactSupport.element(project, contextId, "Context element"));
+            // Setting a context element defaults make_element_as_context to true.
             settings.setMakeElementAsContext(Gs.bool(p, "make_element_as_context", true));
         } else {
             applyBool(p, "make_element_as_context", settings::setMakeElementAsContext);
@@ -201,9 +218,11 @@ public final class RelationMapService implements GsonService {
         applyBool(p, "short_node_names", settings::setEnabledShortNodeNamesMode);
         applyBool(p, "types_include_subtypes", settings::setTypesIncludeSubtypes);
         applyBool(p, "types_include_custom_types", settings::setIncludeCustomTypes);
+        // Without this flag the settings may be treated as not configured yet.
         settings.setInitialized(true);
     }
 
+    /** Calls setter only when key is present, so omitted booleans keep their current value. */
     private static void applyBool(JsonObject p, String key, BooleanSetter setter) {
         if (Gs.has(p, key)) {
             setter.set(Gs.bool(p, key, false));
@@ -212,6 +231,7 @@ public final class RelationMapService implements GsonService {
 
     // ------------------------------------------------------------------ serialization
 
+    /** cameo_get_relation_map (and the result of most other operations): diagram summary plus its GraphSettings. */
     static JsonObject serialize(Project project, String id) {
         Diagram diagram = ArtifactSupport.relationMap(project, id);
         DiagramPresentationElement dpe = project.getDiagram(diagram);
@@ -257,6 +277,7 @@ public final class RelationMapService implements GsonService {
         return v instanceof Number ? v : null;
     }
 
+    /** Sets depth by reflection (int vs Integer parameter differs by release); UNSUPPORTED when it cannot. */
     static void setDepth(GraphSettings settings, int depth) {
         try {
             Reflect.invoke(settings, "setDepth", Integer.valueOf(depth));
@@ -266,6 +287,7 @@ public final class RelationMapService implements GsonService {
         }
     }
 
+    /** Compact settings payload stored in Snapshots for target_type=relationMap. */
     private static JsonObject snapshotSettings(Diagram diagram) {
         GraphSettings settings = new GraphSettings(diagram);
         JsonObject json = new JsonObject();
@@ -285,6 +307,7 @@ public final class RelationMapService implements GsonService {
 
     // ------------------------------------------------------------------ refresh / raw / presentations
 
+    /** cameo_refresh_relation_map: rebuilds the map contents; "timeout" is used as the write session timeout. */
     private JsonObject refresh(JsonObject p) throws Exception {
         String id = mapId(p);
         int timeout = ArtifactSupport.timeoutSeconds(p, "timeout");
@@ -299,6 +322,10 @@ public final class RelationMapService implements GsonService {
         }, timeout);
     }
 
+    /**
+     * cameo_dump_relation_map_raw_settings: the normal settings plus the value of every public no-arg
+     * GraphSettings getter, for discovering settings that the typed API does not expose.
+     */
     private JsonObject rawSettings(JsonObject p) throws Exception {
         String id = mapId(p);
         boolean includeRaw = Gs.bool(p, "include_raw", false);
@@ -320,6 +347,10 @@ public final class RelationMapService implements GsonService {
         });
     }
 
+    /**
+     * cameo_list_relation_map_presentations: paged (offset/limit) list of the map's presentation elements,
+     * depth-first, optionally with each one's property manager.
+     */
     private JsonObject presentations(JsonObject p) throws Exception {
         String id = mapId(p);
         int limit = Math.max(0, Gs.integer(p, "limit", 250));
@@ -331,6 +362,7 @@ public final class RelationMapService implements GsonService {
             Diagram diagram = ArtifactSupport.relationMap(project, id);
             DiagramPresentationElement dpe = project.getDiagram(diagram);
             JsonArray warnings = new JsonArray();
+            // Load symbols first: an unopened map may otherwise report no presentation elements.
             try {
                 dpe.ensureLoaded();
                 warnings.add("Relation Map ensureLoaded() was called before presentation inspection");
@@ -340,6 +372,7 @@ public final class RelationMapService implements GsonService {
             Map<String, String> parentById = new LinkedHashMap<>();
             List<PresentationElement> all = PresentationJson.flatten(dpe, parentById);
             JsonArray array = new JsonArray();
+            // Long arithmetic avoids int overflow for a large offset + limit.
             int end = (int) Math.min(all.size(), (long) offset + limit);
             for (int i = offset; i < end; i++) {
                 PresentationElement pe = all.get(i);
@@ -367,6 +400,10 @@ public final class RelationMapService implements GsonService {
 
     // ------------------------------------------------------------------ criteria
 
+    /**
+     * cameo_set_relation_map_criteria: replaces, appends to or removes from the map's dependency criteria.
+     * Entries may be template keys, raw expressions or {template|rawExpression|relationshipType} objects.
+     */
     private JsonObject setCriteria(JsonObject p) throws Exception {
         String id = mapId(p);
         String mode = ArtifactSupport.optStr(p, "mode");
@@ -376,6 +413,7 @@ public final class RelationMapService implements GsonService {
         }
         JsonArray requested = criteriaArray(p);
         boolean refresh = Gs.bool(p, "refresh", false);
+        // 600 s write timeout: a refresh after a criteria change can be slow on large models.
         return Edt.write("Set Relation Map Criteria", project -> {
             Diagram diagram = ArtifactSupport.relationMap(project, id);
             GraphSettings settings = new GraphSettings(diagram);
@@ -390,6 +428,7 @@ public final class RelationMapService implements GsonService {
                 after.addAll(criteria);
             } else {
                 after = new ArrayList<>(before);
+                // "remove" drops entries whose text equals a requested criterion exactly.
                 after.removeAll(criteria);
             }
             settings.setDependencyCriterion(after);
@@ -437,6 +476,10 @@ public final class RelationMapService implements GsonService {
         return one;
     }
 
+    /**
+     * Turns request entries into criterion strings. A bare string that is a template key becomes the
+     * template's expression; any other string (or one containing "<", i.e. XML) is passed through as raw text.
+     */
     static List<String> criteriaFromRequest(Project project, JsonArray requested) {
         List<String> out = new ArrayList<>();
         for (JsonElement item : requested) {
@@ -468,6 +511,7 @@ public final class RelationMapService implements GsonService {
                 out.add(toExpression(project, t));
                 continue;
             }
+            // Fallback form "Type:direction"; passed to GraphSettings as given.
             String type = Gs.str(o, "relationshipType", Gs.str(o, "relationship_type"));
             String direction = Gs.str(o, "direction");
             if (type != null) {
@@ -479,6 +523,7 @@ public final class RelationMapService implements GsonService {
         return out;
     }
 
+    /** Expression text for a template: the stored text for raw templates, built via the DSL API for DSL ones. */
     private static String toExpression(Project project, CriteriaTemplates.Template t) {
         if (!t.isDsl()) {
             return t.expression;
@@ -503,10 +548,12 @@ public final class RelationMapService implements GsonService {
      */
     private static String dslExpression(Stereotype stereotype, String direction, String displayName)
             throws Exception {
+        // Load through this class's loader, which (see OptionalModules) can see classes of other Cameo plugins.
         ClassLoader cl = RelationMapService.class.getClassLoader();
         String pkg = "com.nomagic.magicdraw.expressions.specification.";
         Class<?> dslType = Class.forName(pkg + "DSLRelationExpressionSpecification", true, cl);
         Object expression = null;
+        // Pick the one-argument constructor that accepts the Stereotype instance; its declared type is not documented.
         for (java.lang.reflect.Constructor<?> c : dslType.getConstructors()) {
             if (c.getParameterCount() == 1 && c.getParameterTypes()[0].isInstance(stereotype)) {
                 expression = c.newInstance(stereotype);
@@ -517,6 +564,7 @@ public final class RelationMapService implements GsonService {
             throw new NoSuchMethodException(dslType.getName() + "(Stereotype)");
         }
         Class<?> directionType = Class.forName(pkg + "Direction", true, cl);
+        // Direction is an enum; look up the constant (DIRECT, OPPOSITE or BOTH) by name.
         Object dir = directionType.getField(direction).get(null);
         Reflect.invoke(expression, "setDirection", dir);
         Class<?> util = Class.forName(pkg + "ExpressionSpecificationUtil", true, cl);
@@ -532,6 +580,7 @@ public final class RelationMapService implements GsonService {
         return String.valueOf(text);
     }
 
+    /** Stereotype by exact name; PRECONDITION_FAILED when the project does not use the profile defining it. */
     private static Stereotype findStereotype(Project project, String name) {
         Collection<Stereotype> all = StereotypesHelper.getAllStereotypes(project);
         if (all != null) {
@@ -547,6 +596,11 @@ public final class RelationMapService implements GsonService {
 
     // ------------------------------------------------------------------ expand / collapse / render
 
+    /**
+     * cameo_expand_relation_map / cameo_collapse_relation_map: drives the open map display, then reports
+     * presentation counts, graph and display summaries before and after. Collapse is always reported
+     * unsupported because no collapse API has been validated; element_ids are accepted but not applied.
+     */
     private JsonObject expandCollapse(JsonObject p, boolean expand) throws Exception {
         String id = mapId(p);
         boolean refresh = Gs.bool(p, "refresh", false);
@@ -559,6 +613,7 @@ public final class RelationMapService implements GsonService {
         return Edt.write((expand ? "Expand" : "Collapse") + " Relation Map", project -> {
             Diagram diagram = ArtifactSupport.relationMap(project, id);
             DiagramPresentationElement dpe = project.getDiagram(diagram);
+            // Load symbols so the "before" presentation count is accurate.
             dpe.ensureLoaded();
             int before = PresentationJson.flatten(dpe, null).size();
             JsonObject graphBefore = graphSummary(project, id, diagram);
@@ -617,6 +672,10 @@ public final class RelationMapService implements GsonService {
         }, timeout);
     }
 
+    /**
+     * cameo_render_relation_map: optionally sets depth, expands, refreshes and lays out the map, then
+     * exports it as PNG. Each step's failure becomes a warning rather than failing the whole call.
+     */
     private JsonObject render(JsonObject p) throws Exception {
         String id = mapId(p);
         boolean refresh = Gs.bool(p, "refresh", false);
@@ -629,6 +688,8 @@ public final class RelationMapService implements GsonService {
         boolean exportImage = Gs.bool(p, "export_image", true);
         boolean includeSummary = Gs.bool(p, "include_presentation_summary", true);
         int timeout = ArtifactSupport.clamp(ArtifactSupport.optInt(p, "render_timeout_seconds"), 1, 600, 120);
+        // Only mutating requests need an undoable write session; a pure render still runs on the EDT
+        // (Edt.onEdt) because image export is UI work.
         boolean mutates = refresh || layout != null || doExpand || depth != null;
         Edt.ModelAction<JsonObject> action = project -> {
             Diagram diagram = ArtifactSupport.relationMap(project, id);
@@ -669,6 +730,7 @@ public final class RelationMapService implements GsonService {
             BufferedImage image = null;
             if (exportImage) {
                 try {
+                    // ImageExporter.export(dpe, false, scale) returns null for an empty map rather than throwing.
                     image = ImageExporter.export(dpe, false, scale);
                     if (image == null) {
                         warnings.add("Relation Map image export returned no image (empty map?)");
@@ -705,6 +767,7 @@ public final class RelationMapService implements GsonService {
                 : Edt.onEdt("Render Relation Map", action, timeout);
     }
 
+    /** PNG metadata, plus the Base64-encoded image when includeImage is true. */
     private static JsonObject imageJson(BufferedImage image, boolean includeImage) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ImageIO.write(image, "png", out);
@@ -721,6 +784,10 @@ public final class RelationMapService implements GsonService {
         return json;
     }
 
+    /**
+     * Expands the map through its display (opening the diagram window if needed), recording each attempt
+     * in "attempts". Collapse is refused up front since no display collapse API has been validated.
+     */
     private boolean invokeDisplayAction(DiagramPresentationElement dpe, boolean expand, JsonArray attempts) {
         JsonObject attempt = new JsonObject();
         attempt.addProperty("className", DISPLAY_CLASS);
@@ -741,6 +808,7 @@ public final class RelationMapService implements GsonService {
                 attempt.addProperty("error", "Relation Map display is unavailable");
                 return false;
             }
+            // Node counts around the call show whether expandElements actually changed the display.
             attempt.addProperty("nodeCountBefore", invokeInt(display, "getNodeCount"));
             invokeNoArg(display, "expandElements");
             invokeNoArg(display, "refreshView");
@@ -756,6 +824,10 @@ public final class RelationMapService implements GsonService {
         }
     }
 
+    /**
+     * The map's display object, reached by reflection because these classes are internal to the
+     * Relation Map plugin; null when the diagram has no display component.
+     */
     private static Object display(DiagramPresentationElement dpe) throws Exception {
         Object component = Reflect.invokeStatic(RelationMapManager.class, "getRMDiagramComponent", dpe);
         if (component == null) {
@@ -765,6 +837,7 @@ public final class RelationMapService implements GsonService {
         return invokeNoArg(component, "getRelationMapDisplay");
     }
 
+    /** Read-only state of the open map display (window state, node count, relationship types); never throws. */
     private static JsonObject displaySummary(DiagramPresentationElement dpe) {
         JsonObject summary = new JsonObject();
         try {
@@ -776,6 +849,7 @@ public final class RelationMapService implements GsonService {
             if (active != null) {
                 summary.addProperty("diagramWindowActive", active);
             }
+            // A closed window has no display to inspect; do not open it just to summarize.
             if (Boolean.FALSE.equals(open)) {
                 summary.addProperty("available", false);
                 summary.addProperty("reason", "Relation Map diagram window is not open");
@@ -809,6 +883,7 @@ public final class RelationMapService implements GsonService {
         return summary;
     }
 
+    /** Display name of a relationship type object via getName(), falling back to toString(). */
     private static String relationshipTypeName(Object t) {
         if (t == null) {
             return "";
@@ -824,12 +899,14 @@ public final class RelationMapService implements GsonService {
         return String.valueOf(t);
     }
 
+    /** Public no-arg method call by reflection on an internal Relation Map class. */
     private static Object invokeNoArg(Object target, String method) throws Exception {
         Method m = target.getClass().getMethod(method);
         m.setAccessible(true);
         return m.invoke(target);
     }
 
+    /** invokeNoArg result as an int; 0 when it is not a Number. */
     private static int invokeInt(Object target, String method) throws Exception {
         Object v = invokeNoArg(target, method);
         return v instanceof Number ? ((Number) v).intValue() : 0;
@@ -837,6 +914,10 @@ public final class RelationMapService implements GsonService {
 
     // ------------------------------------------------------------------ verify / compare / graph
 
+    /**
+     * Node/edge counts of a fixed traversal (both directions, depth 3, up to 1000 nodes) from the map's
+     * context element, used as a cheap before/after indicator; errors are reported, not thrown.
+     */
     private JsonObject graphSummary(Project project, String id, Diagram diagram) {
         JsonObject summary = new JsonObject();
         try {
@@ -857,6 +938,10 @@ public final class RelationMapService implements GsonService {
         return summary;
     }
 
+    /**
+     * cameo_verify_relation_map: checks traversal size against expected minimums, GraphSettings validity
+     * and the rendered presentation count; "ok" is true only when all three checks pass.
+     */
     private JsonObject verify(JsonObject p) throws Exception {
         String id = mapId(p);
         int minNodes = ArtifactSupport.clamp(ArtifactSupport.optInt(p, "expected_min_nodes"), 0, 100000, 0);
@@ -900,6 +985,7 @@ public final class RelationMapService implements GsonService {
         });
     }
 
+    /** cameo_compare_relation_maps: captures both maps and returns a JSON diff (up to 500 changes). */
     private JsonObject compare(JsonObject p) throws Exception {
         String leftId = Gs.reqStr(p, "left_relation_map_id").trim();
         String rightId = Gs.reqStr(p, "right_relation_map_id").trim();
@@ -916,6 +1002,7 @@ public final class RelationMapService implements GsonService {
         });
     }
 
+    /** Settings, raw getter values and optionally presentations of one map, as compared by compare(). */
     private JsonObject capture(Project project, String id, boolean includePresentations, boolean includeRaw) {
         JsonObject json = serialize(project, id);
         Diagram diagram = ArtifactSupport.relationMap(project, id);
@@ -938,6 +1025,7 @@ public final class RelationMapService implements GsonService {
         return json;
     }
 
+    /** cameo_get_traceability_graph with only relation_map_id: the map's context element is the root. */
     private JsonObject graph(JsonObject p) throws Exception {
         String id = mapId(p);
         return Edt.read(project -> {
@@ -948,6 +1036,7 @@ public final class RelationMapService implements GsonService {
 
     // ------------------------------------------------------------------ probes
 
+    /** "relationMap.*" probe templates forwarded from Probes.executeTemplate. */
     private JsonObject probeTemplate(String template) throws Exception {
         JsonObject response = new JsonObject();
         response.addProperty("template", template);
@@ -968,6 +1057,7 @@ public final class RelationMapService implements GsonService {
         }
     }
 
+    /** Class name and text of every dependency criterion on every Relation Map in the project. */
     private JsonArray criteriaClasses(Project project) {
         JsonArray array = new JsonArray();
         Collection<DiagramPresentationElement> diagrams = project.getDiagrams();
@@ -997,6 +1087,7 @@ public final class RelationMapService implements GsonService {
         return array;
     }
 
+    /** Implementation class of every presentation element on every Relation Map in the project. */
     private JsonArray presentationClasses(Project project) {
         JsonArray array = new JsonArray();
         Collection<DiagramPresentationElement> diagrams = project.getDiagrams();
@@ -1021,6 +1112,10 @@ public final class RelationMapService implements GsonService {
         return array;
     }
 
+    /**
+     * cameo_execute_probe operation invokeGraphSettingsGetter: calls one public no-arg get or is method
+     * of a map's GraphSettings and serializes the value.
+     */
     private JsonObject invokeGetter(JsonObject p) throws Exception {
         String id = mapId(p);
         String methodName = Gs.reqStr(p, "method_name").trim();

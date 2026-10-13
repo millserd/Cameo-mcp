@@ -23,6 +23,7 @@ public final class PresentationJson {
     private PresentationJson() {
     }
 
+    /** {id, name, type, owner} of a diagram; an empty object for null. */
     public static JsonObject diagramSummary(DiagramPresentationElement dpe) {
         JsonObject json = new JsonObject();
         if (dpe == null) {
@@ -40,6 +41,10 @@ public final class PresentationJson {
         return json;
     }
 
+    /**
+     * One symbol/path: id, class name, model element (if any), bounds and child count. The element and
+     * bounds reads are guarded separately because some presentation kinds throw for them.
+     */
     public static JsonObject presentationSummary(PresentationElement pe, String parentPresentationId) {
         JsonObject json = new JsonObject();
         if (pe == null) {
@@ -81,6 +86,7 @@ public final class PresentationJson {
         return json;
     }
 
+    /** presentationSummary plus its serialized property manager and one level of child summaries. */
     public static JsonObject presentationWithProperties(PresentationElement pe, String parentPresentationId,
                                                         boolean includeRaw, boolean summaryOnly) {
         JsonObject json = presentationSummary(pe, parentPresentationId);
@@ -129,6 +135,7 @@ public final class PresentationJson {
         return out;
     }
 
+    /** presentationSummary for each element, with the parent id looked up in parentById. */
     public static JsonArray summarize(Collection<PresentationElement> elements, Map<String, String> parentById) {
         JsonArray array = new JsonArray();
         if (elements != null) {
@@ -139,6 +146,7 @@ public final class PresentationJson {
         return array;
     }
 
+    /** Count of presentation elements per implementation class simple name, in first-seen order. */
     public static JsonObject countByType(Collection<PresentationElement> elements) {
         JsonObject counts = new JsonObject();
         if (elements != null) {
@@ -154,6 +162,7 @@ public final class PresentationJson {
         return counts;
     }
 
+    // Top-level symbols (parentId null) get no entry in parentById.
     private static void collect(List<PresentationElement> elements, List<PresentationElement> sink,
                                 Map<String, String> parentById, String parentId) {
         if (elements == null) {

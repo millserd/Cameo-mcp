@@ -31,6 +31,7 @@ public final class Probes {
             "com.nomagic.uml2.ext.magicdraw.",
     };
 
+    // {key, description}. "relationMap.*" templates are executed by the optional Relation Map module.
     private static final String[][] TEMPLATES = {
             {"relationMap.listGraphSettingsMethods", "List public GraphSettings methods"},
             {"relationMap.dumpCriteriaClasses", "Dump GraphSettings criteria value classes"},
@@ -42,6 +43,7 @@ public final class Probes {
     private Probes() {
     }
 
+    /** cameo_list_probe_templates: the built-in templates, all read-only. */
     public static JsonObject templates() {
         JsonArray templates = new JsonArray();
         for (String[] t : TEMPLATES) {
@@ -57,16 +59,22 @@ public final class Probes {
         return response;
     }
 
+    /** Non-read probe modes need either of these JVM system properties set to true at Cameo start-up. */
     static boolean writeProbesEnabled() {
         return Boolean.getBoolean("cameo.mcp.probes.write.enabled")
                 || Boolean.getBoolean("cameo.bridge.probes.write.enabled");
     }
 
+    /**
+     * cameo_execute_probe: runs a named template or a restricted javaReflection operation. Scripts in
+     * other languages are refused (not executed); the result says so and points to cameo_execute_macro.
+     */
     public static JsonObject execute(JsonObject p) throws Exception {
         String mode = ArtifactSupport.optStr(p, "mode");
         if (mode == null) {
             mode = "read";
         }
+        // Every operation below only reads; a non-read mode is just refused unless the gate is open.
         if (!"read".equalsIgnoreCase(mode) && !writeProbesEnabled()) {
             throw new ToolException("PRECONDITION_FAILED", "Write probes are disabled. Start Cameo with "
                     + "-Dcameo.mcp.probes.write.enabled=true to allow mode='" + mode + "', or use mode='read'.");
@@ -104,6 +112,10 @@ public final class Probes {
         return result;
     }
 
+    /**
+     * javaReflection operations: listMethods and invokeStaticNoArg on allow-listed classes, or a
+     * GraphSettings getter on a Relation Map (delegated to the optional module).
+     */
     private static JsonObject reflectionProbe(JsonObject p) throws Exception {
         String operation = ArtifactSupport.optStr(p, "operation");
         if (operation == null) {
@@ -124,6 +136,7 @@ public final class Probes {
                 JsonObject r = OptionalModules.call(ArtifactSupport.RELATION_MAP_SERVICE, "invokeGraphSettingsGetter",
                         Gs.obj("relation_map_id", Gs.reqStr(p, "relation_map_id").trim(),
                                 "method_name", Gs.reqStr(p, "method_name").trim()));
+                // Merge the optional module's result into this response.
                 for (String key : r.keySet()) {
                     response.add(key, r.get(key));
                 }
@@ -139,12 +152,14 @@ public final class Probes {
                     throw ToolException.invalid("No public no-arg method " + methodName + " on " + cls.getName()
                             + ". Use operation=listMethods to see the available methods.");
                 }
+                // Restricting to static no-arg methods with a return value keeps the probe to simple lookups.
                 if (!Modifier.isStatic(method.getModifiers()) || method.getReturnType() == Void.TYPE) {
                     throw ToolException.invalid("Only public static no-arg methods with return values are allowed.");
                 }
                 Object value = method.invoke(null);
                 response.addProperty("className", cls.getName());
                 response.addProperty("methodName", methodName);
+                // includeRaw=true so unknown result types also dump their getter values.
                 response.add("value", PropertyJson.serializeValue(value, true, true));
                 return response;
             }
@@ -154,6 +169,7 @@ public final class Probes {
         }
     }
 
+    /** True when className starts with one of ALLOWED_PREFIXES. */
     static boolean allowedClassName(String className) {
         for (String prefix : ALLOWED_PREFIXES) {
             if (className.startsWith(prefix)) {
@@ -163,6 +179,10 @@ public final class Probes {
         return false;
     }
 
+    /**
+     * Loads an allow-listed class, trying this plugin's loader, then the thread context loader, then
+     * the optional-module loader; NOT_FOUND when none has it (e.g. the owning Cameo plugin is absent).
+     */
     static Class<?> safeProbeClass(String className) {
         if (!allowedClassName(className)) {
             throw ToolException.invalid("Class is outside the allowed Cameo probe package prefixes: " + className
@@ -187,6 +207,7 @@ public final class Probes {
         }
     }
 
+    /** Class loader of the optional jar (which also sees other Cameo plugins), or null when it cannot load. */
     private static ClassLoader optionalLoader() {
         try {
             return OptionalModules.service(ArtifactSupport.RELATION_MAP_SERVICE).getClass().getClassLoader();
@@ -195,6 +216,7 @@ public final class Probes {
         }
     }
 
+    /** Runs a built-in template; non-Relation-Map templates only list public methods of core Cameo classes. */
     private static JsonObject executeTemplate(JsonObject p, String template) throws Exception {
         if (template.startsWith("relationMap.")) {
             return OptionalModules.call(ArtifactSupport.RELATION_MAP_SERVICE, "probeTemplate",
