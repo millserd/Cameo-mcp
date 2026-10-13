@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
  */
 public final class J {
 
+    // Unicode-aware so non-breaking and other Unicode spaces collapse like Python's str.split().
     private static final Pattern WS = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
 
     private J() {
@@ -40,12 +41,14 @@ public final class J {
         return m;
     }
 
+    /** Mutable list of the given values (Python list literal). */
     public static List<Object> arr(Object... values) {
         List<Object> l = new ArrayList<>(values.length);
         Collections.addAll(l, values);
         return l;
     }
 
+    /** One verification check entry in the {@code {name, ok, details}} shape used by check reports. */
     public static Map<String, Object> check(String name, boolean ok, Object details) {
         return obj("name", name, "ok", ok, "details", details);
     }
@@ -56,6 +59,7 @@ public final class J {
         return o instanceof Map;
     }
 
+    /** The value cast to a JSON object map, or null when it is not a map. */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> map(Object o) {
         return o instanceof Map ? (Map<String, Object>) o : null;
@@ -73,6 +77,7 @@ public final class J {
         return m == null ? new LinkedHashMap<>() : new LinkedHashMap<>(m);
     }
 
+    /** Null-safe {@code m.get(key)}: null when {@code m} is not a map. */
     public static Object get(Object m, String key) {
         Map<String, Object> map = map(m);
         return map == null ? null : map.get(key);
@@ -84,6 +89,7 @@ public final class J {
         if (o instanceof List) {
             return (List<Object>) o;
         }
+        // Other collections (e.g. sets) are copied so callers always get a List; the copy is detached.
         if (o instanceof Collection) {
             return new ArrayList<>((Collection<Object>) o);
         }
@@ -109,6 +115,10 @@ public final class J {
 
     // ------------------------------------------------------------------ truthiness
 
+    /**
+     * Python truthiness: null, false, zero, empty strings and empty collections/maps are false;
+     * any other object is true.
+     */
     public static boolean truthy(Object o) {
         if (o == null) {
             return false;
@@ -190,10 +200,12 @@ public final class J {
         return WS.matcher(s).replaceAll(" ").trim();
     }
 
+    /** Whitespace-normalized, lower-cased text, used as a case-insensitive comparison key. */
     public static String normalizedKey(Object o) {
         return lower(normalizedText(o));
     }
 
+    /** Locale-independent lower-casing (avoids e.g. the Turkish dotless i); null-safe. */
     public static String lower(String s) {
         return s == null ? null : s.toLowerCase(Locale.ROOT);
     }
@@ -225,6 +237,7 @@ public final class J {
         }
         if (o instanceof String) {
             String s = (String) o;
+            // Python switches to double quotes when the string contains a single quote but no double quote.
             if (s.contains("'") && !s.contains("\"")) {
                 return "\"" + s + "\"";
             }
@@ -272,9 +285,11 @@ public final class J {
             if (Double.isNaN(d) || Double.isInfinite(d)) {
                 return null;
             }
+            // Truncates toward zero like Python int(float); values beyond int range wrap via the long cast.
             return (int) ((Number) o).longValue();
         }
         if (o instanceof String) {
+            // Python int() accepts digit-group underscores ("1_000"); decimals and other text are rejected.
             String s = ((String) o).trim().replace("_", "");
             if (!s.matches("[+-]?\\d+")) {
                 return null;
@@ -288,6 +303,7 @@ public final class J {
         return null;
     }
 
+    /** Lenient numeric conversion: numbers, booleans and numeric strings; anything else yields {@code dflt}. */
     public static double toDouble(Object o, double dflt) {
         if (o instanceof Number) {
             return ((Number) o).doubleValue();
@@ -310,6 +326,7 @@ public final class J {
         if (Double.isNaN(value) || Double.isInfinite(value)) {
             return value;
         }
+        // new BigDecimal(double) keeps the exact binary value, matching Python's round() results.
         return new BigDecimal(value).setScale(digits, RoundingMode.HALF_EVEN).doubleValue();
     }
 
@@ -322,6 +339,7 @@ public final class J {
             return false;
         }
         if (a instanceof Number && b instanceof Number) {
+            // Python 1 == 1.0 is true, so mixed Integer/Double values compare numerically.
             return ((Number) a).doubleValue() == ((Number) b).doubleValue();
         }
         if (a instanceof Map && b instanceof Map) {
@@ -357,6 +375,7 @@ public final class J {
 
     // ------------------------------------------------------------------ collections
 
+    /** Natural-order sorted copy; duplicates and empty strings are kept. */
     public static List<String> sorted(Collection<String> values) {
         List<String> out = new ArrayList<>(values);
         Collections.sort(out);
@@ -389,6 +408,7 @@ public final class J {
     /** String list from a list-like parameter value ({@code [str(item) for item in value or ()]}). */
     public static List<String> strings(Object o) {
         List<String> out = new ArrayList<>();
+        // Unlike Python, a bare string is treated as a single item rather than iterated character by character.
         if (o instanceof String) {
             out.add((String) o);
             return out;

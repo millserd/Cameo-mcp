@@ -24,6 +24,10 @@ final class InterfaceFlowReader {
     private InterfaceFlowReader() {
     }
 
+    /**
+     * Validates the ID list, then reads all interface blocks and flow properties in a single
+     * EDT read transaction and converts the Gson result into plain maps for the analysis code.
+     */
     @SuppressWarnings("unchecked")
     static Map<String, Object> read(List<String> interfaceIds) throws Exception {
         if (interfaceIds == null || interfaceIds.isEmpty()) {
@@ -34,6 +38,8 @@ final class InterfaceFlowReader {
         return (Map<String, Object>) Gs.fromGson(response);
     }
 
+    // Runs on the EDT. Each ID must resolve to a Class (InterfaceBlock or Block); owned attributes
+    // without a FlowProperty stereotype are ordinary value/part properties and are skipped.
     private static JsonObject readIn(Project project, List<String> interfaceIds) {
         JsonArray interfaceBlocks = new JsonArray();
         JsonArray flowProperties = new JsonArray();
@@ -43,6 +49,7 @@ final class InterfaceFlowReader {
                 throw new ToolException("NOT_FOUND", "Interface block not found: " + interfaceId
                         + ". Use cameo_query_elements(stereotype=\"InterfaceBlock\") to find valid IDs.");
             }
+            // InterfaceBlock is a stereotyped UML Class, so the Class check accepts both InterfaceBlock and Block.
             if (!(found instanceof com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Class)) {
                 throw ToolException.invalid("Interface block is not a class: " + interfaceId
                         + ". Pass the IDs of InterfaceBlock (or Block) elements.");
@@ -63,9 +70,11 @@ final class InterfaceFlowReader {
                     continue;
                 }
                 JsonObject flowProperty = ElementJson.toJsonCompact(prop);
+                // Owner fields are added explicitly so callers can group flow properties by interface without a second lookup.
                 flowProperty.addProperty("ownerId", block.getID());
                 String ownerName = block.getName();
                 flowProperty.addProperty("ownerName", ownerName == null ? "" : ownerName);
+                // Direction (in/out/inout) is a stereotype tag value; it is omitted when unset rather than defaulted.
                 String direction = ElementJson.readFlowPropertyDirection(prop, stereotype);
                 if (direction != null) {
                     flowProperty.addProperty("direction", direction);

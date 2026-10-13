@@ -22,6 +22,10 @@ public final class MethodologyRegistry {
     private MethodologyRegistry() {
     }
 
+    /*
+     * Parses the embedded pack JSON once (double-checked locking on a volatile field) into a map keyed
+     * by lower-cased pack ID; a duplicate ID is a data error and fails fast.
+     */
     private static Map<String, Map<String, Object>> packs() {
         Map<String, Map<String, Object>> local = packs;
         if (local == null) {
@@ -69,6 +73,7 @@ public final class MethodologyRegistry {
         List<String> ids = new ArrayList<>();
         for (Map<String, Object> recipe : J.maps(pack.get("recipes"))) {
             if (J.str(recipe.get("id")).equals(recipeId)) {
+                // The pack is already a deep copy, so the recipe can be returned without another copy.
                 return recipe;
             }
             ids.add(J.str(recipe.get("id")));
@@ -77,6 +82,7 @@ public final class MethodologyRegistry {
                 + ". Valid recipe ids: " + String.join(", ", ids) + ".");
     }
 
+    /** The recipe list of an already-loaded pack (no copy). */
     public static List<Map<String, Object>> recipes(Map<String, Object> pack) {
         return J.maps(pack.get("recipes"));
     }

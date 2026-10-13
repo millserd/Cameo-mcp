@@ -24,10 +24,15 @@ public final class AnalysisBindings {
         Object run(Args a, Bridge bridge) throws Exception;
     }
 
+    /** Registers all analysis tools against the production in-process bridge. */
     public static void bind(ToolRegistry r) {
         bind(r, new InternalBridge());
     }
 
+    /*
+     * Registers every analysis tool with an explicit bridge (tests pass an in-memory fake).
+     * Simple tools map their arguments inline; tools with many options delegate to the handlers below.
+     */
     static void bind(ToolRegistry r, Bridge bridge) {
         on(r, bridge, "cameo_verify_matrix_consistency", AnalysisBindings::verifyMatrix);
         on(r, bridge, "cameo_verify_diagram_visual", AnalysisBindings::verifyDiagramVisual);
@@ -48,6 +53,7 @@ public final class AnalysisBindings {
                 a.map("activity_validation"), a.map("port_validation"), a.map("requirement_validation"),
                 a.map("trace_validation"), a.maps("architecture_elements")));
 
+        // Proofing: cameo_proof_model_text produces a patch plan; cameo_apply_proofing_patch_plan applies it later.
         on(r, bridge, "cameo_proof_model_text", (a, b) -> Proofing.proofModelText(
                 blankToNull(a.str("root_package_id")), a.strList("requirement_ids"), a.strList("comment_ids"),
                 a.strList("state_ids"), a.strList("transition_ids"), a.strList("diagram_ids"),
@@ -61,6 +67,7 @@ public final class AnalysisBindings {
             return Proofing.applyPatchPlan(plan, b);
         });
 
+        // Methodology packs: catalogue, guidance, recipe execution/validation and review packets.
         on(r, bridge, "cameo_list_methodology_packs", (a, b) -> MethodologyService.listMethodologyPacks());
         on(r, bridge, "cameo_get_methodology_pack", (a, b) -> MethodologyService.getMethodologyPack(a.reqStr("pack_id")));
         on(r, bridge, "cameo_get_methodology_guidance", (a, b) -> MethodologyService.getWorkflowGuidance(
@@ -74,6 +81,7 @@ public final class AnalysisBindings {
                 a.reqStr("pack_id"), a.reqStr("recipe_id"), a.map("recipe_parameters"),
                 optionalMaps(a, "current_artifacts"), a.strList("assumptions"), a.strList("notes"), b));
 
+        // Methodology workflows: artifact comparison, package validation and diagram/deck export.
         on(r, bridge, "cameo_compare_expected_artifact_list", (a, b) -> {
             if (!a.has("expected_artifacts")) {
                 throw ToolException.invalid("expected_artifacts is required: a list of {key, kind, name, ...} objects.");
@@ -95,6 +103,11 @@ public final class AnalysisBindings {
                 blankToNull(a.str("pdf_name")), exportFormat(a), b));
     }
 
+    /*
+     * Wraps a handler with uniform error translation. A failed recipe step is reported with the
+     * receipts of the steps already applied so the caller can undo or re-run (artifacts are reused);
+     * IllegalArgumentException from the analysis code becomes INVALID_PARAMS.
+     */
     private static void on(ToolRegistry r, Bridge bridge, String name, Body body) {
         r.bind(name, (a, c) -> {
             try {
@@ -104,6 +117,7 @@ public final class AnalysisBindings {
                 for (MethodologyRuntime.OperationReceipt receipt : e.receipts()) {
                     receipts.add(receipt.toMap());
                 }
+                // Keep the original tool's error code when the failing step was itself a tool call.
                 String code = e.getCause() instanceof ToolException ? ((ToolException) e.getCause()).code() : "TOOL_FAILED";
                 throw new ToolException(code, e.getMessage() + ". " + receipts.size() + " earlier step(s) were applied "
                         + "(see details.receipts); each is one undo step, so use cameo_undo to roll them back, or fix the "
@@ -117,6 +131,7 @@ public final class AnalysisBindings {
 
     // ------------------------------------------------------------------ handlers
 
+    // cameo_verify_matrix_consistency: checks the matrix against expectations and echoes the raw matrix back.
     private static Object verifyMatrix(Args a, Bridge bridge) throws Exception {
         Map<String, Object> matrix = bridge.getMatrix(a.reqStr("matrix_id"));
         Map<String, Object> result = Verification.verifyMatrixConsistency(matrix,
@@ -127,8 +142,10 @@ public final class AnalysisBindings {
         return result;
     }
 
+    // cameo_verify_diagram_visual: combines the rendered image metadata and the shape list into one visual check.
     private static Object verifyDiagramVisual(Args a, Bridge bridge) throws Exception {
         String diagramId = a.reqStr("diagram_id");
+        // Empty options: the image tool's defaults are used.
         Map<String, Object> image = bridge.getDiagramImage(diagramId, obj());
         Map<String, Object> shapes = bridge.listDiagramShapes(diagramId);
         Verification.VisualOptions o = new Verification.VisualOptions();
@@ -147,6 +164,7 @@ public final class AnalysisBindings {
         return result;
     }
 
+    // cameo_detect_cross_diagram_inconsistencies: runs all semantic validators and collects their findings.
     private static Object detect(Args a, Bridge bridge) throws Exception {
         AutoRemediation.DetectOptions o = new AutoRemediation.DetectOptions();
         o.activityDiagramId = blankToNull(a.str("activity_diagram_id"));
@@ -154,6 +172,7 @@ public final class AnalysisBindings {
         o.ibdDiagramId = blankToNull(a.str("ibd_diagram_id"));
         o.requirementIds = a.strList("requirement_ids");
         o.architectureElementIds = a.strList("architecture_element_ids");
+        // null (parameter absent) is kept distinct from an explicitly passed empty list.
         o.allowSharedFlowPropertyNames = a.has("allow_shared_flow_property_names")
                 ? a.strList("allow_shared_flow_property_names") : null;
         o.requireId = a.bool("require_id", true);
@@ -164,6 +183,7 @@ public final class AnalysisBindings {
         return AutoRemediation.detect(o, bridge);
     }
 
+    // cameo_execute_methodology_recipe: creates the recipe's artifacts under root_package_id.
     private static Object executeRecipe(Args a, Bridge bridge) {
         Map<String, Object> params = a.map("recipe_parameters");
         if (params == null) {
@@ -176,15 +196,18 @@ public final class AnalysisBindings {
 
     // ------------------------------------------------------------------ helpers
 
+    /** The parameter as a list of maps, or null when it was not passed (so callers can tell "absent" from "empty"). */
     private static List<Map<String, Object>> optionalMaps(Args a, String name) {
         return a.get(name) == null ? null : a.maps(name);
     }
 
+    /** export_format parameter, defaulting to png when blank. */
     private static String exportFormat(Args a) {
         String format = a.str("export_format");
         return format == null || format.trim().isEmpty() ? "png" : format.trim();
     }
 
+    /** Treats blank optional string parameters as absent. */
     static String blankToNull(String s) {
         return s == null || s.trim().isEmpty() ? null : s;
     }

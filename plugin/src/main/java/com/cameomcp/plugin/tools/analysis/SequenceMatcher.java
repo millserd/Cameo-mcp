@@ -27,7 +27,13 @@ final class SequenceMatcher {
         return 2.0 * matches(a, b) / (la + lb);
     }
 
+    /*
+     * Total size of the matching blocks (difflib get_matching_blocks): find the longest common block,
+     * then recurse on the unmatched regions to its left and right. A work queue replaces recursion;
+     * processing order does not affect the total.
+     */
     static int matches(String a, String b) {
+        // b2j: character -> ascending positions in b, so longestMatch can scan candidate j values in order.
         Map<Character, List<Integer>> b2j = new HashMap<>();
         for (int j = 0; j < b.length(); j++) {
             b2j.computeIfAbsent(b.charAt(j), k -> new ArrayList<>()).add(j);
@@ -64,6 +70,10 @@ final class SequenceMatcher {
         return total;
     }
 
+    /*
+     * difflib find_longest_match without junk: dynamic programming over a[alo:ahi] where j2len[j]
+     * is the length of the match ending at a[i-1], b[j-1]. Ties keep the earliest block in a.
+     */
     private static int[] longestMatch(String a, String b, Map<Character, List<Integer>> b2j,
                                       int alo, int ahi, int blo, int bhi) {
         int besti = alo;
@@ -92,6 +102,7 @@ final class SequenceMatcher {
             }
             j2len = newj2len;
         }
+        // Extend the block over characters dropped from b2j by the popularity heuristic (difflib does the same).
         while (besti > alo && bestj > blo && a.charAt(besti - 1) == b.charAt(bestj - 1)) {
             besti--;
             bestj--;
@@ -103,6 +114,7 @@ final class SequenceMatcher {
         return new int[]{besti, bestj, bestsize};
     }
 
+    /** difflib quick_ratio: an upper bound on ratio() from character multiset overlap, ignoring order. */
     private static double quickRatio(String a, String b) {
         Map<Character, Integer> full = new HashMap<>();
         for (int i = 0; i < b.length(); i++) {
@@ -128,6 +140,7 @@ final class SequenceMatcher {
         for (String x : possibilities) {
             int la = x.length();
             int lb = word.length();
+            // real_quick_ratio, quick_ratio, ratio: progressively more expensive bounds, so most candidates are rejected cheaply.
             double realQuick = la + lb == 0 ? 1.0 : 2.0 * Math.min(la, lb) / (la + lb);
             if (realQuick < cutoff) {
                 continue;
@@ -140,6 +153,7 @@ final class SequenceMatcher {
                 result.add(new Object[]{r, x});
             }
         }
+        // Best score first; ties broken by reverse string order, matching Python's heapq.nlargest on (score, word) tuples.
         result.sort((p, q) -> {
             int c = Double.compare((Double) q[0], (Double) p[0]);
             return c != 0 ? c : ((String) q[1]).compareTo((String) p[1]);
