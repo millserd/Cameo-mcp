@@ -33,6 +33,8 @@ public final class PresentationPresets {
             this.containsTokens = containsTokens;
         }
 
+        // True when the property name equals one of the exact names or contains one of the tokens, both
+        // compared after normalizeKey (lower-case alphanumerics).
         public boolean matches(String propertyName) {
             String normalized = normalizeKey(propertyName);
             for (String exact : exactNames) {
@@ -62,6 +64,11 @@ public final class PresentationPresets {
         return Collections.unmodifiableList(Arrays.asList(v));
     }
 
+    /*
+     * Selection for one canonical intent key (e.g. "showTriggers"). Each lists the native names plus
+     * looser contains-tokens, because property names vary by shape type and Cameo version (Trigger vs
+     * Event, Guard vs Condition). Unknown keys match their own name.
+     */
     public static Selection forCanonicalKey(String canonicalKey, boolean value) {
         String n = normalizeKey(canonicalKey);
         switch (n) {
@@ -96,6 +103,7 @@ public final class PresentationPresets {
                 return sel(value, l("Show Tagged Values"), l("showtaggedvalues"));
             case "showports":
                 return sel(value, l("Show Ports", "Suppress Ports"), l("showports", "suppressports"));
+            // Attributes only exist as a "Suppress" property, so valueFor inverts the request.
             case "showattributes":
                 return sel(value, l("Suppress Attributes"), l("suppressattributes"));
             case "showelementproperties":
@@ -130,6 +138,7 @@ public final class PresentationPresets {
         }
     }
 
+    // One Selection per canonical key, all requesting the same boolean value (used by the repair tools).
     public static Map<String, Selection> selectionMap(boolean value, List<String> canonicalKeys) {
         Map<String, Selection> m = new LinkedHashMap<>();
         for (String k : canonicalKeys) {
@@ -140,6 +149,7 @@ public final class PresentationPresets {
 
     // ------------------------------------------------------------------ presets of the label tools
 
+    // cameo_set_transition_label_presentation: which transition label parts to show.
     public static Map<String, Selection> transitionLabels(boolean showName, boolean showTriggers, boolean showGuard,
                                                           boolean showEffect) {
         Map<String, Selection> m = new LinkedHashMap<>();
@@ -150,6 +160,7 @@ public final class PresentationPresets {
         return m;
     }
 
+    // cameo_set_item_flow_label_presentation: which item-flow label parts to show.
     public static Map<String, Selection> itemFlowLabels(boolean showName, boolean showConveyed,
                                                         boolean showItemProperty, boolean showDirection,
                                                         boolean showStereotype) {
@@ -162,6 +173,7 @@ public final class PresentationPresets {
         return m;
     }
 
+    // cameo_set_allocation_compartment_presentation: allocated-element, element-property and port compartments.
     public static Map<String, Selection> allocationCompartments(boolean showAllocatedElements,
                                                                 boolean showElementProperties, boolean showPorts,
                                                                 boolean showFullPorts, boolean applyAllocationNaming) {
@@ -254,6 +266,11 @@ public final class PresentationPresets {
         }
     }
 
+    /*
+     * Which label and compartment keys the repair tools touch for a diagram type, chosen by substring
+     * on the normalized type name; the general defaults cover unrecognized types. hiddenLabelKeys is the
+     * union of the shape and path label keys.
+     */
     public static RepairDefaults repairDefaults(String diagramType) {
         String n = normalizeKey(diagramType);
         List<String> shape = l("showName", "showStereotype");
@@ -261,6 +278,7 @@ public final class PresentationPresets {
         List<String> conveyed = l("showConveyed", "showItemProperty", "showDirection");
         List<String> compartments = l();
 
+        // State machines: transitions carry triggers/guards/effects on the path label.
         if (n.contains("statemachine")) {
             shape = l("showName");
             path = l("showName", "showTriggers", "showGuard", "showEffect");

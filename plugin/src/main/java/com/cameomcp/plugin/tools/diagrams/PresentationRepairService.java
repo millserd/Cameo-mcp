@@ -43,6 +43,7 @@ final class PresentationRepairService {
 
     // ================================================================== presets
 
+    // cameo_set_transition_label_presentation: label parts of transition paths (all of them when ids is null).
     static JsonObject transitionLabels(String diagramId, List<String> ids, boolean showName, boolean showTriggers,
                                        boolean showGuard, boolean showEffect, boolean resetLabels) throws Exception {
         return preset("Configure Transition Label Presentation", "configureTransitionLabelPresentation", diagramId, ids,
@@ -50,6 +51,7 @@ final class PresentationRepairService {
                 PresentationPresets.transitionLabels(showName, showTriggers, showGuard, showEffect), resetLabels);
     }
 
+    // cameo_set_item_flow_label_presentation: label parts of information/item-flow paths.
     static JsonObject itemFlowLabels(String diagramId, List<String> ids, boolean showName, boolean showConveyed,
                                      boolean showItemProperty, boolean showDirection, boolean showStereotype,
                                      boolean resetLabels) throws Exception {
@@ -59,6 +61,7 @@ final class PresentationRepairService {
                         showStereotype), resetLabels);
     }
 
+    // cameo_set_allocation_compartment_presentation: never resets labels (these targets are shapes).
     static JsonObject allocationCompartments(String diagramId, List<String> ids, boolean showAllocatedElements,
                                              boolean showElementProperties, boolean showPorts, boolean showFullPorts,
                                              boolean applyAllocationNaming) throws Exception {
@@ -69,6 +72,11 @@ final class PresentationRepairService {
                         showFullPorts, applyAllocationNaming), false);
     }
 
+    /*
+     * Shared body of the three preset tools: select the targets, apply the selections to each one in a
+     * single write session (120 s limit, since a whole diagram may be touched) and collect per-target results.
+     * Targets the predicate rejects are only reported when they were named explicitly in ids.
+     */
     private static JsonObject preset(String session, String operation, String diagramId, List<String> ids,
                                      Predicate<PresentationElement> predicate, String unsupported,
                                      Map<String, Selection> selections, boolean resetLabels) throws Exception {
@@ -101,6 +109,7 @@ final class PresentationRepairService {
 
     // ================================================================== repairs
 
+    // cameo_repair_hidden_labels: turns on the diagram type's default shape/path label properties.
     static JsonObject repairHiddenLabels(String diagramId, List<String> ids, boolean dryRun) throws Exception {
         return Edt.write("Repair Hidden Labels", project -> {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
@@ -114,6 +123,10 @@ final class PresentationRepairService {
         }, 120);
     }
 
+    /*
+     * cameo_repair_conveyed_item_labels: sets the diagram type's conveyed-item label properties to false
+     * (inverted for "Suppress ..." properties) on paths that have any of them.
+     */
     static JsonObject repairConveyedItemLabels(String diagramId, List<String> ids, boolean dryRun,
                                                boolean resetLabels) throws Exception {
         return Edt.write("Force Conveyed Item Labels", project -> {
@@ -131,6 +144,8 @@ final class PresentationRepairService {
         }, 120);
     }
 
+    // cameo_normalize_compartment_presets: turns on the diagram type's default compartments on shapes,
+    // skipping comments/notes.
     static JsonObject normalizeCompartmentPresets(String diagramId, List<String> ids, boolean dryRun)
             throws Exception {
         return Edt.write("Normalize Compartment Presets", project -> {
@@ -146,6 +161,8 @@ final class PresentationRepairService {
         }, 120);
     }
 
+    // Common body of the repair tools: configure (or with dryRun, only preview) each target and wrap the
+    // results with the diagram type's repair defaults so callers can see which keys were used.
     private static JsonObject repairRun(String diagramId, String type, RepairDefaults defaults, String mode,
                                         String operation, boolean dryRun, boolean resetLabels,
                                         SelectionResult selection, Map<String, Selection> selections) {
@@ -171,6 +188,10 @@ final class PresentationRepairService {
         return response;
     }
 
+    /*
+     * cameo_repair_label_positions: resets label positions of paths. With onlyOverlapping, only paths whose
+     * bounds (grown by the padding) intersect another selected path are touched.
+     */
     static JsonObject repairLabelPositions(String diagramId, List<String> ids, boolean dryRun,
                                            boolean onlyOverlapping, int overlapPadding) throws Exception {
         int padding = Math.max(0, overlapPadding);
@@ -242,6 +263,8 @@ final class PresentationRepairService {
         entry.addProperty("labelsReset", reset);
     }
 
+    // Pairwise bounds check (O(n^2)); a path is kept when its padded bounds touch another path's bounds.
+    // Paths without bounds are dropped.
     private static List<PresentationElement> overlappingPaths(List<PresentationElement> targets, int padding) {
         if (targets == null || targets.size() < 2) {
             return targets == null ? Collections.emptyList() : targets;
@@ -284,6 +307,11 @@ final class PresentationRepairService {
 
     // ================================================================== pruning
 
+    /*
+     * cameo_prune_diagram_presentations: deletes symbols by rule: not in keep_element_ids, or matching a
+     * drop element/shape type. The exclude lists and the diagram's own frame always survive. A symbol whose
+     * parent is also being pruned is skipped, since deleting the parent removes it.
+     */
     static JsonObject prunePresentations(String diagramId, List<String> keepElementIds, List<String> dropElementTypes,
                                          List<String> dropShapeTypes, List<String> excludeElementIds,
                                          List<String> excludePresentationIds, boolean dryRun) throws Exception {
@@ -342,6 +370,10 @@ final class PresentationRepairService {
         }, 120);
     }
 
+    /*
+     * cameo_prune_path_decorations: deletes child symbols of paths whose class name matches one of the
+     * drop types (default "RoleView", the association-end role labels).
+     */
     static JsonObject prunePathDecorations(String diagramId, List<String> ids, List<String> dropChildShapeTypes,
                                            boolean dryRun) throws Exception {
         List<String> dropTypes = dropChildShapeTypes == null || dropChildShapeTypes.isEmpty()
@@ -404,6 +436,7 @@ final class PresentationRepairService {
                         decorations.add(decoration);
                     }
                 }
+                // "updated" in a dry run means "would change".
                 boolean updated = dryRun ? decorations.size() > 0 : deleted > 0;
                 String status;
                 if (decorations.size() == 0) {
@@ -490,6 +523,7 @@ final class PresentationRepairService {
         if (elementId != null && exclElements.contains(elementId)) {
             return false;
         }
+        // keep_element_ids prunes everything else that has a model element; symbols without one are kept by this rule.
         boolean matched = !keep.isEmpty() && elementId != null && !keep.contains(elementId);
         if (!dropTypes.isEmpty()) {
             for (String t : dropTypes) {
@@ -507,6 +541,11 @@ final class PresentationRepairService {
 
     // ================================================================== configure core
 
+    /*
+     * Core of the preset and repair tools: on a property-manager copy, set every property each selection
+     * matches, then apply the copy (and optionally reset path labels) when apply is true. Status is
+     * "preview" without apply, "partial" when only some requests or steps worked.
+     */
     private static JsonObject configure(PresentationElement target, Map<String, Selection> selections,
                                         boolean resetLabels, boolean apply) {
         PropertyManager pm = DiagramSupport.propertyManagerCopy(target);
@@ -522,6 +561,7 @@ final class PresentationRepairService {
                 if (!s.getValue().matches(p.getName())) {
                     continue;
                 }
+                // Several matching names can normalize alike; set each normalized name only once per request.
                 if (!seen.add(normalizeKey(p.getName()))) {
                     continue;
                 }
@@ -604,6 +644,7 @@ final class PresentationRepairService {
 
     // ================================================================== selection
 
+    // Targets to configure plus error entries for explicitly requested ids that were missing or unsupported.
     static final class SelectionResult {
         final List<PresentationElement> targets;
         final List<JsonObject> errors;
@@ -618,6 +659,7 @@ final class PresentationRepairService {
         }
     }
 
+    // With no ids, every symbol on the diagram that passes the predicate; with ids, exactly those (or errors).
     private static SelectionResult select(List<PresentationElement> roots, List<String> ids,
                                           Predicate<PresentationElement> predicate, String unsupported) {
         List<PresentationElement> flat = DiagramSupport.flatten(roots);
@@ -648,6 +690,7 @@ final class PresentationRepairService {
         return new SelectionResult(selected, errors);
     }
 
+    // A predicate that throws (e.g. on a symbol in an odd state) just means "not a target".
     private static boolean safeTest(Predicate<PresentationElement> p, PresentationElement pe) {
         try {
             return p.test(pe);
@@ -666,6 +709,7 @@ final class PresentationRepairService {
         return e;
     }
 
+    // Class/type-name heuristics, see matchesToken.
     private static boolean isTransitionPath(PresentationElement pe) {
         return pe instanceof PathElement && matchesToken(pe, "transition");
     }
@@ -674,6 +718,7 @@ final class PresentationRepairService {
         return pe instanceof PathElement && (matchesToken(pe, "informationflow") || matchesToken(pe, "itemflow"));
     }
 
+    // Shapes (not comments) whose property manager exposes allocation-related properties.
     private static boolean isAllocationCandidate(PresentationElement pe) {
         if (!(pe instanceof ShapeElement) || isCommentLike(pe)) {
             return false;
@@ -729,6 +774,7 @@ final class PresentationRepairService {
         return normalizeKey(classType != null ? classType.toString() : "").contains(t);
     }
 
+    // Substring match of the tokens against the presentation class simple name (e.g. "RoleView").
     private static boolean matchesShapeType(PresentationElement pe, List<String> tokens) {
         if (pe == null || tokens == null) {
             return false;
@@ -774,6 +820,7 @@ final class PresentationRepairService {
         return r;
     }
 
+    // Results that changed something: "updated" true or a non-empty "updates" list, ignoring error entries.
     static int countUpdated(JsonArray results) {
         int n = 0;
         for (JsonElement e : results) {

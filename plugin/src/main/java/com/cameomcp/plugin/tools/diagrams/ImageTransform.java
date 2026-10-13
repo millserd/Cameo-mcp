@@ -84,6 +84,7 @@ public final class ImageTransform {
         BufferedImage current = src;
         int w = src.getWidth();
         int h = src.getHeight();
+        // Halving in bilinear steps first avoids the aliasing a single large bicubic downscale produces.
         while (w / 2 >= targetWidth && h / 2 >= targetHeight && w / 2 > 0 && h / 2 > 0) {
             w /= 2;
             h /= 2;
@@ -95,6 +96,7 @@ public final class ImageTransform {
         return current;
     }
 
+    // Redraws src at w x h into a new image of the given type with quality rendering hints.
     private static BufferedImage draw(BufferedImage src, int w, int h, int type, Object interpolation) {
         BufferedImage out = new BufferedImage(w, h, type);
         Graphics2D g = out.createGraphics();
@@ -127,6 +129,7 @@ public final class ImageTransform {
         return out;
     }
 
+    // Lossless PNG bytes of the image.
     public static byte[] png(BufferedImage image) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (!ImageIO.write(image, "png", out)) {
@@ -135,6 +138,7 @@ public final class ImageTransform {
         return out.toByteArray();
     }
 
+    // JPEG bytes at quality 1-100 (mapped to ImageIO's 0.01-1.0 compression quality); alpha is flattened first.
     public static byte[] jpeg(BufferedImage image, int quality) throws IOException {
         BufferedImage rgb = flattenOnWhite(image);
         Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");

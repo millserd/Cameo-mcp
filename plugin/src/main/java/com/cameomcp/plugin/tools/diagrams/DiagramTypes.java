@@ -38,10 +38,13 @@ public final class DiagramTypes {
         }
     }
 
+    // Lookup table: canonical name, every native type name and every alias, all keyed by lookupKey().
     public static final List<Spec> VALIDATED;
     private static final Map<String, Spec> BY_KEY = new LinkedHashMap<>();
 
     static {
+        // Order here is the order cameo_list_diagram_types reports. A spec may list several native names;
+        // createDiagram tries them in order (e.g. both requirement diagram spellings) until one works.
         List<Spec> l = new ArrayList<>();
         l.add(new Spec("Class", "uml", list("Class Diagram"), "class", "ClassDiagram", "Class Diagram"));
         l.add(new Spec("Package", "uml", list("Package Diagram"), "package", "PackageDiagram", "Package Diagram"));
@@ -92,12 +95,18 @@ public final class DiagramTypes {
         return Arrays.asList(v);
     }
 
+    /*
+     * Normalizes a type token for lookup: splits camelCase and acronym boundaries, lower-cases, treats
+     * '-' and '_' as spaces and collapses whitespace.
+     */
     /** "StateMachineDiagram" / "state_machine-diagram" -> "state machine diagram". */
     public static String lookupKey(String value) {
         if (value == null) {
             return "";
         }
+        // "StateMachine" -> "State Machine"
         String spaced = value.trim().replaceAll("([a-z0-9])([A-Z])", "$1 $2");
+        // "BDDiagram"-style runs: split before the last capital of an acronym followed by lower case.
         spaced = spaced.replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2");
         String normalized = spaced.toLowerCase(Locale.ROOT).replace('-', ' ').replace('_', ' ');
         return String.join(" ", normalized.trim().split("\\s+"));
@@ -130,10 +139,12 @@ public final class DiagramTypes {
         return Collections.singletonList(input == null ? "" : input.trim());
     }
 
+    // Relation maps need extra setup (context, scope, criteria) after creation; see DiagramService.createDiagram.
     public static boolean isRelationMap(String nativeType) {
         return "Relation Map Diagram".equals(nativeType);
     }
 
+    // cameo_list_diagram_types: the validated types with their native names, fallbacks and aliases.
     public static JsonObject listJson() {
         JsonArray arr = new JsonArray();
         for (Spec s : VALIDATED) {

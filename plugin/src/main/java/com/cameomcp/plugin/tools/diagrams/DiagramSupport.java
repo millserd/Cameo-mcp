@@ -26,6 +26,11 @@ final class DiagramSupport {
 
     // ------------------------------------------------------------------ lookup
 
+    /*
+     * Resolves a diagram id to its DiagramPresentationElement: direct id lookup first, then a scan of all
+     * diagrams. When the id names a non-diagram element the error says what it is, to help a caller that
+     * passed an element id by mistake.
+     */
     static DiagramPresentationElement findDiagram(Project project, String diagramId) {
         if (diagramId == null || diagramId.trim().isEmpty()) {
             throw ToolException.invalid("Missing required parameter 'diagram_id'.");
@@ -54,12 +59,15 @@ final class DiagramSupport {
                 + "' not found. Use cameo_list_diagrams to find valid diagram IDs.");
     }
 
+    // Same as findDiagram, but makes sure the diagram's symbols are loaded; diagrams can be loaded lazily
+    // and would otherwise show no presentation elements.
     static DiagramPresentationElement loadedDiagram(Project project, String diagramId) {
         DiagramPresentationElement dpe = findDiagram(project, diagramId);
         dpe.ensureLoaded();
         return dpe;
     }
 
+    // Model element by id; a missing id or a non-UML object becomes a tool error naming the label.
     static Element findElement(Project project, String id, String label) {
         Object o = id == null ? null : project.getElementByID(id);
         if (o instanceof Element) {
@@ -89,6 +97,7 @@ final class DiagramSupport {
         return null;
     }
 
+    // Like findPresentation but throws NOT_FOUND, reminding callers that presentation ids differ from element ids.
     static PresentationElement requirePresentation(DiagramPresentationElement dpe, String peId) {
         if (peId == null || peId.trim().isEmpty()) {
             throw ToolException.invalid("Missing required parameter 'presentation_id'.");
@@ -116,6 +125,7 @@ final class DiagramSupport {
         }
     }
 
+    // Every presentation element under the given roots, depth-first, without parent tracking.
     static List<PresentationElement> flatten(List<PresentationElement> roots) {
         List<PresentationElement> out = new ArrayList<>();
         collect(roots, out, null, null);
@@ -147,6 +157,10 @@ final class DiagramSupport {
         return com.cameomcp.plugin.cameo.DiagramCompat.layout(dpe);
     }
 
+    /*
+     * Reflectively calls a no-arg method; null when the method is missing or inaccessible. A
+     * RuntimeException thrown by the method itself is rethrown unwrapped so callers see the real error.
+     */
     static Object invokeNoArg(Object target, String name) {
         java.lang.reflect.Method m = findMethod(target.getClass(), name);
         if (m == null) {
@@ -165,6 +179,9 @@ final class DiagramSupport {
         }
     }
 
+    // Public method (including inherited) first; otherwise a declared one on the class or a superclass,
+    // made accessible. LinkageError is caught because a method signature may reference classes missing
+    // in this Cameo version.
     static java.lang.reflect.Method findMethod(Class<?> type, String name, Class<?>... params) {
         try {
             return type.getMethod(name, params);
@@ -185,6 +202,7 @@ final class DiagramSupport {
 
     // ------------------------------------------------------------------ serialization
 
+    // Native diagram type name (e.g. "SysML Block Definition Diagram"), or "" when it cannot be read.
     static String diagramType(DiagramPresentationElement dpe) {
         try {
             if (dpe == null || dpe.getDiagramType() == null || dpe.getDiagramType().getType() == null) {
@@ -201,6 +219,7 @@ final class DiagramSupport {
         return n != null ? n : "";
     }
 
+    // The id/name/type/owner summary used by cameo_list_diagrams and as the base of other diagram responses.
     static JsonObject diagramJson(DiagramPresentationElement dpe) {
         JsonObject json = new JsonObject();
         Diagram diagram = dpe.getDiagram();
@@ -269,6 +288,7 @@ final class DiagramSupport {
         return out;
     }
 
+    // Unreadable symbols (and their subtrees) are skipped rather than failing the listing.
     private static void collectShapes(List<PresentationElement> elements, JsonArray out, String parentId) {
         if (elements == null) {
             return;
@@ -288,6 +308,7 @@ final class DiagramSupport {
 
     // ------------------------------------------------------------------ JSON values
 
+    // Adds a property value as a JSON boolean/number when possible, else as its string form; null is omitted.
     static void addValue(JsonObject target, String key, Object value) {
         if (value == null) {
             return;
@@ -315,6 +336,7 @@ final class DiagramSupport {
         return s.trim().isEmpty() ? null : s;
     }
 
+    // Raw element of a request item by camelCase key, falling back to the snake_case form.
     static JsonElement itemGet(JsonObject item, String camelKey) {
         if (item == null) {
             return null;
@@ -326,6 +348,7 @@ final class DiagramSupport {
         return e == null || e.isJsonNull() ? null : e;
     }
 
+    // Integer field of a request item; decimals are rounded, non-numbers are an INVALID_PARAMS error.
     static Integer itemInt(JsonObject item, String camelKey) {
         JsonElement e = itemGet(item, camelKey);
         if (e == null) {
@@ -338,6 +361,7 @@ final class DiagramSupport {
         }
     }
 
+    // "parentPresentationId" -> "parent_presentation_id"
     static String snake(String camel) {
         StringBuilder sb = new StringBuilder();
         for (char c : camel.toCharArray()) {
@@ -350,6 +374,7 @@ final class DiagramSupport {
         return sb.toString();
     }
 
+    // {x, y} object -> Point (rounded); null when the value is not an object with both coordinates.
     static Point point(JsonElement el) {
         if (el == null || el.isJsonNull() || !el.isJsonObject()) {
             return null;
@@ -361,6 +386,7 @@ final class DiagramSupport {
         return new Point((int) Math.round(o.get("x").getAsDouble()), (int) Math.round(o.get("y").getAsDouble()));
     }
 
+    // Array of {x, y} objects -> points; malformed entries are skipped.
     static List<Point> points(JsonElement el) {
         List<Point> out = new ArrayList<>();
         if (el == null || el.isJsonNull() || !el.isJsonArray()) {
@@ -380,6 +406,7 @@ final class DiagramSupport {
         if (e == null || e.isJsonNull()) {
             throw ToolException.invalid("Missing required parameter '" + key + "' (an array of objects).");
         }
+        // Some MCP clients send nested arrays as a JSON string; parse it before validating.
         if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
             try {
                 e = com.google.gson.JsonParser.parseString(e.getAsString());
