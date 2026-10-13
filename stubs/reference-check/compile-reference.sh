@@ -5,9 +5,9 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STUBS="$HERE/../src/main/java"
-SCRATCH=/tmp/claude-0/-home-claude/9ff1fdcb-1a22-5473-b04d-2881b3c0f74b/scratchpad
-REF="${REF_SRC:-$SCRATCH/ref/cameo-mcp-bridge/plugin/src}"
-GSON="${GSON_JAR:-$SCRATCH/libs/gson-2.10.1.jar}"
+# REF_SRC: the plugin/src folder of a cameo-mcp-bridge checkout (required).
+REF="${REF_SRC:?set REF_SRC to cameo-mcp-bridge/plugin/src}"
+GSON="${GSON_JAR:-$HERE/../../devtools/lib/gson-2.10.1.jar}"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 find "$STUBS" -name '*.java' > "$OUT/sources.txt"

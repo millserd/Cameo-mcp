@@ -1151,6 +1151,8 @@ Preview a requirements export without writing anything: probe-only contract (dry
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `scope_ids` | string[] |  | Roots to export from (default: primary model). |
+| `root_id` | string |  | Single root element id (combined with scope_ids). |
+| `package_id` | string |  | Alias of root_id. |
 | `format` | string |  | Planned export format. One of: [csv, json, reqif]. Default: `csv`. |
 | `output_path` | string |  | Planned absolute output path (checked, not written). |
 

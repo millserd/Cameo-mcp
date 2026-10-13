@@ -18,6 +18,7 @@ import java.lang.reflect.Method;
  */
 public final class DiagramCompat {
 
+    // 2026x command classes, looked up by name because they don't exist in 2024x.
     private static final String MACRO_COMMAND = "com.dassault_systemes.modeler.foundation.editing.MacroCommand";
     private static final String COMPOSITE_COMMAND = "com.dassault_systemes.modeler.foundation.editing.CompositeCommand";
     private static final String ABSTRACT_DPE = "com.nomagic.magicdraw.uml.symbols.AbstractDiagramPresentationElement";
@@ -28,11 +29,13 @@ public final class DiagramCompat {
     /** Lays out the whole diagram. Returns false when Cameo reports nothing was laid out. */
     public static boolean layout(DiagramPresentationElement dpe) {
         try {
+            // 2024x path: the old one-call layout API.
             Method legacy = method(dpe.getClass(), "layout", boolean.class);
             if (legacy != null) {
                 Object r = legacy.invoke(dpe, true);
                 return !(r instanceof Boolean) || (Boolean) r;
             }
+            // 2026x path: ask the diagram for its layouter and run it inside a fresh macro command.
             Method getLayouter = method(dpe.getClass(), "getDefaultDiagramLayouter");
             Object layouter = getLayouter != null ? getLayouter.invoke(dpe) : null;
             if (layouter != null) {
@@ -73,6 +76,7 @@ public final class DiagramCompat {
         return bool(dpe, "isDiagramWindowActive");
     }
 
+    // Calls a no-argument boolean method if it exists; null when missing or failing.
     private static Boolean bool(Object target, String name) {
         Method m = method(target.getClass(), name);
         if (m == null) {
@@ -86,6 +90,7 @@ public final class DiagramCompat {
         }
     }
 
+    // Public method lookup that returns null instead of throwing when the method is missing.
     private static Method method(Class<?> type, String name, Class<?>... params) {
         try {
             return type.getMethod(name, params);

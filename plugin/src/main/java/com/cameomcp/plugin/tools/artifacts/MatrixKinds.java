@@ -15,6 +15,8 @@ import java.util.Map;
  * default row/column type domains and example domains (Cameo-free, unit-tested).
  */
 public enum MatrixKinds {
+    // Each constant: apiName, native diagramType, aliases, default row types, default column types,
+    // then the row/column type examples that were validated against a live Cameo install.
     REFINE("refine", "Refine Requirement Matrix",
             Arrays.asList("refine", "refine matrix", "refine requirement matrix"),
             Arrays.asList("Block"), Arrays.asList("Requirement"),
@@ -37,9 +39,12 @@ public enum MatrixKinds {
             Arrays.asList("Activity", "OpaqueAction", "Block", "Requirement"),
             Arrays.asList("Activity", "OpaqueAction", "Block", "Requirement"));
 
+    /** Short token used in tool parameters and results (e.g. "satisfy"). */
     public final String apiName;
+    /** Exact Cameo diagram type name; compared verbatim by {@link #fromDiagramType}. */
     public final String diagramType;
     public final List<String> aliases;
+    // Used by the matrix creation service when the caller gives no row/column types.
     public final List<String> defaultRowTypes;
     public final List<String> defaultColumnTypes;
     public final List<String> rowTypeExamples;
@@ -61,6 +66,7 @@ public enum MatrixKinds {
         if (raw == null) {
             return null;
         }
+        // Squashing lets "Satisfy-Matrix", "satisfy matrix" and "SATISFYMATRIX" all match.
         String key = squash(raw);
         if (key.isEmpty()) {
             return null;
@@ -78,6 +84,7 @@ public enum MatrixKinds {
         return null;
     }
 
+    /** Like {@link #fromInput} but throws an invalid-params ToolException listing the supported kinds. */
     public static MatrixKinds require(String raw) {
         MatrixKinds k = fromInput(raw);
         if (k == null) {
@@ -97,6 +104,7 @@ public enum MatrixKinds {
         return null;
     }
 
+    /** Lower-cases and drops everything except ASCII letters and digits, for lenient matching. */
     private static String squash(String s) {
         return s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "");
     }

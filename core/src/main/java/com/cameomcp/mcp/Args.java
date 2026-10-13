@@ -18,20 +18,25 @@ import java.util.Map;
  */
 public final class Args {
 
+    // The arguments object as received; never null.
     private final Map<String, Object> raw;
 
+    /** Wraps a tool call's {@code arguments} object; null means "no arguments". */
     public Args(Map<String, Object> raw) {
         this.raw = raw == null ? Collections.emptyMap() : raw;
     }
 
+    /** Builds arguments from key/value pairs, mainly for tests. */
     public static Args of(Object... keyValues) {
         return new Args(Json.obj(keyValues));
     }
 
+    /** The underlying map, for handlers that pass arguments through unchanged. */
     public Map<String, Object> raw() {
         return raw;
     }
 
+    // element_id -> elementId, so either spelling of a parameter is found.
     static String camel(String snake) {
         StringBuilder sb = new StringBuilder();
         boolean up = false;
@@ -58,12 +63,14 @@ public final class Args {
         return v;
     }
 
+    /** True when the parameter is present and not JSON null. */
     public boolean has(String name) {
         return get(name) != null;
     }
 
     // ---------------------------------------------------------------- strings
 
+    /** String value or null. Numbers and booleans are converted; objects and arrays are rejected. */
     public String str(String name) {
         Object v = get(name);
         if (v == null) {
@@ -76,6 +83,7 @@ public final class Args {
         return s;
     }
 
+    /** String value, or {@code dflt} when absent. */
     public String str(String name, String dflt) {
         String s = str(name);
         return s == null ? dflt : s;
@@ -102,6 +110,10 @@ public final class Args {
 
     // ---------------------------------------------------------------- numbers
 
+    /**
+     * Integer value or null. Numeric strings are accepted; a fractional value is truncated, so
+     * {@code "3.0"} works for agents that send every number as a float.
+     */
     public Long lng(String name) {
         Object v = get(name);
         if (v == null) {
@@ -121,16 +133,19 @@ public final class Args {
         }
     }
 
+    /** Integer value or {@code dflt}; values outside the int range are clamped, not wrapped. */
     public int integer(String name, int dflt) {
         Long v = lng(name);
         return v == null ? dflt : (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, v));
     }
 
+    /** Integer value or null. */
     public Integer integerOrNull(String name) {
         Long v = lng(name);
         return v == null ? null : (int) (long) v;
     }
 
+    /** Integer value that must be present. */
     public int reqInt(String name) {
         Long v = lng(name);
         if (v == null) {
@@ -145,6 +160,7 @@ public final class Args {
         return Math.max(min, Math.min(max, v));
     }
 
+    /** Decimal value or null. Numeric strings are accepted. */
     public Double dbl(String name) {
         Object v = get(name);
         if (v == null) {
@@ -161,6 +177,7 @@ public final class Args {
         }
     }
 
+    /** Decimal value or {@code dflt}. */
     public double dbl(String name, double dflt) {
         Double v = dbl(name);
         return v == null ? dflt : v;
@@ -168,6 +185,7 @@ public final class Args {
 
     // ---------------------------------------------------------------- booleans
 
+    /** Boolean value or null. Accepts true/false, yes/no, 1/0 and on/off in any case. */
     public Boolean boolOrNull(String name) {
         Object v = get(name);
         if (v == null) {
@@ -187,6 +205,7 @@ public final class Args {
         }
     }
 
+    /** Boolean value or {@code dflt}. */
     public boolean bool(String name, boolean dflt) {
         Boolean b = boolOrNull(name);
         return b == null ? dflt : b;
@@ -210,11 +229,13 @@ public final class Args {
         throw ToolException.invalid("Parameter '" + name + "' must be an object.");
     }
 
+    /** Object value, or a new empty map when absent. */
     public Map<String, Object> mapOrEmpty(String name) {
         Map<String, Object> m = map(name);
         return m == null ? new LinkedHashMap<>() : m;
     }
 
+    /** A nested object parameter wrapped as {@code Args}, for options such as {@code layout: {...}}. */
     public Args sub(String name) {
         return new Args(map(name));
     }
@@ -243,6 +264,7 @@ public final class Args {
         return one;
     }
 
+    /** List value, or a new empty list when absent. */
     public List<Object> listOrEmpty(String name) {
         List<Object> l = list(name);
         return l == null ? new ArrayList<>() : l;
@@ -271,6 +293,7 @@ public final class Args {
         return out;
     }
 
+    /** List of strings that must have at least one entry. */
     public List<String> reqStrList(String name) {
         List<String> l = strList(name);
         if (l.isEmpty()) {

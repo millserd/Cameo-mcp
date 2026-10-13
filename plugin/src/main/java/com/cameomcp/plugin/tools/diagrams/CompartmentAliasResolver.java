@@ -12,6 +12,9 @@ import java.util.Map;
  */
 public final class CompartmentAliasResolver {
 
+    // Keyed by the normalized compartment name with any show/suppress prefix removed. Values list the
+    // native property names to look for in priority order; both polarities are listed because which
+    // one a shape exposes depends on the shape type (e.g. "Suppress Ports" vs "Show Ports").
     private static final Map<String, String[]> ALIASES = new LinkedHashMap<>();
 
     static {
@@ -39,8 +42,15 @@ public final class CompartmentAliasResolver {
     private CompartmentAliasResolver() {
     }
 
+    /*
+     * Native property names that may control the compartment named by requestedKey, in lookup order.
+     * The show/suppress prefix is dropped first so "showPorts", "suppressPorts" and "ports" resolve
+     * alike; DiagramService.resolveCompartmentProperty uses this only after an exact normalized match fails.
+     * Returns an empty list for unknown keys.
+     */
     public static List<String> candidatePropertyNames(String requestedKey) {
         String normalized = normalizeKey(requestedKey);
+        // Strip only when something follows the prefix, so a bare "show" key is not reduced to "".
         if (normalized.startsWith("show") && normalized.length() > 4) {
             normalized = normalized.substring(4);
         } else if (normalized.startsWith("suppress") && normalized.length() > 8) {

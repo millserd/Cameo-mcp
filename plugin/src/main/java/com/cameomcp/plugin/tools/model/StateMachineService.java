@@ -40,12 +40,17 @@ final class StateMachineService {
 
     // ------------------------------------------------------------------ triggers
 
+    // cameo_get_transition_triggers: the transition's triggers with their events.
     static JsonObject getTriggers(Args a) throws Exception {
         String id = a.reqStr("transition_id");
         return Edt.read(project -> triggersPayload(
                 ModelSupport.typed(project, id, "transition_id", Transition.class, "a Transition")));
     }
 
+    /*
+     * cameo_set_transition_trigger: adds a change trigger (expression) or signal trigger (signal_id).
+     * With replace=true (default) the existing triggers are removed first.
+     */
     static JsonObject setTrigger(Args a) throws Exception {
         String id = a.reqStr("transition_id");
         String expression = a.str("expression");
@@ -117,6 +122,7 @@ final class StateMachineService {
         return sm != null ? sm : project.getPrimaryModel();
     }
 
+    /** The transition id and its triggers. */
     static JsonObject triggersPayload(Transition transition) {
         JsonArray triggers = new JsonArray();
         Collection<Trigger> list = transition.getTrigger();
@@ -132,6 +138,7 @@ final class StateMachineService {
         return out;
     }
 
+    // One trigger: its event type, and the signal or change expression behind it.
     private static JsonObject trigger(Trigger t) {
         JsonObject o = new JsonObject();
         o.addProperty("id", t.getID());
@@ -156,6 +163,7 @@ final class StateMachineService {
         return o;
     }
 
+    /** The text of a value specification: literal string, first opaque body, or its "value" feature. */
     static String valueText(ValueSpecification v) {
         if (v == null) {
             return null;
@@ -177,11 +185,16 @@ final class StateMachineService {
 
     // ------------------------------------------------------------------ state behaviors
 
+    // cameo_get_state_behaviors: the state's entry, do and exit behaviors.
     static JsonObject getBehaviors(Args a) throws Exception {
         String id = a.reqStr("state_id");
         return Edt.read(project -> behaviorsPayload(ModelSupport.typed(project, id, "state_id", State.class, "a State")));
     }
 
+    /*
+     * cameo_set_state_behaviors: sets entry/do/exit as OpaqueBehaviors with body text and language.
+     * Omitted slots are kept (or cleared with clear_unspecified); blank text clears a slot.
+     */
     static JsonObject setBehaviors(Args a) throws Exception {
         String id = a.reqStr("state_id");
         String entry = a.str("entry");
@@ -199,6 +212,7 @@ final class StateMachineService {
         });
     }
 
+    // The behavior currently in a slot (entry, doActivity, exit).
     private static Behavior current(State s, String slot) {
         switch (slot) {
             case "entry":
@@ -210,6 +224,7 @@ final class StateMachineService {
         }
     }
 
+    // Puts a behavior (or null) into a slot.
     private static void assign(State s, String slot, Behavior b) {
         switch (slot) {
             case "entry":
@@ -224,6 +239,7 @@ final class StateMachineService {
         }
     }
 
+    // Applies one slot's rule; an existing OpaqueBehavior is rewritten in place so references to it stay valid.
     private static void apply(Project project, State state, String slot, String body, String language,
                               boolean clearUnspecified) throws Exception {
         switch (ModelText.slotAction(body, clearUnspecified)) {
@@ -252,6 +268,7 @@ final class StateMachineService {
         assign(state, slot, behavior);
     }
 
+    /** The state id plus each slot's behavior (null when empty). */
     static JsonObject behaviorsPayload(State state) {
         JsonObject out = new JsonObject();
         out.addProperty("stateId", state.getID());
@@ -262,6 +279,7 @@ final class StateMachineService {
         return out;
     }
 
+    // One behavior as {id, name, body, language, humanType}.
     private static com.google.gson.JsonElement behavior(Behavior b) {
         if (b == null) {
             return JsonNull.INSTANCE;

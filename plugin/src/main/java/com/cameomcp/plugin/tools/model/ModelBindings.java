@@ -11,15 +11,18 @@ public final class ModelBindings {
     private ModelBindings() {
     }
 
+    // A model tool written against Gson: takes the core Args, returns a Gson object.
     @FunctionalInterface
     private interface Impl {
         JsonObject run(com.cameomcp.mcp.Args a) throws Exception;
     }
 
+    // Adapts an Impl to a core handler by converting the Gson result back to plain JSON values.
     private static void bind(ToolRegistry r, String name, Impl impl) {
         r.bind(name, (a, c) -> Gs.fromGson(impl.run(a)));
     }
 
+    /** Binds every model-family tool to its service method. */
     public static void bind(ToolRegistry r) {
         bind(r, "cameo_get_project", a -> ProjectUiService.getProject());
         bind(r, "cameo_save_project", a -> ProjectUiService.saveProject());
@@ -54,6 +57,7 @@ public final class ModelBindings {
         bind(r, "cameo_get_state_behaviors", StateMachineService::getBehaviors);
         bind(r, "cameo_set_state_behaviors", StateMachineService::setBehaviors);
 
+        // A macro that fails still returns its output and log; flag the result as an error so the agent notices.
         r.bind("cameo_execute_macro", (a, c) -> {
             JsonObject out = MacroService.execute(a);
             ToolResult result = ToolResult.of(Gs.fromGson(out));

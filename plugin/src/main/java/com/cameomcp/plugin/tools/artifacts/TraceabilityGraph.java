@@ -57,8 +57,10 @@ public final class TraceabilityGraph {
         Set<String> nodeIds = new HashSet<>();
         Set<String> edgeIds = new HashSet<>();
         Set<String> expanded = new HashSet<>();
+        // Queue entries are {Element, Integer depth}.
         Queue<Object[]> frontier = new ArrayDeque<>();
 
+        // Roots are recorded at depth 0 and seed the BFS frontier.
         for (Element root : roots) {
             addNode(nodes, nodeIds, root, 0, true);
             frontier.add(new Object[]{root, 0});
@@ -69,24 +71,29 @@ public final class TraceabilityGraph {
             Object[] item = frontier.remove();
             Element element = (Element) item[0];
             int depth = (Integer) item[1];
+            // Skip elements at the depth limit or already expanded at this depth.
             if (depth >= maxDepth || !expanded.add(element.getID() + "@" + depth)) {
                 continue;
             }
             for (Edge edge : adjacentEdges(element, direction, filter)) {
                 String relId = edge.relationship.getID();
+                // Relationships without an id are skipped; a relationship reached from both ends is listed once.
                 if (relId == null || !edgeIds.add(relId)) {
                     continue;
                 }
+                // The edge is recorded even if its far endpoint ends up cut off by max_nodes below.
                 edges.add(edge.toJson(depth + 1));
                 for (Element endpoint : edge.traversalTargets) {
                     if (endpoint == null || endpoint.getID() == null) {
                         continue;
                     }
                     boolean added = addNode(nodes, nodeIds, endpoint, depth + 1, false);
+                    // Once the node budget is reached, stop the whole traversal and report truncated=true.
                     if (nodeIds.size() >= maxNodes) {
                         truncated = true;
                         break;
                     }
+                    // Only newly seen nodes are expanded, so cycles do not re-enter the frontier.
                     if (added && depth + 1 < maxDepth) {
                         frontier.add(new Object[]{endpoint, depth + 1});
                     }
@@ -120,6 +127,10 @@ public final class TraceabilityGraph {
         return (ids != null && !ids.isEmpty()) || ArtifactSupport.optStr(body, "context_element_id") != null;
     }
 
+    /**
+     * Roots in priority order: root_element_ids, then context_element_id, then the Relation Map's
+     * context element; otherwise an invalid-params error worded for the map or plain-graph case.
+     */
     private static List<Element> resolveRoots(Project project, JsonObject body, String relationMapId,
                                               Element mapContext) {
         List<String> rootIds = ArtifactSupport.optStrList(body, "root_element_ids");
@@ -141,6 +152,10 @@ public final class TraceabilityGraph {
                 + "map has a context element.");
     }
 
+    /**
+     * Relationships touching element in the requested direction, filtered by type. Covers directed
+     * relationships, activity flows, and (only for "both") undirected relationships and connectors.
+     */
     static List<Edge> adjacentEdges(Element element, String direction, Set<String> filter) {
         List<Edge> edges = new ArrayList<>();
         String selfId = element.getID();
@@ -173,6 +188,8 @@ public final class TraceabilityGraph {
                 addActivityEdges(edges, ((ActivityNode) element).getIncoming(), "incoming", filter);
             }
         }
+        // Undirected relationships (e.g. Association) and connectors have no source/target side,
+        // so they are only followed when direction is "both".
         if ("both".equals(direction)) {
             Collection<Relationship> rels = element.get_relationshipOfRelatedElement();
             if (rels != null) {
@@ -184,6 +201,7 @@ public final class TraceabilityGraph {
             }
             if (element instanceof ConnectableElement) {
                 Collection<Connector> connectors;
+                // Connectors helper may be missing or fail on some element kinds; treat as no connectors.
                 try {
                     connectors = Connectors.collectDirectConnectors((ConnectableElement) element);
                 } catch (RuntimeException | LinkageError e) {
@@ -201,6 +219,7 @@ public final class TraceabilityGraph {
         return edges;
     }
 
+    /** Adds an Edge for each ActivityEdge (control/object flow) that passes the type filter. */
     private static void addActivityEdges(List<Edge> edges, Collection<ActivityEdge> flows, String dir,
                                          Set<String> filter) {
         if (flows == null) {
@@ -221,6 +240,7 @@ public final class TraceabilityGraph {
         }
     }
 
+    /** Appends a node reference once per element id; returns false when already present or id-less. */
     private static boolean addNode(JsonArray nodes, Set<String> ids, Element element, int depth, boolean root) {
         if (element == null || element.getID() == null || !ids.add(element.getID())) {
             return false;
@@ -232,6 +252,7 @@ public final class TraceabilityGraph {
         return true;
     }
 
+    /** True when the filter is empty or any type token of the relationship (see tokens) is in it. */
     static boolean matches(Element relationship, Set<String> filter) {
         if (filter.isEmpty()) {
             return true;
@@ -244,6 +265,10 @@ public final class TraceabilityGraph {
         return false;
     }
 
+    /**
+     * Normalized tokens a relationship can be matched by: human type, metaclass short name, its own
+     * name and applied stereotype names. Each source is read defensively so one failure loses only that token.
+     */
     private static Set<String> tokens(Element relationship) {
         Set<String> tokens = new HashSet<>();
         try {
@@ -292,10 +317,12 @@ public final class TraceabilityGraph {
         return filter;
     }
 
+    /** Lower-cases and strips everything but ASCII letters and digits; null becomes "". */
     public static String normalizeToken(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
     }
 
+    /** Validates direction; blank or null means "both". Throws invalid-params for anything else. */
     public static String normalizeDirection(String value) {
         if (value == null || value.trim().isEmpty() || "both".equalsIgnoreCase(value.trim())) {
             return "both";
@@ -314,6 +341,7 @@ public final class TraceabilityGraph {
         final List<Element> sources;
         final List<Element> targets;
         final List<Element> related;
+        // The elements the BFS continues to from this edge (the far side relative to the current node).
         final List<Element> traversalTargets;
 
         private Edge(Element relationship, String direction, Collection<? extends Element> sources,
@@ -327,12 +355,14 @@ public final class TraceabilityGraph {
             this.traversalTargets = nonNull(traversalTargets);
         }
 
+        // For a directed edge, the far side is the sources when walking incoming, else the targets.
         static Edge directed(Element rel, String dir, Collection<? extends Element> sources,
                              Collection<? extends Element> targets) {
             return new Edge(rel, dir, sources, targets, Collections.<Element>emptyList(),
                     "incoming".equals(dir) ? sources : targets);
         }
 
+        // Undirected: the far side is every related element other than the current one (selfId).
         static Edge undirected(Element rel, String selfId, Collection<? extends Element> related) {
             List<Element> next = new ArrayList<>();
             if (related != null) {
@@ -346,6 +376,7 @@ public final class TraceabilityGraph {
                     related, next);
         }
 
+        // A connector's ends are treated as related elements: the role and, if set, the part owning the port.
         static Edge connector(Connector connector, String selfId) {
             List<Element> related = new ArrayList<>();
             Collection<ConnectorEnd> ends = connector.getEnd();
@@ -365,6 +396,7 @@ public final class TraceabilityGraph {
             return undirected(connector, selfId, related);
         }
 
+        /** Edge as an element reference plus direction, depth and compact sources/targets/related lists. */
         JsonObject toJson(int depth) {
             JsonObject json = ElementJson.toJsonReference(relationship);
             json.addProperty("relationshipId", relationship.getID());

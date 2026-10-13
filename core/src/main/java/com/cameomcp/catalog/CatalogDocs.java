@@ -51,6 +51,7 @@ public final class CatalogDocs {
         for (ToolSpec s : specs) {
             StringBuilder sb = byFamily.computeIfAbsent(s.family(), f -> new StringBuilder());
             sb.append("### `").append(s.name()).append("`");
+            // Kind label after the name, e.g. "(read)" or "(side-effect)".
             sb.append(" (").append(s.kind().name().toLowerCase().replace('_', '-')).append(")\n\n");
             sb.append(s.description()).append("\n\n");
             if (!s.parameters().isEmpty()) {
@@ -72,6 +73,7 @@ public final class CatalogDocs {
                     }
                     sb.append("| `").append(e.getKey()).append("` | ").append(type).append(" | ")
                             .append(req.contains(e.getKey()) ? "yes" : "").append(" | ")
+                            // Pipes and newlines would break the Markdown table row.
                             .append(desc.replace("|", "\\|").replace("\n", " ")).append(" |\n");
                 }
                 sb.append('\n');

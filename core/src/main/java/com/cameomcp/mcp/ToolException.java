@@ -10,7 +10,9 @@ import java.util.Map;
  */
 public class ToolException extends RuntimeException {
 
+    // Stable code such as NOT_FOUND or INVALID_PARAMS; agents and tests branch on it, so never rename one.
     private final String code;
+    // Optional extra fields (candidate IDs, limits, ...) merged into the error result.
     private final Map<String, Object> details;
 
     public ToolException(String code, String message) {
@@ -37,19 +39,23 @@ public class ToolException extends RuntimeException {
 
     // Common factories -------------------------------------------------------
 
+    /** Bad or missing arguments. The message should name the argument and what is expected. */
     public static ToolException invalid(String message) {
         return new ToolException("INVALID_PARAMS", message);
     }
 
+    /** An element, diagram or other object with the given id does not exist. */
     public static ToolException notFound(String what, String id) {
         return new ToolException("NOT_FOUND", what + " '" + id + "' not found.");
     }
 
+    /** The tool needs an open project and Cameo has none. */
     public static ToolException noProject() {
         return new ToolException("NO_PROJECT",
                 "No project is open in Cameo. Open or create a project, then retry.");
     }
 
+    /** The feature is missing in this Cameo edition or version (for example no Teamwork Cloud). */
     public static ToolException unsupported(String message) {
         return new ToolException("UNSUPPORTED", message);
     }

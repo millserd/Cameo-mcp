@@ -60,6 +60,7 @@ final class ModelSupport {
         return type.cast(e);
     }
 
+    /** The given element, or the project's primary model when no id is given (the usual default root). */
     static Element root(Project project, String id, String param) {
         if (id != null && !id.trim().isEmpty()) {
             return element(project, id, param);
@@ -69,6 +70,7 @@ final class ModelSupport {
 
     // ------------------------------------------------------------------ naming
 
+    /** The element's name, or "" for unnamed and non-named elements. */
     static String name(Element e) {
         if (e instanceof NamedElement) {
             String n = ((NamedElement) e).getName();
@@ -77,6 +79,7 @@ final class ModelSupport {
         return "";
     }
 
+    /** The metaclass short name (Class, Package, ...), falling back to the human type. */
     static String typeName(Element e) {
         try {
             String shortName = ClassTypes.getShortName(e.getClassType());
@@ -90,6 +93,7 @@ final class ModelSupport {
         return human == null ? "" : human;
     }
 
+    /** The Java interface name of the element's metaclass, or null. */
     static String className(Element e) {
         try {
             Class<?> c = e.getClassType();
@@ -124,6 +128,7 @@ final class ModelSupport {
         return type + " '" + human + "' [id=" + (id == null ? "<no-id>" : id) + "]";
     }
 
+    /** Minimal {id, name} reference used inside results. */
     static JsonObject ref(Element e) {
         JsonObject o = new JsonObject();
         o.addProperty("id", e.getID());
@@ -133,6 +138,7 @@ final class ModelSupport {
         return o;
     }
 
+    // Stable orderings so query results and listings come back the same way every time.
     static final Comparator<Element> BY_TYPE_NAME_ID = Comparator
             .comparing(ModelSupport::typeName, String.CASE_INSENSITIVE_ORDER)
             .thenComparing(ModelSupport::name, String.CASE_INSENSITIVE_ORDER)
@@ -142,11 +148,13 @@ final class ModelSupport {
             .comparing(ModelSupport::name, String.CASE_INSENSITIVE_ORDER)
             .thenComparing(ModelSupport::safeId);
 
+    /** The element id, or "" if it has none. */
     static String safeId(Element e) {
         String id = e.getID();
         return id == null ? "" : id;
     }
 
+    /** Owned elements sorted by name, then id. */
     static List<Element> sortedChildren(Element e) {
         Collection<Element> owned = e.getOwnedElement();
         List<Element> out = owned == null ? new ArrayList<>() : new ArrayList<>(owned);
@@ -156,6 +164,7 @@ final class ModelSupport {
 
     // ------------------------------------------------------------------ stereotypes
 
+    /** True if any applied stereotype has this name (case-insensitive). */
     static boolean hasStereotypeNamed(Element element, String name) {
         try {
             List<Stereotype> list = StereotypesHelper.getStereotypes(element);
@@ -172,6 +181,7 @@ final class ModelSupport {
         return false;
     }
 
+    /** Names of the applied stereotypes. */
     static JsonArray stereotypeNames(Element element) {
         JsonArray a = new JsonArray();
         try {
@@ -211,6 +221,7 @@ final class ModelSupport {
         return out;
     }
 
+    // Every stereotype in the project (including used profiles) with this name, case-insensitive.
     private static List<Stereotype> stereotypesNamed(Project project, String name) {
         List<Stereotype> matches = new ArrayList<>();
         Collection<Stereotype> all = StereotypesHelper.getAllStereotypes(project);
@@ -320,6 +331,7 @@ final class ModelSupport {
         throw new ToolException("CONFLICT", sb.toString());
     }
 
+    /** "Model > Package > Sub" path of the element's owners, or "<root>". */
     static String ownerPath(Element element) {
         List<String> names = new ArrayList<>();
         Element cur = element == null ? null : element.getOwner();
@@ -333,6 +345,7 @@ final class ModelSupport {
         return names.isEmpty() ? "<root>" : String.join(" > ", names);
     }
 
+    /** The SysML FlowProperty stereotype applied to the element, or null; both name spellings are tried. */
     static Stereotype flowPropertyStereotype(Element element) {
         try {
             Stereotype st = StereotypesHelper.getAppliedStereotypeByString(element, "FlowProperty");
@@ -347,6 +360,7 @@ final class ModelSupport {
 
     // ------------------------------------------------------------------ documentation
 
+    /** The bodies of the element's owned comments joined by newlines, or null if there are none. */
     static String documentation(Element element) {
         try {
             Collection<Comment> comments = element.getOwnedComment();
@@ -383,6 +397,10 @@ final class ModelSupport {
 
     // ------------------------------------------------------------------ editability
 
+    /**
+     * Fails with PRECONDITION_FAILED when Cameo reports the element read-only. If the check itself
+     * throws (older API), the element is treated as editable and the write decides.
+     */
     static void requireEditable(Element element, String what) {
         boolean editable;
         try {
@@ -397,6 +415,7 @@ final class ModelSupport {
         }
     }
 
+    /** True if {@code candidateAncestor} is the element itself or one of its owners; used to block cyclic moves. */
     static boolean isAncestorOrSelf(Element candidateAncestor, Element element) {
         Element cur = element;
         while (cur != null) {

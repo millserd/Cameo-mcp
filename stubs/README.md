@@ -40,7 +40,7 @@ Some things trip people up:
 should report 0 errors:
 
 ```
-stubs/reference-check/compile-reference.sh
+REF_SRC=/path/to/cameo-mcp-bridge/plugin/src stubs/reference-check/compile-reference.sh
 # Reference compile OK: <n> stub sources, 41 reference sources, 0 errors
 ```
 

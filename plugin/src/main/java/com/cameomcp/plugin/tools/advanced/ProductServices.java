@@ -28,9 +28,11 @@ import java.util.Map;
  */
 final class ProductServices {
 
+    // Bounds for the extension scan: max elements walked, and max element findings returned.
     private static final int SCAN_LIMIT = 250_000;
     private static final int ELEMENT_FINDING_LIMIT = 500;
 
+    // Default name/type terms for the safety/cyber scan when the caller supplies no targets.
     static final List<String> EXTENSION_TERMS = Arrays.asList("safety", "cyber", "security", "risk", "hazard",
             "failure", "fmea", "control", "threat", "classification");
 
@@ -50,6 +52,10 @@ final class ProductServices {
 
     // ------------------------------------------------------------------ DataHub
 
+    /*
+     * cameo_get_datahub_capabilities: DataHub counts as present if either known plugin class loads or a
+     * datahub/doors/enovia plugin folder exists. Source readback and sync are never claimed.
+     */
     static JsonObject dataHubCapabilities() {
         JsonObject response = Support.baseCapabilities("datahub", "probe-first");
         JsonObject probe = Support.classProbe("com.nomagic.datahub.DataHubPlugin", "com.nomagic.magicdraw.datahub.DataHubPlugin");
@@ -64,6 +70,7 @@ final class ProductServices {
         return response;
     }
 
+    // cameo_list_datahub_sources: always an empty list; DataHub's source APIs are not wired in, so it points to the UI.
     static JsonObject dataHubSources() {
         JsonObject response = dataHubCapabilities();
         response.addProperty("sourceInventoryMode", "diagnostic");
@@ -73,6 +80,7 @@ final class ProductServices {
         return response;
     }
 
+    // cameo_preview_datahub_sync: echoes the request and resolves scope_id (if a project is open) so bad IDs surface early.
     static JsonObject dataHubSyncPreview(JsonObject p) {
         JsonObject response = Support.previewAccepted("datahub", Support.request(p),
                 "DataHub sync preview recorded. No external synchronization was performed.");
@@ -92,6 +100,7 @@ final class ProductServices {
 
     // ------------------------------------------------------------------ profiles
 
+    // cameo_get_profile_capabilities: profiles use core Cameo API, so they are always available, but only as previews.
     static JsonObject profileCapabilities() {
         JsonObject response = Support.baseCapabilities("profiles", "core-profile-api");
         response.addProperty("available", true);
@@ -108,6 +117,7 @@ final class ProductServices {
         return response;
     }
 
+    // cameo_preview_profile_operation: validates the operation name and echoes the payload; writes go through the element tools.
     static JsonObject profilePreview(JsonObject p) {
         String operation = Gs.reqStr(p, "operation").trim().toLowerCase(Locale.ROOT);
         String label = PROFILE_OPERATIONS.get(operation);
@@ -125,6 +135,7 @@ final class ProductServices {
         return response;
     }
 
+    // cameo_export_profile_summary: profiles and stereotypes owned under the primary model, as element references.
     static JsonObject profileSummary() throws Exception {
         return Edt.read(project -> {
             JsonArray profiles = new JsonArray();
@@ -156,6 +167,10 @@ final class ProductServices {
 
     // ------------------------------------------------------------------ variants
 
+    /*
+     * cameo_get_variant_capabilities: variant analysis is bridge-owned (always available); a native product-line
+     * plugin folder is only reported, never driven.
+     */
     static JsonObject variantCapabilities() {
         JsonObject response = Support.baseCapabilities("variants", "bridge-owned-plus-native-probe");
         JsonArray dirs = Support.pluginDirectories("variant", "variability", "productline", "product-line", "ple");
@@ -172,6 +187,7 @@ final class ProductServices {
         return response;
     }
 
+    // cameo_install_variant_pattern_preview / cameo_export_variant_configuration: echo only, nothing hidden or deleted.
     static JsonObject variantPreview(JsonObject p, String operation) {
         JsonObject payload = Gs.object(p, "payload");
         JsonObject response = Support.previewAccepted("variants", payload == null ? new JsonObject() : payload,
@@ -181,6 +197,10 @@ final class ProductServices {
         return response;
     }
 
+    /*
+     * cameo_analyze_variants_preview: checks that configuration_ids and scope_ids resolve and echoes the scope elements.
+     * No variability rules are evaluated, so excludedElements is always empty.
+     */
     static JsonObject analyzeVariants(JsonObject p) {
         JsonObject response = new JsonObject();
         response.addProperty("family", "variants");
@@ -213,6 +233,7 @@ final class ProductServices {
 
     // ------------------------------------------------------------------ extensions
 
+    // cameo_get_extension_capabilities: safety/cyber support is detected by plugin folder name only.
     static JsonObject extensionCapabilities() {
         JsonObject response = Support.baseCapabilities("extensions", "profile-and-plugin-probe");
         JsonArray dirs = Support.pluginDirectories("safety", "reliability", "cyber", "security", "risk", "fmea", "fmeca", "hazard");
@@ -226,10 +247,12 @@ final class ProductServices {
         return response;
     }
 
+    // cameo_list_extension_profiles: whole-model scan with the default terms, profiles and stereotypes only.
     static JsonObject extensionProfiles() throws Exception {
         return Edt.read(project -> scan(project, null, EXTENSION_TERMS, false));
     }
 
+    // cameo_scan_extensions: term scan (default EXTENSION_TERMS) under scope_id or the primary model, with element findings.
     static JsonObject scanExtensions(JsonObject p) throws Exception {
         List<String> targets = Gs.strList(p, "targets");
         List<String> terms = new ArrayList<>();
@@ -243,6 +266,7 @@ final class ProductServices {
         }
         String scopeId = Gs.str(p, "scope_id");
         List<String> finalTerms = terms;
+        // Edt.read supplies the open project (NO_PROJECT error when none) and runs on the calling thread.
         return Edt.read(project -> {
             Element scope = scopeId == null ? null : Support.requireElement(project, scopeId, "Scope element");
             JsonObject response = scan(project, scope, finalTerms, true);
@@ -254,6 +278,10 @@ final class ProductServices {
         });
     }
 
+    /*
+     * Depth-first walk of the ownership tree from scope (or the primary model) collecting term matches.
+     * Stops at SCAN_LIMIT elements; element findings are capped separately and both set truncated.
+     */
     private static JsonObject scan(Project project, Element scope, List<String> terms, boolean includeElements) {
         JsonObject response = extensionCapabilities();
         JsonArray profiles = new JsonArray();
@@ -287,6 +315,7 @@ final class ProductServices {
                 }
                 Collection<Element> children = element.getOwnedElement();
                 if (children != null) {
+                    // Push children in reverse so they pop in owned order (keeps output order stable and model-like).
                     List<Element> list = new ArrayList<>(children);
                     for (int i = list.size() - 1; i >= 0; i--) {
                         stack.push(list.get(i));
@@ -307,6 +336,10 @@ final class ProductServices {
         return response;
     }
 
+    /*
+     * Case-insensitive substring match of terms against the element's runtime class simple name and its name.
+     * The class name is the implementation class, so broad terms like "control" also hit e.g. control-flow elements.
+     */
     static boolean matches(Element element, List<String> terms) {
         StringBuilder text = new StringBuilder(element.getClass().getSimpleName()).append(' ');
         if (element instanceof NamedElement) {
@@ -324,6 +357,7 @@ final class ProductServices {
         return false;
     }
 
+    // cameo_install_extension_pattern_preview: echo only; no profile is installed.
     static JsonObject extensionInstallPreview(JsonObject p) {
         JsonObject payload = Gs.object(p, "payload");
         JsonObject response = Support.previewAccepted("extensions", payload == null ? new JsonObject() : payload,

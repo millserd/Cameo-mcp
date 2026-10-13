@@ -12,7 +12,6 @@ param(
     [string[]]$CameoHome,
     [switch]$All,
     [switch]$Uninstall,
-    [switch]$NoClaude,
     [int]$Port = 18740
 )
 $ErrorActionPreference = 'Stop'
@@ -79,20 +78,11 @@ foreach ($cameo in $CameoHome) {
 }
 
 if ($Uninstall) {
-    if (-not $NoClaude -and (Get-Command claude -ErrorAction SilentlyContinue)) {
-        & claude mcp remove --scope user cameo 2>$null | Out-Null
-    }
     Write-Host 'Done. Settings remain in ~\.cameo-mcp (delete that folder to remove them).'
     exit 0
 }
 
 $url = "http://127.0.0.1:$Port/mcp"
-if (-not $NoClaude -and (Get-Command claude -ErrorAction SilentlyContinue)) {
-    & claude mcp add --scope user --transport http cameo $url 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) { Write-Host "Registered with Claude Code as 'cameo' -> $url" }
-    else { Write-Host "Claude Code already has a 'cameo' server or registration failed; check with: claude mcp list" }
-}
-
 Write-Host ''
 Write-Host 'Next steps:'
 Write-Host '  1. Start Cameo. An MCP menu appears; the Notification window shows "[Cameo MCP] MCP server started".'

@@ -54,6 +54,8 @@ final class DiagramService {
 
     // ================================================================== diagrams
 
+    // cameo_list_diagrams: every diagram in the project (id, name, type, owner). A diagram that throws
+    // while being described is skipped so one broken diagram does not fail the whole listing.
     static JsonObject listDiagrams() throws Exception {
         return Edt.read(project -> {
             JsonArray array = new JsonArray();
@@ -88,6 +90,11 @@ final class DiagramService {
         }
     }
 
+    /*
+     * cameo_create_diagram: resolves the type token to native Cameo type names and creates the diagram
+     * under parent_id (default: the primary model). For a Relation Map with relation_map_* options the
+     * settings are validated inside the create session and applied after it closes.
+     */
     static JsonObject createDiagram(String type, String name, String parentId, RelationMapOptions rm)
             throws Exception {
         if (type == null || type.trim().isEmpty()) {
@@ -110,6 +117,8 @@ final class DiagramService {
             } else {
                 parent = com.cameomcp.plugin.cameo.ProjectKind.primaryModel(project);
             }
+            // Validating relation-map ids here, before createDiagram, means a bad id aborts the session and no
+            // half-configured diagram is left behind.
             boolean relationMap = DiagramTypes.isRelationMap(candidates.get(0));
             if (relationMap && rm.hasConfiguration()) {
                 planRelationMap(project, rm, relationMapPlan);
@@ -119,6 +128,8 @@ final class DiagramService {
             Diagram diagram = null;
             String resolvedType = null;
             List<String> failures = new ArrayList<>();
+            // Try each native name in order: an unknown name can throw or return null depending on the version,
+            // so both count as "try the next one", and every failure is reported if none works.
             for (String candidate : candidates) {
                 try {
                     diagram = mem.createDiagram(candidate, parent);
@@ -150,6 +161,9 @@ final class DiagramService {
             return response;
         });
 
+        // Configured outside the create session: cameo_configure_relation_map runs its own Edt.write, which
+        // cannot start while this one holds the single write permit. Failure is reported, not thrown, since
+        // the diagram itself was created.
         if (relationMapPlan.size() > 0) {
             created.add("relationMap", configureRelationMap(created.get("id").getAsString(), rm, relationMapPlan));
         }
@@ -231,6 +245,8 @@ final class DiagramService {
         return out;
     }
 
+    // Relation-map element types: a stereotype whose normalized name matches wins (Block, Requirement);
+    // otherwise the token is tried as a UML metaclass, raw and then normalized.
     private static Element resolveTypeElement(Project project, String typeName) {
         String normalized = normalizeTypeToken(typeName);
         Collection<Stereotype> stereotypes = StereotypesHelper.getAllStereotypes(project);
@@ -262,10 +278,12 @@ final class DiagramService {
         return input == null ? "" : input.replaceAll("[^A-Za-z0-9]+", "").toLowerCase(java.util.Locale.ROOT);
     }
 
+    // cameo_delete_diagram: removes the diagram element only; the model elements it showed remain.
     static JsonObject deleteDiagram(String diagramId) throws Exception {
         return Edt.write("Delete Diagram", project -> {
             DiagramPresentationElement dpe = findDiagram(project, diagramId);
             Diagram diagram = dpe.getDiagram();
+            // Described before removal, while the diagram can still be read.
             JsonObject response = DiagramSupport.diagramJson(dpe);
             if (diagram == null) {
                 throw new ToolException("NOT_FOUND", "Diagram '" + diagramId + "' has no model element.");
@@ -282,6 +300,7 @@ final class DiagramService {
         });
     }
 
+    // cameo_rename_diagram: renames the diagram and reports the previous name.
     static JsonObject renameDiagram(String diagramId, String name) throws Exception {
         if (name == null || name.trim().isEmpty()) {
             throw ToolException.invalid("Missing required parameter 'name'.");
@@ -302,6 +321,8 @@ final class DiagramService {
         });
     }
 
+    // cameo_auto_layout: Cameo's layout via DiagramCompat (2024x/2026x API differ). Uses a 180 s time
+    // limit instead of the default because layout of large diagrams can be slow.
     static JsonObject autoLayout(String diagramId) throws Exception {
         return Edt.write("Auto-Layout Diagram", project -> {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
@@ -316,11 +337,17 @@ final class DiagramService {
 
     // ================================================================== add to diagram
 
+    /*
+     * cameo_add_to_diagram: shows an existing model element on a diagram, optionally inside a container
+     * symbol. ActivityPartitions take a separate native swimlane path; everything else uses
+     * createShapeElement. The receipt echoes the bounds Cameo actually applied.
+     */
     static JsonObject addToDiagram(String diagramId, String elementId, Integer x, Integer y, Integer width,
                                    Integer height, String containerPeId) throws Exception {
         if (elementId == null || elementId.trim().isEmpty()) {
             throw ToolException.invalid("Missing required parameter 'element_id'.");
         }
+        // Negative width/height means "Cameo's default size", same as omitting them; only both-or-neither is valid.
         Integer w = width != null && width >= 0 ? width : null;
         Integer h = height != null && height >= 0 ? height : null;
         if ((w == null) != (h == null)) {
@@ -338,11 +365,13 @@ final class DiagramService {
                             + "cameo_list_diagram_shapes to get container presentation IDs.");
                 }
             }
+            // Default drop point when x/y are omitted.
             int px = x != null ? x : 100;
             int py = y != null ? y : 100;
             ShapeElement shape;
             String status;
             boolean partitionNative = false;
+            // Partitions are not dropped as ordinary shapes: they are drawn as lanes of a swimlane container.
             if (element instanceof ActivityPartition) {
                 if (shapeParent != dpe) {
                     throw new ToolException("UNSUPPORTED", "ActivityPartition insertion through "
@@ -360,6 +389,7 @@ final class DiagramService {
                             + "' on this diagram (the element type may not be allowed on a "
                             + DiagramSupport.diagramType(dpe) + ").");
                 }
+                // createShapeElement takes only a point, so the size is applied in a second step.
                 if (w != null) {
                     pem.reshapeShapeElement(shape, new Rectangle(px, py, w, h));
                 }
@@ -370,6 +400,7 @@ final class DiagramService {
             response.addProperty("diagramId", diagramId);
             response.addProperty("elementId", elementId);
             Rectangle bounds = null;
+            // Prefer the bounds Cameo really used; fall back to the requested point when bounds are unavailable.
             try {
                 bounds = shape.getBounds();
             } catch (RuntimeException ignored) {
@@ -426,15 +457,20 @@ final class DiagramService {
             return new Object[]{requireShape(existing, "Existing activity partition presentation is not a shape"),
                     "existing"};
         }
+        // Only a fresh swimlane is built here; inserting a lane into an existing swimlane is left to the user
+        // rather than tearing down and rebuilding the container.
         if (findFirstSwimlane(dpe.getPresentationElements()) != null) {
             throw new ToolException("CONFLICT", "The diagram already has a swimlane but no presentation for partition "
                     + partition.getID() + ". Refusing to rebuild the whole swimlane container automatically; add the "
                     + "partition to the existing swimlane in Cameo or delete the swimlane first.");
         }
+        // One lane per partition of the same owner, so sibling lanes appear together. Defaults: 220 wide per
+        // lane, 280 high overall.
         List<ActivityPartition> siblings = siblingPartitions(partition);
         int laneCount = Math.max(siblings.size(), 1);
         int laneWidth = width != null ? width : 220;
         int totalHeight = height != null ? height : 280;
+        // createSwimlane is declared with raw List parameters, hence the raw ArrayList and the suppression.
         @SuppressWarnings({"rawtypes", "unchecked"})
         ShapeElement swimlane = pem.createSwimlane(Collections.emptyList(), new ArrayList(siblings), dpe);
         if (swimlane == null) {
@@ -442,6 +478,7 @@ final class DiagramService {
         }
         pem.reshapeShapeElement(swimlane, new Rectangle(x != null ? x : 100, y != null ? y : 100,
                 laneWidth * laneCount, totalHeight));
+        // createSwimlane does not hand back the lane for this partition, so look it up in the symbol tree.
         PresentationElement created = findPartitionPresentation(dpe.getPresentationElements(), partition.getID());
         if (created == null) {
             throw new ToolException("TOOL_FAILED", "Failed to locate the created swimlane presentation for activity "
@@ -450,6 +487,7 @@ final class DiagramService {
         return new Object[]{requireShape(created, "Created activity partition presentation is not a shape"), "created"};
     }
 
+    // All partitions owned by the partition's owner (normally the activity), always including this one.
     private static List<ActivityPartition> siblingPartitions(ActivityPartition partition) {
         Element owner = partition.getOwner();
         if (owner == null) {
@@ -467,6 +505,11 @@ final class DiagramService {
         return partitions;
     }
 
+    /*
+     * Finds the symbol showing a partition. A SwimlaneHeaderView wins at once; another view whose class
+     * name contains Swimlane/Partition is kept as a fallback. Matched by class simple name, so no internal
+     * view classes are referenced.
+     */
     private static PresentationElement findPartitionPresentation(List<PresentationElement> elements, String id) {
         if (elements == null || id == null) {
             return null;
@@ -496,6 +539,7 @@ final class DiagramService {
         return fallback;
     }
 
+    // Depth-first search for an existing swimlane container symbol (SwimlaneView).
     private static ShapeElement findFirstSwimlane(List<PresentationElement> elements) {
         if (elements == null) {
             return null;
@@ -521,6 +565,7 @@ final class DiagramService {
 
     // ================================================================== shapes
 
+    // cameo_list_diagram_shapes: flattens all symbols on the EDT, then filters/pages off the EDT in ShapeFilter.
     static JsonObject listShapes(String diagramId, ShapeFilter.Options options) throws Exception {
         JsonArray shapes = Edt.onEdt("List Diagram Shapes", project -> {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
@@ -529,6 +574,10 @@ final class DiagramService {
         return ShapeFilter.filter(diagramId, shapes, options);
     }
 
+    /*
+     * cameo_get_shape_properties: every presentation property of one symbol, returned three ways: a
+     * name->value map, a list with ids and class types, and well-known compartments under short keys.
+     */
     static JsonObject getShapeProperties(String diagramId, String peId) throws Exception {
         return Edt.onEdt("Get Shape Properties", project -> {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
@@ -575,12 +624,14 @@ final class DiagramService {
         });
     }
 
+    // PropertyManager.getProperties() is untyped and may return null; callers always get a list.
     @SuppressWarnings("unchecked")
     static List<Property> properties(PropertyManager pm) {
         List<Property> l = pm.getProperties();
         return l != null ? l : Collections.emptyList();
     }
 
+    // A property getter can throw; such properties are reported without a value instead of failing the call.
     static Object safeValue(Property p) {
         try {
             return p.getValue();
@@ -589,6 +640,10 @@ final class DiagramService {
         }
     }
 
+    /*
+     * cameo_move_shapes: reshapes each symbol to its x/y/width/height (all four required). Errors are
+     * recorded per item and the loop continues, so one bad item does not roll back the others.
+     */
     static JsonObject moveShapes(String diagramId, List<JsonObject> shapes) throws Exception {
         return Edt.write("Move/Resize Shapes", project -> {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
@@ -642,6 +697,7 @@ final class DiagramService {
         });
     }
 
+    // cameo_delete_shapes: removes symbols only (model elements stay); errors are recorded per id.
     static JsonObject deleteShapes(String diagramId, List<String> ids) throws Exception {
         if (ids.isEmpty()) {
             throw ToolException.invalid("Parameter 'presentation_ids' must be a non-empty list.");
@@ -671,10 +727,13 @@ final class DiagramService {
         });
     }
 
+    // cameo_reparent_shapes: moves symbols under another symbol on the same diagram (per-item errors).
     static JsonObject reparentShapes(String diagramId, List<JsonObject> reparentings) throws Exception {
         return Edt.write("Reparent Shapes", project -> {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
             List<PresentationElement> all = dpe.getPresentationElements();
+            // setParent is called reflectively; if this Cameo version lacks it, getMethod fails the whole call
+            // up front, before any symbol is touched.
             Method setParent = PresentationElement.class.getMethod("setParent", PresentationElement.class);
             JsonArray results = new JsonArray();
             for (JsonObject req : reparentings) {
@@ -715,6 +774,10 @@ final class DiagramService {
         });
     }
 
+    /*
+     * cameo_add_diagram_paths: draws existing relationships between two symbols already on the diagram.
+     * Source/target are presentation ids (from cameo_list_diagram_shapes), not model element ids.
+     */
     static JsonObject addPaths(String diagramId, List<JsonObject> paths) throws Exception {
         return Edt.write("Add Relationship Paths", project -> {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
@@ -763,6 +826,11 @@ final class DiagramService {
         });
     }
 
+    /*
+     * cameo_route_paths: sets a path's break points, and its end points when sourcePoint/targetPoint are
+     * given. Label positions are reset afterwards unless resetLabels is false, since old label offsets
+     * usually end up far from the new route.
+     */
     static JsonObject routePaths(String diagramId, List<JsonObject> routes) throws Exception {
         return Edt.write("Route Paths", project -> {
             DiagramPresentationElement dpe = loadedDiagram(project, diagramId);
@@ -792,12 +860,14 @@ final class DiagramService {
                 JsonElement reset = itemGet(req, "resetLabels");
                 boolean resetLabels = reset == null || reset.getAsBoolean();
                 try {
+                    // changePathPoints also moves the end points; changePathBreakPoints keeps the current ones.
                     if (sourcePoint != null || targetPoint != null) {
                         pem.changePathPoints(path, sourcePoint, targetPoint, breakPoints);
                     } else {
                         pem.changePathBreakPoints(path, breakPoints);
                     }
                     if (resetLabels) {
+                        // A failed label reset makes this route's result an error, even though the points were changed.
                         try {
                             pem.resetLabelPositions(path);
                         } catch (Exception e) {
@@ -829,6 +899,11 @@ final class DiagramService {
 
     // ================================================================== shape properties
 
+    /*
+     * cameo_set_shape_properties: sets presentation properties by exact native name (as listed by
+     * cameo_get_shape_properties) on a copy of the property manager, then applies the copy once.
+     * Unknown names are reported per entry; the others are still applied.
+     */
     static JsonObject setShapeProperties(String diagramId, String peId, JsonObject input) throws Exception {
         if (input.size() == 0) {
             throw ToolException.invalid("'properties' must contain at least one property name. Call "
@@ -856,6 +931,7 @@ final class DiagramService {
                     u.addProperty("error", "Property not found on this shape");
                 } else {
                     JsonElement val = e.getValue();
+                    // JSON -> property value: null -> "", numbers -> int (fraction dropped), objects/arrays -> JSON text.
                     if (val == null || val.isJsonNull()) {
                         match.setValue("");
                     } else if (val.isJsonPrimitive() && val.getAsJsonPrimitive().isBoolean()) {
@@ -872,6 +948,7 @@ final class DiagramService {
                 }
                 updated.add(u);
             }
+            // Apply only when something matched, so an all-unknown request is a "noop" rather than an empty write.
             if (setCount > 0) {
                 applyOrThrow(target, pm, "Failed to apply shape properties to presentation " + peId);
             }
@@ -885,6 +962,10 @@ final class DiagramService {
         });
     }
 
+    /*
+     * cameo_set_shape_compartments: like cameo_set_shape_properties, but keys are compartment names
+     * ("showAttributes", "ports", ...) resolved through CompartmentAliasResolver.
+     */
     static JsonObject setShapeCompartments(String diagramId, String peId, JsonObject input) throws Exception {
         if (input.size() == 0) {
             throw ToolException.invalid("'compartments' must contain at least one key, e.g. {\"showAttributes\": false}.");
@@ -910,6 +991,7 @@ final class DiagramService {
                     continue;
                 }
                 JsonElement value = e.getValue();
+                // A boolean means "show": valueFor inverts it when the resolved property is a "Suppress ..." one.
                 if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()) {
                     property.setValue(PresentationPresets.sel(value.getAsBoolean(), Collections.emptyList(),
                             Collections.emptyList()).valueFor(property.getName()));
@@ -939,6 +1021,7 @@ final class DiagramService {
         });
     }
 
+    // An exact (normalized) property-name match wins; otherwise try the alias table's native candidates.
     private static Property resolveCompartmentProperty(Map<String, Property> byName, String requestedKey) {
         String normalized = CompartmentAliasResolver.normalizeKey(requestedKey);
         for (Map.Entry<String, Property> e : byName.entrySet()) {
@@ -955,6 +1038,7 @@ final class DiagramService {
         return null;
     }
 
+    // Writes an edited property-manager copy back to the symbol; any failure becomes TOOL_FAILED.
     static void applyOrThrow(PresentationElement target, PropertyManager pm, String message) {
         try {
             PresentationElementsManager.getInstance().setPresentationElementProperties(target, pm);
@@ -972,6 +1056,7 @@ final class DiagramService {
         return err;
     }
 
+    // Common envelope for per-item tools: the results plus how many of them carry an "error".
     private static JsonObject batch(String diagramId, JsonArray results) {
         JsonObject response = new JsonObject();
         response.addProperty("diagramId", diagramId);

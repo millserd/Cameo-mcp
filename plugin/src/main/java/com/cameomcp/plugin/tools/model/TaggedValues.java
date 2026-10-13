@@ -31,6 +31,7 @@ final class TaggedValues {
     private TaggedValues() {
     }
 
+    /** The stereotype attribute that defines the named tag, or null; base_* extension ends are not tags. */
     static Property tagDefinition(Stereotype stereotype, String tagName) {
         List<Property> attributes = stereotype.getAttribute();
         if (attributes == null) {
@@ -62,6 +63,7 @@ final class TaggedValues {
         return out;
     }
 
+    /** Converts a JSON value to what the tag's type needs; unknown tags get generic coercion. */
     static Object coerceForTag(Project project, Stereotype stereotype, String tagName, JsonElement value) {
         Property def = tagDefinition(stereotype, tagName);
         if (def == null) {
@@ -70,6 +72,7 @@ final class TaggedValues {
         return coerceForType(project, def.getType(), value, stereotype, tagName);
     }
 
+    // Arrays coerce item by item; enumeration-typed tags need a real literal; anything else is generic.
     private static Object coerceForType(Project project, Type expected, JsonElement value, Stereotype stereotype,
                                         String tagName) {
         if (value == null || value.isJsonNull()) {
@@ -88,6 +91,10 @@ final class TaggedValues {
         return coerceGeneric(project, value);
     }
 
+    /*
+     * Finds the enumeration literal the value names: an {"id"} object, then an exact id, exact name,
+     * and finally a case-insensitive name. Fails listing the valid literals.
+     */
     private static EnumerationLiteral literal(Project project, Enumeration enumeration, JsonElement value,
                                               Stereotype stereotype, String tagName) {
         Collection<EnumerationLiteral> owned = enumeration.getOwnedLiteral();
@@ -134,6 +141,7 @@ final class TaggedValues {
                 + "\" does not own literal " + value + ". Valid literals: " + names + ".");
     }
 
+    // The literal name or id inside a value: a plain string, or the name/literal/value field of an object.
     private static String literalCandidate(JsonElement value) {
         if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
             String s = value.getAsString();

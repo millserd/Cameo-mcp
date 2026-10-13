@@ -33,15 +33,18 @@ import static com.cameomcp.plugin.tools.analysis.J.truthy;
  */
 public final class Verification {
 
+    // Substrings of a shape's element type that mark it as a relationship (path) rather than a node.
     static final Set<String> RELATIONSHIP_TYPE_HINTS = new LinkedHashSet<>(Arrays.asList(
             "association", "dependency", "connector", "transition", "item flow", "information flow",
             "control flow", "object flow", "generalization", "include", "extend", "allocate", "satisfy",
             "verify", "derive", "refine", "trace"));
 
+    // Generic verbs/articles ignored when comparing names, so "Send Order" and "Order" share the token set {order}.
     static final Set<String> TERM_STOPWORDS = new HashSet<>(Arrays.asList(
             "a", "an", "and", "display", "for", "from", "get", "of", "process", "provide", "query", "receive",
             "record", "select", "selection", "send", "show", "submit", "the", "to", "update", "with"));
 
+    // A requirement counts as measurable only when it has a directive verb AND a measurement cue.
     static final Pattern DIRECTIVE = Pattern.compile("\\b(shall|must|will)\\b", Pattern.CASE_INSENSITIVE);
     static final Pattern MEASUREMENT = Pattern.compile("\\b("
             + "\\d+"
@@ -58,6 +61,7 @@ public final class Verification {
 
     // ------------------------------------------------------------------ small extractors
 
+    /** The payload's ID, accepting the key variants used by the different read tools. */
     static String elementId(Map<String, Object> payload) {
         Object v = J.or(payload.get("id"), payload.get("elementId"), payload.get("relationshipId"));
         return v == null ? null : J.str(v);
@@ -68,6 +72,7 @@ public final class Verification {
         return v == null ? null : J.str(v);
     }
 
+    /** Normalized lower-case type name ("type", then "humanType", then "elementType"). */
     static String elementTypeName(Map<String, Object> payload) {
         return normalizedKey(J.or(payload.get("type"), payload.get("humanType"), payload.get("elementType")));
     }
@@ -76,6 +81,7 @@ public final class Verification {
         return normalizedKey(J.or(payload.get("type"), payload.get("relationshipType"), payload.get("humanType")));
     }
 
+    /** ID of an element reference that may be a {@code {id, ...}} map or a bare ID string. */
     static String referenceId(Object payload) {
         if (payload instanceof Map) {
             Map<String, Object> m = J.map(payload);
@@ -96,6 +102,7 @@ public final class Verification {
         return normalizedText(payload);
     }
 
+    /** Tagged values from the payload's own "taggedValues" and every applied stereotype, later ones winning. */
     static Map<String, Object> nestedTaggedValues(Map<String, Object> payload) {
         Map<String, Object> tagged = new LinkedHashMap<>();
         Map<String, Object> direct = J.map(payload.get("taggedValues"));
@@ -115,6 +122,8 @@ public final class Verification {
         return tagged;
     }
 
+    // Direction may be reported at top level (InterfaceFlowReader), in a specification "properties" map,
+    // or only as a stereotype tagged value, depending on which tool produced the payload.
     static String flowPropertyDirection(Map<String, Object> payload) {
         Object value = payload.get("direction");
         if (value != null) {
@@ -141,6 +150,7 @@ public final class Verification {
         return text.isEmpty() ? null : text;
     }
 
+    /** Grouping key for direction conflicts: the owning interface's ID, else its name, else "". */
     static String flowPropertyScopeKey(Map<String, Object> payload) {
         for (String key : new String[]{"scopeId", "interfaceScopeId", "interfaceBlockId", "ownerId"}) {
             Object value = payload.get(key);
@@ -172,6 +182,7 @@ public final class Verification {
         return null;
     }
 
+    // The SysML requirement "Id" is looked up in the same order of sources as the direction above.
     static String extractRequirementId(Map<String, Object> payload) {
         String v = nonBlankString(payload.get("requirementId"));
         if (v != null) {
@@ -188,6 +199,8 @@ public final class Verification {
         return v == null ? "" : v.trim();
     }
 
+    // Requirement text: top-level "text"/"documentation", then the same keys in "properties",
+    // then a constraint body, then a "text" tagged value.
     static String extractRequirementText(Map<String, Object> payload) {
         for (String key : new String[]{"text", "documentation"}) {
             String v = nonBlankString(payload.get(key));
@@ -217,6 +230,7 @@ public final class Verification {
 
     // ------------------------------------------------------------------ term matching
 
+    /** Distinct lower-case alphanumeric tokens of a name, minus the generic {@link #TERM_STOPWORDS}. */
     static Set<String> termSignature(Object value) {
         Set<String> tokens = new LinkedHashSet<>();
         Matcher m = TOKEN.matcher(normalizedKey(value));
@@ -229,6 +243,10 @@ public final class Verification {
         return tokens;
     }
 
+    /*
+     * Loose name match for traceability: equal after normalization, or the smaller token set (two or
+     * more tokens) is contained in the larger. E.g. "Order Status" matches "Send Order Status Update".
+     */
     static boolean termsMatch(String left, String right) {
         String leftKey = normalizedKey(left);
         String rightKey = normalizedKey(right);
@@ -262,6 +280,7 @@ public final class Verification {
                 actual.add(n);
             }
         }
+        // Each expected term is matched against all actual terms; unmatched expected terms are reported missing.
         List<String> missing = new ArrayList<>();
         Map<String, Object> matches = new LinkedHashMap<>();
         for (String item : expectedTerms) {
@@ -284,6 +303,7 @@ public final class Verification {
         return new Object[]{missing, matches};
     }
 
+    /** Removes repeated relationships by ID; relationships without an ID are all kept, after the identified ones. */
     static List<Map<String, Object>> dedupeRelationships(List<Map<String, Object>> relationships) {
         Map<String, Map<String, Object>> deduped = new LinkedHashMap<>();
         List<Map<String, Object>> anonymous = new ArrayList<>();
@@ -314,6 +334,7 @@ public final class Verification {
 
     // ------------------------------------------------------------------ diagram visuals
 
+    /** Shape bounds as {x, y, width, height}, or null when missing, non-numeric or degenerate. */
     static int[] shapeBounds(Map<String, Object> shape) {
         Map<String, Object> bounds = J.map(shape.get("bounds"));
         if (bounds == null) {
@@ -332,6 +353,7 @@ public final class Verification {
         return new int[]{x, y, w, h};
     }
 
+    // Path elements are relationships by definition; otherwise fall back to the element type name.
     static boolean isRelationshipShape(Map<String, Object> shape) {
         String shapeType = J.lower(String.valueOf(shape.getOrDefault("shapeType", "")));
         if (shapeType.endsWith("pathelement")) {
@@ -346,6 +368,7 @@ public final class Verification {
         return false;
     }
 
+    /** Node shapes considered for overlap checks: bounded, not a label or path, and at least 200 square pixels. */
     static boolean isLayoutShape(Map<String, Object> shape) {
         String shapeType = J.lower(String.valueOf(shape.getOrDefault("shapeType", "")));
         if (shapeType.contains("label") || shapeType.contains("pathelement")) {
@@ -370,6 +393,7 @@ public final class Verification {
                 sb.append(c);
             }
         }
+        // Non-alphabet characters (whitespace, line breaks) were dropped above; a wrong length means truncated data.
         if (sb.length() % 4 != 0) {
             return new byte[0];
         }
@@ -380,6 +404,11 @@ public final class Verification {
         }
     }
 
+    /*
+     * Decodes the base64 PNG from cameo_get_diagram_image and measures it: signature, real vs reported
+     * size, and the bounding box and coverage ratio of non-background pixels. Image decoding failures
+     * leave the zero defaults in place instead of failing the verification.
+     */
     public static Map<String, Object> analyzeDiagramImage(Map<String, Object> diagramImage) {
         String imageB64 = J.text(diagramImage.get("image"));
         byte[] payload = decodeBase64(imageB64);
@@ -402,6 +431,7 @@ public final class Verification {
         BufferedImage image;
         try {
             image = ImageIO.read(new ByteArrayInputStream(payload));
+        // LinkageError covers a headless/AWT environment problem inside ImageIO; treat it as "not decodable".
         } catch (Exception | LinkageError e) {
             image = null;
         }
@@ -414,6 +444,7 @@ public final class Verification {
         result.put("imageHeight", h);
 
         int[] rgb = image.getRGB(0, 0, w, h, null, 0, w);
+        // The top-left pixel is taken as the background color.
         int bg = rgb.length > 0 ? rgb[0] : 0;
         int br = (bg >> 16) & 0xff;
         int bgG = (bg >> 8) & 0xff;
@@ -464,6 +495,11 @@ public final class Verification {
         return result;
     }
 
+    /*
+     * Shape statistics from cameo_list_diagram_shapes: counts, relationship shapes with element IDs,
+     * and pairwise overlap between sibling node shapes (same parent presentation element). Overlap is
+     * intersection area divided by the smaller shape's area, so full containment counts as 1.0.
+     */
     public static Map<String, Object> analyzeShapeLayout(List<Map<String, Object>> shapes) {
         List<Map<String, Object>> relationshipShapes = new ArrayList<>();
         int bounded = 0;
@@ -538,6 +574,7 @@ public final class Verification {
         public double maxOverlapRatio = 1.0;
     }
 
+    /** Visual sanity check of a rendered diagram; each check is independent and all must pass for ok. */
     public static Map<String, Object> verifyDiagramVisual(Map<String, Object> diagramImage,
                                                           Map<String, Object> diagramShapes,
                                                           VisualOptions o) {
@@ -585,6 +622,7 @@ public final class Verification {
         return obj("ok", allOk(checks), "checks", checks, "image", img, "shapes", sm);
     }
 
+    /** True when every {@code {name, ok, details}} check passed. */
     static boolean allOk(List<Object> checks) {
         for (Object c : checks) {
             if (!truthy(J.get(c, "ok"))) {
@@ -596,6 +634,10 @@ public final class Verification {
 
     // ------------------------------------------------------------------ matrices
 
+    /*
+     * Checks a cameo_get_matrix payload: the reported counts agree with the actual lists, the matrix
+     * meets density / populated-cell minimums, and the expected rows, columns and dependency names exist.
+     */
     public static Map<String, Object> verifyMatrixConsistency(Map<String, Object> matrix,
                                                               List<String> expectedRowIds,
                                                               List<String> expectedColumnIds,
@@ -673,6 +715,7 @@ public final class Verification {
         return obj("ok", allOk(checks), "checks", checks, "metrics", metrics);
     }
 
+    /** The tool's reported count, or the actual count when the report is missing or zero. */
     private static int orCount(Object reported, int actual) {
         Integer v = safeInt(reported);
         return v == null || v == 0 ? actual : v;
@@ -680,6 +723,7 @@ public final class Verification {
 
     // ------------------------------------------------------------------ trace terms
 
+    /** Names of actions, object nodes, pins and parameters plus object/information flow item names on an activity diagram. */
     public static List<String> extractActivityTraceTerms(List<Map<String, Object>> elements,
                                                          List<Map<String, Object>> relationships) {
         Set<String> terms = new TreeSet<>();
@@ -701,6 +745,7 @@ public final class Verification {
         return new ArrayList<>(terms);
     }
 
+    /** Names of ports, properties and interface blocks plus connector/item flow names on an internal block diagram. */
     public static List<String> extractIbdTraceTerms(List<Map<String, Object>> elements,
                                                     List<Map<String, Object>> relationships) {
         Set<String> terms = new TreeSet<>();
@@ -722,6 +767,7 @@ public final class Verification {
         return new ArrayList<>(terms);
     }
 
+    /** Adds a flow's own name, its item property name and the names of conveyed classifiers. */
     private static void addFlowTerms(Map<String, Object> rel, Set<String> terms) {
         String name = normalizedText(J.or(rel.get("name"), ""));
         if (!name.isEmpty()) {
@@ -741,6 +787,12 @@ public final class Verification {
 
     // ------------------------------------------------------------------ activity flow
 
+    /*
+     * Graph checks over an activity diagram: initial and final nodes exist, every action is connected,
+     * all actions are reachable from an initial node, a final node is reachable, the control/object
+     * flows form a single connected component, and swimlane partitions are not nested too deep,
+     * labelled like stereotypes or used only as containers of other partitions.
+     */
     public static Map<String, Object> verifyActivityFlowSemantics(List<Map<String, Object>> elements,
                                                                   List<Map<String, Object>> relationships,
                                                                   List<Map<String, Object>> shapes,
@@ -760,6 +812,8 @@ public final class Verification {
                 flows.add(rel);
             }
         }
+        // Node kinds are classified by substring on the type name, so e.g. "ActivityFinalNode" and
+        // "FlowFinalNode" both count as final and "CallBehaviorAction" counts as an action.
         Set<String> initialIds = new TreeSet<>();
         Set<String> finalIds = new TreeSet<>();
         Set<String> actionIds = new TreeSet<>();
@@ -799,6 +853,7 @@ public final class Verification {
                 isolated.add(a);
             }
         }
+        // Breadth-first search over directed flows from all initial nodes at once.
         Set<String> reachable = new HashSet<>();
         if (!initialIds.isEmpty()) {
             Deque<String> queue = new ArrayDeque<>(initialIds);
@@ -828,6 +883,7 @@ public final class Verification {
         componentNodes.addAll(initialIds);
         componentNodes.addAll(finalIds);
         componentNodes.addAll(actionIds);
+        // Connected components ignore direction; a diagram split into several islands usually means a missing flow.
         Map<String, Set<String>> undirected = new LinkedHashMap<>();
         for (Map.Entry<String, Set<String>> e : adjacency.entrySet()) {
             for (String t : e.getValue()) {
@@ -858,6 +914,7 @@ public final class Verification {
         }
         sizes.sort((a, b) -> Integer.compare(b, a));
 
+        // Partition checks only run when shapes are supplied (nesting is a presentation property).
         int partitionCount = 0;
         int maxDepth = 0;
         List<String> stereotypeNames = new ArrayList<>();
@@ -886,6 +943,7 @@ public final class Verification {
             for (Map<String, Object> partition : partitions) {
                 int depth = 0;
                 Object parent = partition.get("parentPresentationId");
+                // guard bounds the walk in case of a cycle in the reported parent links.
                 int guard = byPresentation.size() + 1;
                 while (parent instanceof String && byPresentation.containsKey(parent) && guard-- > 0) {
                     depth++;
@@ -895,12 +953,14 @@ public final class Verification {
                 Map<String, Object> el = byId.get(J.str(partition.get("elementId")));
                 String label = normalizedText(J.or(partition.get("elementName"),
                         el == null ? null : el.get("name"), ""));
+                // A label wrapped in guillemets is the stereotype name displayed instead of a real partition name.
                 if (!allowStereotypePartitionLabels && label.startsWith("«") && label.endsWith("»")) {
                     stereotypeNames.add(label);
                 }
                 Object pid = partition.get("presentationId");
                 List<Map<String, Object>> children = byParent.getOrDefault(pid instanceof String ? (String) pid : null,
                         new ArrayList<>());
+                // Non-string presentation IDs cannot be keys of byParent; treat such a partition as childless.
                 if (pid != null && !(pid instanceof String)) {
                     children = new ArrayList<>();
                 }
@@ -914,6 +974,7 @@ public final class Verification {
                             childBehaviors++;
                         }
                     }
+                    // A partition holding only sub-partitions and no actions adds a nesting level without meaning.
                     if (childPartitions > 0 && childBehaviors == 0) {
                         containerOnly.add(normalizedText(J.or(label, J.text(partition.get("elementId")))));
                     }
@@ -955,6 +1016,11 @@ public final class Verification {
 
     // ------------------------------------------------------------------ ports
 
+    /*
+     * Checks interface blocks for port compatibility: every flow property is owned by a listed interface,
+     * named and has a direction; a property name is not reused across interfaces (unless allowed); and
+     * the same name in one interface does not carry conflicting directions.
+     */
     public static Map<String, Object> verifyPortBoundaryConsistency(List<Map<String, Object>> interfaceBlocks,
                                                                     List<Map<String, Object>> flowProperties,
                                                                     List<String> allowSharedFlowPropertyNames) {
@@ -1009,16 +1075,21 @@ public final class Verification {
             }
         }
         Map<String, Object> duplicates = new LinkedHashMap<>();
+        // Same keys as duplicates, but with owner ids: names can repeat across interface blocks.
+        Map<String, Object> duplicateOwnerIds = new LinkedHashMap<>();
         for (Map.Entry<String, List<String>> e : duplicateMap.entrySet()) {
             if (new HashSet<>(e.getValue()).size() > 1 && !allowed.contains(e.getKey())) {
                 Set<String> owners = new TreeSet<>();
+                Set<String> ownerIds = new TreeSet<>();
                 for (String owner : e.getValue()) {
                     if (!owner.isEmpty()) {
                         String label = interfaceNames.get(owner);
                         owners.add(label == null || label.isEmpty() ? owner : label);
+                        ownerIds.add(owner);
                     }
                 }
                 duplicates.put(e.getKey(), new ArrayList<>(owners));
+                duplicateOwnerIds.put(e.getKey(), new ArrayList<>(ownerIds));
             }
         }
         Map<String, Object> conflicts = new LinkedHashMap<>();
@@ -1040,6 +1111,7 @@ public final class Verification {
                 "interfaceCount", interfaceBlocks.size(),
                 "flowPropertyCount", flowProperties.size(),
                 "duplicateFlowProperties", duplicates,
+                "duplicateFlowPropertyOwnerIds", duplicateOwnerIds,
                 "directionConflicts", conflicts,
                 "unnamedPropertyIds", J.sortedNonEmptyList(unnamed),
                 "orphanPropertyIds", J.sortedNonEmptyList(orphans),
@@ -1057,6 +1129,11 @@ public final class Verification {
 
     // ------------------------------------------------------------------ requirements
 
+    /*
+     * Grades requirement text: an ID is present (optional), the text is not blank, and when
+     * requireMeasurement is set the text has a shall/must/will directive, a measurement cue and at
+     * least minTextLength characters.
+     */
     public static Map<String, Object> verifyRequirementQuality(List<Map<String, Object>> requirements,
                                                                boolean requireId,
                                                                boolean requireMeasurement,
@@ -1107,6 +1184,11 @@ public final class Verification {
 
     // ------------------------------------------------------------------ traceability
 
+    /*
+     * Checks that port and IBD terms appear among the activity terms and that each requirement is
+     * linked to at least one of the given architecture elements. Only pairings with inputs are checked;
+     * with no usable inputs a failing "traceability-inputs-present" check is returned.
+     */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> verifyCrossDiagramTraceability(List<String> activityTerms,
                                                                      List<String> portTerms,

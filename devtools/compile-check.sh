@@ -54,7 +54,10 @@ if [[ "${2:-}" == "--tests" ]]; then
   done
   if [[ ${#tsrcs[@]} -eq 0 ]]; then echo "No tests for $FAMILY"; exit 0; fi
   CP="$OUT/classes:$LIB/gson-2.10.1.jar:$LIB/junit-platform-console-standalone-1.10.3.jar"
-  javac --release 17 -nowarn -encoding UTF-8 -cp "$CP" -d "$OUT/test-classes" "${tsrcs[@]}" 2>&1 | grep -v '^Picked up' || true
+  if ! javac --release 17 -nowarn -encoding UTF-8 -cp "$CP" -d "$OUT/test-classes" "${tsrcs[@]}" > "$OUT/javac-test.log" 2>&1; then
+    grep -v '^Picked up' "$OUT/javac-test.log" | head -150
+    echo "TEST COMPILE FAILED"; exit 1
+  fi
   cp -r "$ROOT/core/src/test/resources/." "$OUT/test-classes/" 2>/dev/null || true
   cp -r "$ROOT/plugin/src/test/resources/." "$OUT/test-classes/" 2>/dev/null || true
   java -jar "$LIB/junit-platform-console-standalone-1.10.3.jar" execute -cp "$OUT/test-classes:$CP" --scan-classpath "$OUT/test-classes" --disable-banner --details=summary 2>&1 | grep -v '^Picked up' | tail -40

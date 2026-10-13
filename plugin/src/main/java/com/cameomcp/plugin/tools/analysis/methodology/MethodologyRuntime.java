@@ -40,6 +40,7 @@ public final class MethodologyRuntime {
 
     // ------------------------------------------------------------------ value types
 
+    /** An artifact a recipe needs: key, kind, optional exact name/parent, required stereotypes and property values. */
     public record ArtifactRequirement(String key, String kind, String name, String parentKey,
                                       List<String> stereotypes, Map<String, Object> properties) {
         public ArtifactRequirement {
@@ -61,6 +62,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** A relationship a recipe expects between two artifact keys; optional ones never block. */
     public record RelationshipRequirement(String relationshipType, String sourceKey, String targetKey,
                                           String name, boolean required) {
         public RelationshipRequirement(String relationshipType, String sourceKey, String targetKey, String name) {
@@ -73,6 +75,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** An existing relationship between two artifacts, as reported by the caller or discovered in the model. */
     public record RelationshipSnapshot(String relationshipType, String sourceKey, String targetKey,
                                        String relationshipId, String name, String guard) {
         public Map<String, Object> toMap() {
@@ -81,6 +84,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** An artifact that exists (or is claimed to exist), bound to a model element ID when known. */
     public record ArtifactSnapshot(String key, String kind, String name, String elementId, String parentKey,
                                    List<String> stereotypes, Map<String, Object> properties,
                                    List<RelationshipSnapshot> relationships) {
@@ -104,6 +108,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** One recipe step: an operation kind (a cameo_ tool) plus parameters that may hold {"ref": key} placeholders. */
     public record RecipeOperationDefinition(String kind, String artifactKey, String targetKey,
                                             Map<String, Object> parameters) {
         public RecipeOperationDefinition {
@@ -119,12 +124,14 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** A semantic validator to run after the recipe (e.g. activity flow, port boundary). */
     public record SemanticValidationDefinition(String validatorId, Map<String, Object> parameters) {
         public Map<String, Object> toMap() {
             return obj("validator_id", validatorId, "parameters", plain(parameters));
         }
     }
 
+    /** Runtime view of a pack recipe: required artifacts/relationships, operations and review material. */
     public record RecipeDefinition(String recipeId, String name, String phase, String description,
                                    List<ArtifactRequirement> requiredArtifacts,
                                    List<RelationshipRequirement> requiredRelationships,
@@ -164,6 +171,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** Runtime view of a methodology pack: its phases and recipes in order. */
     public record PackDefinition(String packId, String name, String description, List<String> phases,
                                  List<RecipeDefinition> recipes, List<String> reviewChecklist,
                                  List<String> requiredProfiles) {
@@ -184,6 +192,8 @@ public final class MethodologyRuntime {
             throw new IllegalArgumentException("Unknown recipe: " + recipeId);
         }
 
+        // The first recipe whose required artifacts are not all present; when every recipe is satisfied the
+        // last one is returned so guidance always has a recipe to report on.
         public RecipeDefinition firstPendingRecipe(List<ArtifactSnapshot> completed) {
             for (RecipeDefinition r : recipes) {
                 if (!recipeSatisfied(r, completed)) {
@@ -194,6 +204,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** What is done and what is still missing for one recipe, with blockers and next actions. */
     public record WorkflowGuidance(String packId, String packName, String recipeId, String recipeName, String phase,
                                    boolean readyToExecute, double completionRatio,
                                    List<String> completedArtifactKeys, List<String> missingArtifactKeys,
@@ -210,6 +221,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** A recipe step in a plan: status "pending" or "skipped" (artifact already bound) with an optional reason. */
     public record PlannedOperation(String stepId, RecipeOperationDefinition operation, String status, String reason,
                                    Map<String, Object> resolvedParameters) {
         public Map<String, Object> toMap() {
@@ -218,6 +230,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** Ordered steps for executing a recipe, plus the artifact bindings known before execution. */
     public record RecipeExecutionPlan(String packId, String recipeId, String recipeName, String phase,
                                       Map<String, String> artifactBindings, List<PlannedOperation> plannedOperations,
                                       List<String> requiredArtifactKeys, List<String> missingArtifactKeys,
@@ -235,12 +248,14 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** Outcome of one executed or skipped step; the full tool result is kept for the caller. */
     public record OperationReceipt(String stepId, String operationKind, String status, Map<String, Object> result) {
         public Map<String, Object> toMap() {
             return obj("step_id", stepId, "operation_kind", operationKind, "status", status, "result", plain(result));
         }
     }
 
+    /** Receipts, final bindings and the artifacts created or updated by a recipe execution. */
     public record RecipeExecutionResult(String packId, String recipeId, String recipeName, String phase,
                                         List<OperationReceipt> receipts, Map<String, String> artifactBindings,
                                         List<ArtifactSnapshot> createdArtifacts, List<ArtifactSnapshot> updatedArtifacts,
@@ -255,6 +270,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** One conformance problem; rule IDs are prefixed by type (artifact:, kind:, relationship:, semantic: ...). */
     public record ConformanceFinding(String ruleId, String severity, String message, String artifactKey,
                                      String relationshipType) {
         public Map<String, Object> toMap() {
@@ -263,6 +279,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** Conformance verdict for a recipe; passed only when there are no findings of any severity. */
     public record ConformanceReport(String packId, String recipeId, boolean passed, List<ConformanceFinding> findings,
                                     String summary) {
         public Map<String, Object> toMap() {
@@ -271,6 +288,7 @@ public final class MethodologyRuntime {
         }
     }
 
+    /** Everything a reviewer needs for one recipe run, serialized into the review packet. */
     public record EvidenceBundle(String packId, String packName, String recipeId, String recipeName,
                                  String generatedAt, List<String> artifactKeys, WorkflowGuidance guidance,
                                  RecipeExecutionPlan executionPlan, RecipeExecutionResult executionResult,
@@ -288,6 +306,7 @@ public final class MethodologyRuntime {
 
     // ------------------------------------------------------------------ helpers
 
+    // Serializer for a value type; used by maps() to turn record lists into lists of plain maps.
     private interface ToMap<T> {
         Map<String, Object> apply(T value);
     }
@@ -320,11 +339,13 @@ public final class MethodologyRuntime {
         return value;
     }
 
+    /** Deep copy of a parameter/property map; null becomes an empty map. */
     @SuppressWarnings("unchecked")
     static Map<String, Object> plain(Map<String, Object> value) {
         return value == null ? new LinkedHashMap<>() : (Map<String, Object>) plainValue(value);
     }
 
+    /** Case- and whitespace-insensitive key for comparing kinds, names and relationship types. */
     static String normalizeName(String value) {
         return value == null ? "" : value.strip().toLowerCase(java.util.Locale.ROOT);
     }
@@ -357,6 +378,7 @@ public final class MethodologyRuntime {
         return value;
     }
 
+    /** Artifacts by key; a later snapshot with the same key replaces an earlier one. */
     private static Map<String, ArtifactSnapshot> matchingArtifacts(List<ArtifactSnapshot> artifacts) {
         Map<String, ArtifactSnapshot> index = new LinkedHashMap<>();
         for (ArtifactSnapshot a : artifacts) {
@@ -367,6 +389,8 @@ public final class MethodologyRuntime {
 
     /** The id a bridge operation result refers to (element, relationship, presentation or diagram). */
     public static String resultPrimaryId(Map<String, Object> result) {
+        // Tool results differ in shape: a top-level id or presentationId, a nested element/relationship
+        // object, a results list of placed shapes, or only a diagramId; checked in that order.
         Object direct = J.or(result.get("id"), result.get("presentationId"));
         if (direct != null) {
             return J.str(direct);
@@ -390,14 +414,20 @@ public final class MethodologyRuntime {
         return null;
     }
 
+    /** Normalized identity of a relationship requirement or snapshot for set membership. */
     private static List<String> relationshipKey(String type, String source, String target, String name) {
         return Arrays.asList(normalizeName(type), normalizeName(source), normalizeName(target), normalizeName(name));
     }
 
+    /** True when every required artifact of the recipe is present and matches. */
     static boolean recipeSatisfied(RecipeDefinition recipe, List<ArtifactSnapshot> completed) {
         return missingArtifactRequirements(recipe.requiredArtifacts(), matchingArtifacts(completed)).isEmpty();
     }
 
+    /*
+     * Required artifacts not satisfied by the index: missing, wrong kind, wrong name or parent, a
+     * required stereotype absent, or a required property value different (compared with Python equality).
+     */
     static List<ArtifactRequirement> missingArtifactRequirements(List<ArtifactRequirement> requirements,
                                                                  Map<String, ArtifactSnapshot> index) {
         List<ArtifactRequirement> missing = new ArrayList<>();
@@ -421,6 +451,7 @@ public final class MethodologyRuntime {
         return missing;
     }
 
+    /** Required relationships with no matching snapshot on any artifact (non-required ones are ignored). */
     static List<RelationshipRequirement> missingRelationshipRequirements(List<RelationshipRequirement> requirements,
                                                                          List<ArtifactSnapshot> artifacts) {
         Set<List<String>> all = new HashSet<>();
@@ -441,6 +472,10 @@ public final class MethodologyRuntime {
 
     // ------------------------------------------------------------------ guidance and planning
 
+    /*
+     * Guidance for a recipe (or, without recipeId, the first pending one): completion ratio over the
+     * required artifacts, blockers for missing artifacts and relationships, and recommended next actions.
+     */
     public static WorkflowGuidance buildWorkflowGuidance(PackDefinition pack, List<ArtifactSnapshot> completed,
                                                          String recipeId) {
         Map<String, ArtifactSnapshot> index = matchingArtifacts(completed);
@@ -471,6 +506,7 @@ public final class MethodologyRuntime {
                 recommendedActions(recipe, missingArtifacts, missingRelationships));
     }
 
+    // Without anything missing, the recipe's review checklist becomes the recommended next steps.
     private static List<String> recommendedActions(RecipeDefinition recipe, List<ArtifactRequirement> missingArtifacts,
                                                    List<RelationshipRequirement> missingRelationships) {
         List<String> actions = new ArrayList<>();
@@ -494,6 +530,10 @@ public final class MethodologyRuntime {
         return actions;
     }
 
+    /*
+     * Plans a recipe run against the artifacts that already exist. create_* steps whose artifact is
+     * already bound are skipped, which makes re-running a recipe after a partial failure safe.
+     */
     public static RecipeExecutionPlan buildRecipeExecutionPlan(PackDefinition pack, String recipeId,
                                                                List<ArtifactSnapshot> completed) {
         RecipeDefinition recipe = pack.recipe(recipeId);
@@ -516,6 +556,7 @@ public final class MethodologyRuntime {
             Map<String, Object> params = new LinkedHashMap<>(op.parameters());
             if (targetKey != null && bindings.containsKey(targetKey) && op.kind().startsWith("create_")) {
                 planned.add(new PlannedOperation(stepId, op, "skipped", "artifact '" + targetKey + "' already exists", params));
+            // add_* steps for an artifact that does not yet satisfy its requirement stay pending, with a note.
             } else if (targetKey != null && missingKeys.contains(targetKey) && op.kind().startsWith("add_")) {
                 planned.add(new PlannedOperation(stepId, op, "pending", "artifact '" + targetKey + "' not yet satisfied", params));
             } else {
@@ -573,6 +614,12 @@ public final class MethodologyRuntime {
         }
     }
 
+    /*
+     * Executes the planned steps in order through the bridge. {"ref": key} parameters are resolved
+     * against the bindings accumulated so far, so later steps can use elements created earlier.
+     * The first failure aborts the run with a StepFailedException carrying the receipts of applied steps;
+     * nothing is rolled back automatically.
+     */
     @SuppressWarnings("unchecked")
     public static RecipeExecutionResult executeRecipe(RecipeExecutionPlan plan, Bridge bridge) {
         Map<String, String> bindings = new LinkedHashMap<>(plan.artifactBindings());
@@ -604,10 +651,12 @@ public final class MethodologyRuntime {
             }
             receipts.add(new OperationReceipt(step.stepId(), op.kind(), "applied", new LinkedHashMap<>(result)));
 
+            // Bind the artifact key to the new element (or presentation element) so later refs resolve to it.
             String createdId = resultPrimaryId(result);
             if (op.artifactKey() != null && !op.artifactKey().isEmpty() && createdId != null) {
                 bindings.put(op.artifactKey(), createdId);
                 Map<String, Object> params = step.resolvedParameters();
+                // The snapshot kind is the created element type, PresentationElement for diagram placements, else the operation kind.
                 Object kind = params.containsKey("type") ? params.get("type")
                         : ("add_to_diagram".equals(op.kind()) ? "PresentationElement" : op.kind());
                 Object name = params.containsKey("name") ? params.get("name") : op.artifactKey();
@@ -625,6 +674,11 @@ public final class MethodologyRuntime {
 
     // ------------------------------------------------------------------ conformance
 
+    /*
+     * Structural conformance of the current artifacts against a recipe. Missing artifacts, wrong kinds,
+     * missing stereotypes, wrong property values and missing relationships are errors; a name mismatch
+     * is only a warning.
+     */
     public static ConformanceReport runConformanceChecks(RecipeDefinition recipe, List<ArtifactSnapshot> current,
                                                          String packId) {
         Map<String, ArtifactSnapshot> index = matchingArtifacts(current);
@@ -669,6 +723,7 @@ public final class MethodologyRuntime {
                 passed ? "passed" : findings.size() + " issue(s) found");
     }
 
+    /** One error finding per failed check of each semantic validation result. */
     public static List<ConformanceFinding> semanticValidationFindings(List<Map<String, Object>> validationResults) {
         List<ConformanceFinding> findings = new ArrayList<>();
         for (Map<String, Object> validation : validationResults) {
@@ -686,6 +741,7 @@ public final class MethodologyRuntime {
         return findings;
     }
 
+    /** The report with extra findings appended and passed/summary recomputed. */
     public static ConformanceReport extendConformanceReport(ConformanceReport report, List<ConformanceFinding> extra) {
         List<ConformanceFinding> combined = new ArrayList<>(report.findings());
         combined.addAll(extra);
@@ -694,12 +750,17 @@ public final class MethodologyRuntime {
                 passed ? "passed" : combined.size() + " issue(s) found");
     }
 
+    // Metric keys that hold the offending items of a failed check, in the order they are tried for messages.
     private static final List<String> DETAIL_KEYS = List.of(
             "isolatedActionIds", "unreachableActionIds", "containerOnlyPartitions", "stereotypeStyleNames",
             "duplicateFlowProperties", "directionConflicts", "orphanPropertyIds", "missingDirectionIds",
             "missingIdIds", "blankTextIds", "weakTextIds", "missingPortTerms", "missingIbdTerms",
             "missingRequirementTraceIds", "missing");
 
+    /*
+     * Short message for a failed semantic check: the check's own message if present, else the first
+     * three offending items from the first non-empty detail key, else a generic line.
+     */
     static String semanticFailureMessage(String validatorId, String checkName, Object details) {
         Map<String, Object> detailMap = J.map(details);
         if (detailMap != null) {
@@ -737,6 +798,7 @@ public final class MethodologyRuntime {
 
     // ------------------------------------------------------------------ evidence
 
+    // Fixed six-digit fraction; Python's isoformat would omit the fraction when it is exactly zero.
     private static final DateTimeFormatter ISO_MICROS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSxxx");
 
     /** {@code datetime.now(timezone.utc).isoformat()}. */
@@ -744,6 +806,7 @@ public final class MethodologyRuntime {
         return OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS).format(ISO_MICROS);
     }
 
+    /** Assembles the evidence bundle; artifact keys are the sorted keys of the final bindings. */
     public static EvidenceBundle buildEvidenceBundle(PackDefinition pack, RecipeDefinition recipe,
                                                      WorkflowGuidance guidance, RecipeExecutionPlan plan,
                                                      RecipeExecutionResult result, ConformanceReport conformance,
@@ -757,12 +820,14 @@ public final class MethodologyRuntime {
                 bridgeEvidence == null ? new LinkedHashMap<>() : new LinkedHashMap<>(bridgeEvidence));
     }
 
+    /** New list with the elements of a followed by those of b. */
     static <T> List<T> concat(List<T> a, List<T> b) {
         List<T> out = new ArrayList<>(a);
         out.addAll(b);
         return out;
     }
 
+    /** Insertion-ordered set copy. */
     static Set<String> orderedSet(Collection<String> values) {
         return new LinkedHashSet<>(values);
     }

@@ -21,6 +21,10 @@ public final class JsonDiff {
     private JsonDiff() {
     }
 
+    /**
+     * Diff of two JSON trees as {truncated, changeCount, added, removed, changed, arrayLengthChanges}.
+     * maxChanges (at least 1) caps the total entries across all four lists; includeDetails adds before/after values.
+     */
     public static JsonObject diff(JsonElement before, JsonElement after, Set<String> ignorePaths, int maxChanges,
                                   boolean includeDetails) {
         JsonObject result = new JsonObject();
@@ -40,6 +44,7 @@ public final class JsonDiff {
         return result;
     }
 
+    /** Trimmed, non-blank ignore paths as a set (null input gives an empty set). */
     public static Set<String> ignoreSet(Iterable<String> paths) {
         Set<String> ignored = new HashSet<>();
         if (paths != null) {
@@ -52,6 +57,7 @@ public final class JsonDiff {
         return ignored;
     }
 
+    /** Recursive walk; JSON null and a missing key are treated alike (both mean absent). */
     private static void compare(String path, JsonElement before, JsonElement after, Set<String> ignorePaths,
                                 boolean includeDetails, Counter counter, JsonArray added, JsonArray removed,
                                 JsonArray changed, JsonArray arrayLengthChanges) {
@@ -107,6 +113,7 @@ public final class JsonDiff {
             }
             return;
         }
+        // Leaves, and nodes whose kind differs (e.g. object vs array), are compared by equality.
         if (!before.equals(after)) {
             addChange(changed, path, before, after, includeDetails, counter);
         }
@@ -114,6 +121,7 @@ public final class JsonDiff {
 
     /** A path is ignored when it equals or starts with an ignore entry (prefix match, as in the bridge). */
     static boolean ignored(String path, Set<String> ignorePaths) {
+        // Plain string prefix: "$.a" also ignores "$.ab", not just "$.a.*" and "$.a[...]".
         for (String ignored : ignorePaths) {
             if (path.equals(ignored) || path.startsWith(ignored)) {
                 return true;
@@ -137,6 +145,7 @@ public final class JsonDiff {
         addLimited(target, entry, counter);
     }
 
+    /** Appends while under the cap; the first entry over the cap sets truncated and stops the walk. */
     private static void addLimited(JsonArray target, JsonObject entry, Counter counter) {
         if (counter.count >= counter.max) {
             counter.truncated = true;
@@ -146,6 +155,7 @@ public final class JsonDiff {
         counter.count++;
     }
 
+    /** Shared mutable change count and truncation flag for one diff call. */
     private static final class Counter {
         private final int max;
         private int count;

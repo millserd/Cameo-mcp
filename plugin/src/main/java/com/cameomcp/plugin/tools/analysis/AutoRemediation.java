@@ -29,6 +29,7 @@ public final class AutoRemediation {
 
     // ------------------------------------------------------------------ helpers
 
+    /** Lower-case alphanumeric tokens of a value, in order of first appearance. */
     static Set<String> tokenize(Object value) {
         Set<String> out = new LinkedHashSet<>();
         Matcher m = TOKEN.matcher(normalizedKey(value));
@@ -38,11 +39,13 @@ public final class AutoRemediation {
         return out;
     }
 
+    /** URL-style slug ("Send Order" -> "send-order"); "item" when nothing alphanumeric remains. */
     static String slugify(Object value) {
         String slug = J.strip(NON_SLUG.matcher(normalizedKey(value)).replaceAll("-"), "-");
         return slug.isEmpty() ? "item" : slug;
     }
 
+    /** Distinct non-blank whitespace-normalized strings, first occurrence order. */
     static List<String> uniqueValues(List<?> values) {
         Set<String> seen = new LinkedHashSet<>();
         for (Object v : values) {
@@ -54,6 +57,10 @@ public final class AutoRemediation {
         return new ArrayList<>(seen);
     }
 
+    /*
+     * Similarity score compared lexicographically: shared tokens, then whether the first tokens agree,
+     * then the negated union size (fewer extra tokens is better).
+     */
     static int[] termSimilarity(String left, String right) {
         Set<String> l = tokenize(left);
         Set<String> r = tokenize(right);
@@ -69,6 +76,7 @@ public final class AutoRemediation {
         return new int[]{overlap, sharedPrefix, -union.size()};
     }
 
+    /** Candidate with the highest {@link #termSimilarity}, or null when there are no non-blank candidates. */
     static String bestTermMatch(String term, List<String> candidates) {
         List<Object[]> scored = new ArrayList<>();
         for (String c : candidates) {
@@ -89,10 +97,12 @@ public final class AutoRemediation {
             }
             return 0;
         };
+        // List.sort is stable, so among equal scores the earliest candidate wins.
         scored.sort(cmp.reversed());
         return (String) scored.get(0)[0];
     }
 
+    /** Elements keyed by ID (copied), for resolving names of IDs reported in validation metrics. */
     static Map<String, Map<String, Object>> elementLookup(List<Map<String, Object>> elements) {
         Map<String, Map<String, Object>> lookup = new LinkedHashMap<>();
         for (Map<String, Object> e : elements) {
@@ -104,11 +114,13 @@ public final class AutoRemediation {
         return lookup;
     }
 
+    /** Best human label for a payload: name, then type, then ID. */
     static String targetName(Map<String, Object> payload) {
         return normalizedText(J.or(payload.get("name"), payload.get("elementName"), payload.get("humanType"),
                 payload.get("type"), payload.get("id"), payload.get("elementId"), ""));
     }
 
+    /** Deterministic receipt ID: prefix plus slugs of the non-blank parts, so re-runs produce the same IDs. */
     static String receiptId(String prefix, Object... parts) {
         List<String> slugs = new ArrayList<>();
         for (Object p : parts) {
@@ -119,6 +131,7 @@ public final class AutoRemediation {
         return slugs.isEmpty() ? prefix : prefix + "-" + String.join("-", slugs);
     }
 
+    /** before/after preview block shown to the caller; nothing is applied. */
     static Map<String, Object> preview(Map<String, Object> before, Map<String, Object> after, String note) {
         Map<String, Object> p = obj("before", new LinkedHashMap<>(before), "after", new LinkedHashMap<>(after));
         if (note != null && !note.isEmpty()) {
@@ -127,6 +140,7 @@ public final class AutoRemediation {
         return p;
     }
 
+    // A patch-plan step; stepId and receiptId are the same so a step can be matched to its receipt.
     private static Map<String, Object> step(String receiptId, String kind, Object target, Object preview,
                                             Object applyHint, double confidence) {
         return obj("stepId", receiptId, "kind", kind, "target", target, "preview", preview,
@@ -139,6 +153,11 @@ public final class AutoRemediation {
 
     // ------------------------------------------------------------------ receipt builders
 
+    /*
+     * Receipts for activity-flow findings: isolated actions (suggest connecting to an initial node) and
+     * unreachable actions. Returns {receipts, steps}; an action already reported as isolated is not
+     * reported again as unreachable.
+     */
     @SuppressWarnings("unchecked")
     static List<Map<String, Object>>[] activityReceipts(Map<String, Object> validation) {
         List<Map<String, Object>> receipts = new ArrayList<>();
@@ -166,6 +185,7 @@ public final class AutoRemediation {
                 anchors.add(obj("elementId", anchorId,
                         "name", targetName(elements.getOrDefault(anchorId, obj("id", anchorId)))));
             }
+            // Without an initial node, the first action name is offered as a fallback anchor.
             if (anchors.isEmpty() && !actionTerms.isEmpty()) {
                 anchors.add(obj("name", actionTerms.get(0)));
             }
@@ -227,6 +247,10 @@ public final class AutoRemediation {
         return new List[]{receipts, steps};
     }
 
+    /*
+     * Receipts for port-boundary findings (duplicate flow property names, direction conflicts, unnamed
+     * properties) and for activity terms missing on the port side of the trace validation.
+     */
     @SuppressWarnings("unchecked")
     static List<Map<String, Object>>[] portReceipts(Map<String, Object> portValidation,
                                                     Map<String, Object> traceValidation,
@@ -240,9 +264,12 @@ public final class AutoRemediation {
         List<Map<String, Object>> blocks = J.maps(portValidation.get("interfaceBlocks"));
 
         Map<String, Object> duplicates = J.mapOrEmpty(metrics.get("duplicateFlowProperties"));
+        Map<String, Object> duplicateOwnerIds = J.mapOrEmpty(metrics.get("duplicateFlowPropertyOwnerIds"));
         for (Map.Entry<String, Object> e : duplicates.entrySet()) {
             String name = e.getKey();
-            List<Object> owners = J.list(e.getValue());
+            // Prefer the owner ids; older payloads only carry owner labels, which are then used as-is.
+            List<Object> owners = duplicateOwnerIds.containsKey(name)
+                    ? J.list(duplicateOwnerIds.get(name)) : J.list(e.getValue());
             List<Object> ownerNames = new ArrayList<>();
             for (Object owner : owners) {
                 Map<String, Object> match = null;
@@ -332,6 +359,7 @@ public final class AutoRemediation {
 
         List<Object> tracePortTerms = traceValidation == null ? new ArrayList<>()
                 : new ArrayList<>(J.list(traceValidation.get("portTerms")));
+        // Confidence is lower when no activity term resembles the missing port term.
         for (String missing : uniqueValues(J.list(metricsOf(traceValidation).get("missingPortTerms")))) {
             String best = bestTermMatch(missing, activityTerms);
             String preferred = best != null ? best : missing;
@@ -361,6 +389,10 @@ public final class AutoRemediation {
         return new List[]{receipts, steps};
     }
 
+    /*
+     * Receipts for requirement-quality findings (missing ID, blank text, weak text) and for requirements
+     * with no trace to the supplied architecture elements, proposing the closest-named element.
+     */
     @SuppressWarnings("unchecked")
     static List<Map<String, Object>>[] requirementReceipts(Map<String, Object> requirementValidation,
                                                            Map<String, Object> traceValidation,
@@ -393,6 +425,7 @@ public final class AutoRemediation {
         for (String reqId : uniqueValues(J.list(metrics.get("missingIdIds")))) {
             Map<String, Object> req = byId.getOrDefault(reqId, obj("id", reqId));
             String name = targetName(req);
+            // Suggested ID derived from the name, e.g. "Brake Response" -> "REQ-BRAKE-RESPONSE".
             String candidateId = "REQ-" + slugify(name.isEmpty() ? reqId : name).toUpperCase(java.util.Locale.ROOT);
             String rid = receiptId("requirement", "missing-id", reqId);
             Map<String, Object> target = obj("elementId", reqId, "name", name);
@@ -474,6 +507,7 @@ public final class AutoRemediation {
                     names.add((String) c.get("name"));
                 }
                 String best = bestTermMatch(name.isEmpty() ? reqId : name, names);
+                // Falls back to the first candidate when the best name is not found (cannot normally happen).
                 candidate = candidates.get(0);
                 for (Map<String, Object> c : candidates) {
                     if (c.get("name").equals(best)) {
@@ -510,6 +544,7 @@ public final class AutoRemediation {
         return new List[]{receipts, steps};
     }
 
+    /** Receipts for activity terms that have no matching wording on the IBD side. */
     @SuppressWarnings("unchecked")
     static List<Map<String, Object>>[] ibdReceipts(Map<String, Object> traceValidation, List<String> activityTerms) {
         List<Map<String, Object>> receipts = new ArrayList<>();
@@ -549,6 +584,10 @@ public final class AutoRemediation {
 
     // ------------------------------------------------------------------ plan
 
+    /*
+     * cameo_build_cross_diagram_remediation_plan: combines the four validation results into preview-only
+     * receipts and a patch plan. ok is true only when no receipts were produced and every embedded check passed.
+     */
     public static Map<String, Object> buildRemediationPlan(Map<String, Object> activityValidation,
                                                            Map<String, Object> portValidation,
                                                            Map<String, Object> requirementValidation,
@@ -559,6 +598,7 @@ public final class AutoRemediation {
         Map<String, Object> requirement = J.copy(requirementValidation);
         Map<String, Object> trace = J.copy(traceValidation);
 
+        // The term lists are read from the trace validation result, as SemanticValidation.crossDiagramTraceability returns them.
         List<String> activityTerms = J.strings(trace.get("activityTerms"));
         List<Object> portTerms = J.list(trace.get("portTerms"));
         List<Object> ibdTerms = J.list(trace.get("ibdTerms"));
@@ -570,6 +610,7 @@ public final class AutoRemediation {
 
         List<Object> receipts = new ArrayList<>();
         List<Object> steps = new ArrayList<>();
+        // Receipts and steps are ordered activity, ports, requirements, IBD.
         for (List<Map<String, Object>>[] bucket : List.of(a, p, r, i)) {
             receipts.addAll(bucket[0]);
         }
@@ -666,6 +707,10 @@ public final class AutoRemediation {
         public boolean allowStereotypePartitionLabels = false;
     }
 
+    /*
+     * cameo_detect_cross_diagram_inconsistencies: runs each validator for the inputs given, then builds the
+     * remediation plan from the live results. Trace validation runs only when there is something to trace.
+     */
     public static Map<String, Object> detect(DetectOptions o, Bridge bridge) throws Exception {
         Map<String, Object> activity = new LinkedHashMap<>();
         Map<String, Object> port = new LinkedHashMap<>();
@@ -714,6 +759,10 @@ public final class AutoRemediation {
             }
             trace = Verification.verifyCrossDiagramTraceability(activityTerms, portTerms, ibdTerms, links,
                     o.requirementIds, o.architectureElementIds);
+            // buildRemediationPlan reads the term lists from the trace result, as SemanticValidation returns them.
+            trace.put("activityTerms", activityTerms);
+            trace.put("portTerms", portTerms);
+            trace.put("ibdTerms", ibdTerms);
         }
         List<Map<String, Object>> arch = new ArrayList<>();
         for (String id : o.architectureElementIds) {

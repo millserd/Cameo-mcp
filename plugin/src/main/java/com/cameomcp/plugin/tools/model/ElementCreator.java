@@ -46,6 +46,7 @@ final class ElementCreator {
 
     /** Parameters of one element creation, read from snake_case (or camelCase) arguments. */
     static final class Request {
+        // type is what the agent sent; kind is its canonical form from ModelText.elementKind.
         String type;
         String kind;
         String name;
@@ -66,6 +67,7 @@ final class ElementCreator {
         String direction;
         List<String> metaclasses;
 
+        /** Reads and validates the arguments; nothing touches the model yet, so bad input fails before any session opens. */
         static Request from(Args a) {
             Request r = new Request();
             r.type = a.reqStr("type");
@@ -97,6 +99,11 @@ final class ElementCreator {
         }
     }
 
+    /**
+     * Creates the element under its parent, applies default and explicit stereotypes, then sets the
+     * optional semantics (type, multiplicity, aggregation, port flags, flow direction) and documentation.
+     * Any exception aborts the caller's session, so a half-configured element is never kept.
+     */
     static Element create(Project project, Request r) throws Exception {
         Element parent = ModelSupport.element(project, r.parentId, "parent_id");
         ModelSupport.requireEditable(parent, "Parent");
@@ -104,6 +111,7 @@ final class ElementCreator {
         ModelElementsManager mem = ModelElementsManager.getInstance();
 
         Element created;
+        // Stereotypes are created through the profile API so the extension to their metaclasses is wired up.
         if ("stereotype".equals(r.kind)) {
             if (!(parent instanceof Profile)) {
                 throw ToolException.invalid("A Stereotype's parent must be a Profile, but parent_id is "
@@ -118,13 +126,16 @@ final class ElementCreator {
             if (created instanceof NamedElement) {
                 ((NamedElement) created).setName(r.name);
             }
+            // A state machine needs a region before anything can be put in it, so one is created right away.
             if (created instanceof StateMachine) {
                 mem.addElement(created, parent);
                 ensureRegion(ef, (StateMachine) created);
+            // States live in regions: put them in the parent's (first) region, creating one if needed.
             } else if (created instanceof State || created instanceof Pseudostate) {
                 Region region = stateRegion(ef, parent, r.type);
                 ((Vertex) created).setContainer(region);
                 if (created instanceof Pseudostate) {
+                    // The only pseudostate kind this tool creates is the initial state.
                     ((Pseudostate) created).setKind(PseudostateKindEnum.INITIAL);
                 }
             } else {
@@ -145,6 +156,7 @@ final class ElementCreator {
             }
             ((ActivityPartition) created).setRepresents(ModelSupport.element(project, r.representsId, "represents_id"));
         }
+        // SysML kinds (block, requirement, ...) get their stereotype automatically; an explicit stereotype is added on top.
         for (String stName : ModelText.effectiveCreationStereotypes(r.kind, r.stereotype)) {
             Stereotype st = ModelSupport.findStereotype(project, stName, null);
             if (st == null) {
@@ -166,6 +178,7 @@ final class ElementCreator {
         return created;
     }
 
+    /** A new, unowned UML element for a canonical kind. SysML kinds share the UML metaclass their stereotype extends. */
     static Element instantiate(ElementsFactory ef, String kind) {
         switch (kind) {
             case "package":
@@ -256,6 +269,7 @@ final class ElementCreator {
                 + ModelSupport.describe(parent) + ".");
     }
 
+    /** The state machine's first region, creating one if it has none. */
     static Region ensureRegion(ElementsFactory ef, StateMachine sm) {
         Collection<Region> regions = sm.getRegion();
         if (regions != null && !regions.isEmpty()) {
@@ -266,6 +280,7 @@ final class ElementCreator {
         return region;
     }
 
+    /** The composite state's first region, creating one if it has none. */
     static Region ensureRegion(ElementsFactory ef, State state) {
         Collection<Region> regions = state.getRegion();
         if (regions != null && !regions.isEmpty()) {
@@ -276,6 +291,7 @@ final class ElementCreator {
         return region;
     }
 
+    // The UML metaclasses named for a new stereotype; an unknown name is an error.
     private static Collection<com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Class> resolveMetaclasses(
             Project project, List<String> names) {
         List<com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Class> out = new ArrayList<>();
@@ -293,6 +309,7 @@ final class ElementCreator {
         return out;
     }
 
+    // Optional settings that only some element kinds support; each one checks the kind and explains a mismatch.
     private static void applySemantics(Project project, ElementsFactory ef, Element created, Request r) {
         if (r.typeId != null) {
             if (!(created instanceof TypedElement)) {
@@ -358,6 +375,7 @@ final class ElementCreator {
         }
     }
 
+    /** Sets the lower bound, reusing the existing literal if there is one. */
     static void setLower(ElementsFactory ef, MultiplicityElement me, int lower) {
         ValueSpecification existing = me.getLowerValue();
         if (existing instanceof LiteralInteger) {
@@ -369,6 +387,7 @@ final class ElementCreator {
         me.setLowerValue(v);
     }
 
+    /** Sets the upper bound; -1 means unlimited ("*"), which UML stores as a LiteralUnlimitedNatural. */
     static void setUpper(ElementsFactory ef, MultiplicityElement me, int upper) {
         int value = upper < 0 ? -1 : upper;
         ValueSpecification existing = me.getUpperValue();
@@ -381,6 +400,7 @@ final class ElementCreator {
         me.setUpperValue(v);
     }
 
+    /** none, shared or composite (by name or literal), as Cameo's AggregationKind. */
     static AggregationKind aggregation(String text) {
         String t = text.trim().toLowerCase();
         AggregationKind resolved = AggregationKindEnum.getByName(t);

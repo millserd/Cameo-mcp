@@ -7,12 +7,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/*
+ * Specs (name, schema, description) and handlers are registered separately: core declares every
+ * spec so tools/list works without Cameo (stdio launcher, tests), and the plugin binds handlers
+ * later. Both maps keep insertion order so tools/list is stable between runs.
+ */
 /** Tool specs plus the handlers bound to them. */
 public final class ToolRegistry {
 
     private final Map<String, ToolSpec> specs = new LinkedHashMap<>();
     private final Map<String, ToolHandler> handlers = new LinkedHashMap<>();
 
+    /** Adds tool declarations. Fails fast on a duplicate name, which is always a catalog bug. */
     public ToolRegistry addSpecs(Collection<ToolSpec> list) {
         for (ToolSpec s : list) {
             if (specs.putIfAbsent(s.name(), s) != null) {
@@ -41,18 +47,22 @@ public final class ToolRegistry {
         return this;
     }
 
+    /** The declaration for a tool name, or null if none. */
     public ToolSpec spec(String name) {
         return specs.get(name);
     }
 
+    /** The bound handler for a tool name, or null if the spec has no implementation yet. */
     public ToolHandler handler(String name) {
         return handlers.get(name);
     }
 
+    /** All specs, in declaration order. */
     public Collection<ToolSpec> specs() {
         return Collections.unmodifiableCollection(specs.values());
     }
 
+    /** Names of specs with no handler. Tests assert this is empty; cameo_status reports it. */
     public List<String> unboundTools() {
         List<String> out = new ArrayList<>();
         for (String n : specs.keySet()) {

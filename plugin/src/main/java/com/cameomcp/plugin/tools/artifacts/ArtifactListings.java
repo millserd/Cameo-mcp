@@ -19,6 +19,10 @@ public final class ArtifactListings {
     private ArtifactListings() {
     }
 
+    /**
+     * cameo_list_matrices: every diagram whose native type is a supported matrix kind, optionally
+     * filtered by kind (validated before the model read) and by owning element id.
+     */
     public static JsonObject listMatrices(JsonObject p) throws Exception {
         String rawKind = ArtifactSupport.optStr(p, "kind");
         MatrixKinds filterKind = rawKind == null ? null : MatrixKinds.require(rawKind);
@@ -32,6 +36,7 @@ public final class ArtifactListings {
                     if (diagram == null) {
                         continue;
                     }
+                    // Non-matrix diagrams map to null and are skipped; matching is by exact native type name.
                     MatrixKinds kind = MatrixKinds.fromDiagramType(ArtifactSupport.diagramType(dpe));
                     if (kind == null || (filterKind != null && kind != filterKind)) {
                         continue;
@@ -76,14 +81,17 @@ public final class ArtifactListings {
         return summary;
     }
 
+    /** cameo_list_generic_tables: all diagrams of type "Generic Table". */
     public static JsonObject listGenericTables() throws Exception {
         return listByType(ArtifactSupport.GENERIC_TABLE_TYPE, "tables");
     }
 
+    /** cameo_list_relation_maps: all diagrams of type "Relation Map Diagram". */
     public static JsonObject listRelationMaps() throws Exception {
         return listByType(ArtifactSupport.RELATION_MAP_TYPE, "relationMaps");
     }
 
+    /** Scans the project's diagrams in an Edt.read and returns {count, key: [diagramSummary...]} for one type. */
     private static JsonObject listByType(String type, String key) throws Exception {
         return Edt.read(project -> {
             JsonArray items = new JsonArray();

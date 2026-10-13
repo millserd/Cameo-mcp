@@ -13,9 +13,14 @@ public final class DiagramBindings {
     private DiagramBindings() {
     }
 
+    /*
+     * Registers every diagram MCP tool handler. Handlers only unpack arguments; the work happens in
+     * DiagramService, DiagramImageService, PresentationRepairService and PropertyDumpService.
+     */
     public static void bind(ToolRegistry r) {
         r.bind("cameo_list_diagram_types", (a, c) -> out(DiagramTypes.listJson()));
         r.bind("cameo_list_diagrams", (a, c) -> out(DiagramService.listDiagrams()));
+        // cameo_create_diagram: relation_map_* arguments are only used when the type resolves to a Relation Map.
         r.bind("cameo_create_diagram", (a, c) -> {
             DiagramService.RelationMapOptions rm = new DiagramService.RelationMapOptions();
             rm.contextId = a.optTrim("relation_map_context_id");
@@ -28,6 +33,8 @@ public final class DiagramBindings {
         r.bind("cameo_add_to_diagram", (a, c) -> out(DiagramService.addToDiagram(diagramId(a), a.reqStr("element_id"),
                 a.integerOrNull("x"), a.integerOrNull("y"), a.integerOrNull("width"), a.integerOrNull("height"),
                 a.optTrim("container_presentation_id"))));
+        // The image tools take the raw Args (and context) because they shape their own response
+        // (inline image content / file export) instead of returning a plain JSON object.
         r.bind("cameo_get_diagram_image", DiagramImageService::getImage);
         r.bind("cameo_export_diagram_image", (a, c) -> DiagramImageService.exportToFile(a));
         r.bind("cameo_delete_diagram", (a, c) -> out(DiagramService.deleteDiagram(diagramId(a))));
@@ -64,6 +71,7 @@ public final class DiagramBindings {
         r.bind("cameo_route_paths", (a, c) -> out(DiagramService.routePaths(diagramId(a),
                 DiagramSupport.objectArray(Gs.toElement(a.get("routes")), "routes"))));
 
+        // Label and compartment presentation repair tools; a null presentation_ids list means "all on the diagram".
         r.bind("cameo_set_transition_label_presentation", (a, c) -> out(PresentationRepairService.transitionLabels(
                 diagramId(a), optList(a, "presentation_ids"), a.bool("show_name", true), a.bool("show_triggers", true),
                 a.bool("show_guard", false), a.bool("show_effect", false), a.bool("reset_labels", true))));
@@ -94,6 +102,7 @@ public final class DiagramBindings {
                 diagramId(a), optList(a, "presentation_ids"), optList(a, "drop_child_shape_types"),
                 a.bool("dry_run", false))));
 
+        // Diagnostics: raw presentation-property dumps for working out which native property names to set.
         r.bind("cameo_dump_diagram_properties", (a, c) -> out(PropertyDumpService.dumpDiagram(diagramId(a),
                 a.bool("include_raw", false), a.bool("include_presentation_properties", false),
                 a.bool("summary_only", true), a.integer("limit", 100), a.integer("offset", 0))));
@@ -102,6 +111,7 @@ public final class DiagramBindings {
                 a.bool("summary_only", false))));
     }
 
+    // Trimmed because callers often paste ids with surrounding whitespace.
     private static String diagramId(Args a) {
         return a.reqStr("diagram_id").trim();
     }
@@ -111,6 +121,7 @@ public final class DiagramBindings {
         return a.has(name) ? a.strList(name) : null;
     }
 
+    // Converts the Gson result into plain Java maps/lists for the MCP layer; null becomes an empty object.
     private static Object out(JsonObject json) {
         return json == null ? new java.util.LinkedHashMap<String, Object>() : Gs.fromGson(json);
     }

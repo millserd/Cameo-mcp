@@ -17,6 +17,7 @@ public final class ShapeFilter {
     private ShapeFilter() {
     }
 
+    /** Arguments of cameo_list_diagram_shapes; defaults match the tool's documented defaults. */
     public static final class Options {
         public int limit = 200;
         public int offset = 0;
@@ -28,6 +29,11 @@ public final class ShapeFilter {
         public boolean summaryOnly = false;
     }
 
+    /*
+     * Applies the type/parent filters, then pages the result with offset/limit. Counts describe the
+     * filtered set, not the whole diagram. With summaryOnly, per-type counts are returned instead of
+     * shapes; otherwise bounds/childCount are dropped from copies when not requested.
+     */
     public static JsonObject filter(String diagramId, JsonArray shapes, Options o) {
         List<JsonObject> filtered = new ArrayList<>();
         for (JsonElement e : shapes) {
@@ -35,12 +41,14 @@ public final class ShapeFilter {
                 filtered.add(e.getAsJsonObject());
             }
         }
+        // Clamp offset/limit so out-of-range paging returns an empty page instead of throwing.
         int start = Math.min(Math.max(o.offset, 0), filtered.size());
         int end = Math.min(start + Math.max(o.limit, 0), filtered.size());
 
         JsonObject response = new JsonObject();
         response.addProperty("diagramId", diagramId);
         response.addProperty("count", end - start);
+        // "count"/"returned" and "totalCount"/"shapeCount" are duplicates kept for response compatibility.
         response.addProperty("returned", end - start);
         response.addProperty("totalCount", filtered.size());
         response.addProperty("shapeCount", filtered.size());
@@ -75,6 +83,7 @@ public final class ShapeFilter {
         JsonArray page = new JsonArray();
         for (JsonObject s : filtered.subList(start, end)) {
             JsonObject projected = s;
+            // Copy before removing fields so the caller's shape objects are not mutated.
             if (!o.includeBounds || !o.includeChildCount) {
                 projected = s.deepCopy();
                 if (!o.includeBounds) {
@@ -90,6 +99,7 @@ public final class ShapeFilter {
         return response;
     }
 
+    // Type filters are case-insensitive exact matches; the parent id must match exactly.
     private static boolean matches(JsonObject shape, Options o) {
         if (notBlank(o.shapeType) && !str(shape, "shapeType").toLowerCase(Locale.ROOT)
                 .equals(o.shapeType.toLowerCase(Locale.ROOT))) {
@@ -130,6 +140,7 @@ public final class ShapeFilter {
         return !str(o, key).isEmpty();
     }
 
+    // Missing/null keys read as ""; non-primitive values fall back to their JSON text.
     private static String str(JsonObject o, String key) {
         JsonElement e = o.get(key);
         if (e == null || e.isJsonNull()) {

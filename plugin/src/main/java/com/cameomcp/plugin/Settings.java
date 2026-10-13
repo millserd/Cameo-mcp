@@ -21,27 +21,36 @@ public final class Settings {
     public static final int DEFAULT_PORT = 18740;
     public static final String DEFAULT_HOST = "127.0.0.1";
 
+    // Public fields because the status window edits them directly before save().
     public int port = DEFAULT_PORT;
     public String host = DEFAULT_HOST;
     /** Bearer token clients must send; empty means no authentication (loopback only). */
     public String token = "";
+    // Start the server when Cameo starts; off means the user starts it from the MCP menu.
     public boolean autoStart = true;
-    public boolean allowMacros = true;
+    // When false, cameo_execute_macro and cameo_execute_probe are refused (see Catalog.isScriptTool).
+    public boolean allowMacros = false;
     /** off | errors | all : which tool calls are echoed to the Notification window. */
     public String guiLogLevel = "errors";
 
     /** Where the value of the port came from, shown in the status window. */
     public String portSource = "default";
 
+    /** The settings folder: {@code -Dcameo.mcp.home} if set, else {@code ~/.cameo-mcp}. */
     public static File directory() {
         String override = System.getProperty("cameo.mcp.home");
         return override != null ? new File(override) : new File(System.getProperty("user.home"), ".cameo-mcp");
     }
 
+    /** The settings file inside {@link #directory()}. */
     public static File file() {
         return new File(directory(), "settings.properties");
     }
 
+    /**
+     * Reads the settings file, then applies overrides: environment variables, then JVM options,
+     * which win. Never throws; an unreadable file is logged and defaults are used.
+     */
     public static Settings load() {
         Settings s = new Settings();
         Properties p = new Properties();
@@ -60,7 +69,7 @@ public final class Settings {
         s.host = p.getProperty("host", DEFAULT_HOST).trim();
         s.token = p.getProperty("token", "").trim();
         s.autoStart = Boolean.parseBoolean(p.getProperty("autoStart", "true"));
-        s.allowMacros = Boolean.parseBoolean(p.getProperty("allowMacros", "true"));
+        s.allowMacros = Boolean.parseBoolean(p.getProperty("allowMacros", "false"));
         s.guiLogLevel = p.getProperty("guiLogLevel", "errors").trim();
 
         String env = System.getenv("CAMEO_MCP_PORT");
@@ -84,15 +93,25 @@ public final class Settings {
         return s;
     }
 
+    /** Writes the current values to the settings file, creating the folder if needed. */
     public void save() throws IOException {
         File dir = directory();
         if (!dir.isDirectory() && !dir.mkdirs()) {
             throw new IOException("Cannot create " + dir);
         }
+        Properties old = new Properties();
+        if (file().isFile()) {
+            try (InputStream in = new FileInputStream(file())) {
+                old.load(in);
+            }
+        }
         Properties p = new Properties();
-        p.setProperty("port", String.valueOf(port));
-        p.setProperty("host", host);
-        p.setProperty("token", token == null ? "" : token);
+        // Values that only come from an environment variable or JVM option stay out of the file (a token must not land on disk).
+        keep(p, old, "port", String.valueOf(port),
+                System.getProperty("cameo.mcp.port", System.getenv("CAMEO_MCP_PORT")));
+        keep(p, old, "host", host, System.getProperty("cameo.mcp.host"));
+        keep(p, old, "token", token == null ? "" : token,
+                System.getProperty("cameo.mcp.token", System.getenv("CAMEO_MCP_TOKEN")));
         p.setProperty("autoStart", String.valueOf(autoStart));
         p.setProperty("allowMacros", String.valueOf(allowMacros));
         p.setProperty("guiLogLevel", guiLogLevel);
@@ -101,6 +120,18 @@ public final class Settings {
         }
     }
 
+    // Stores value under key, unless it equals the active override; then the file keeps its previous value (or none).
+    private static void keep(Properties p, Properties old, String key, String value, String override) {
+        if (override != null && !override.trim().isEmpty() && override.trim().equals(value)) {
+            if (old.getProperty(key) != null) {
+                p.setProperty(key, old.getProperty(key));
+            }
+        } else {
+            p.setProperty(key, value);
+        }
+    }
+
+    /** Parses a port number; out-of-range or non-numeric text gives {@code dflt}. Port 0 means "any free port". */
     public static int parsePort(String text, int dflt) {
         if (text == null) {
             return dflt;
@@ -113,6 +144,7 @@ public final class Settings {
         }
     }
 
+    /** A new random 48-character hex token from a secure random source. */
     public static String newToken() {
         byte[] b = new byte[24];
         new SecureRandom().nextBytes(b);
@@ -123,6 +155,7 @@ public final class Settings {
         return sb.toString();
     }
 
+    /** True when the server only listens on this machine. */
     public boolean isLoopback() {
         return host.equals("127.0.0.1") || host.equals("localhost") || host.equals("::1");
     }

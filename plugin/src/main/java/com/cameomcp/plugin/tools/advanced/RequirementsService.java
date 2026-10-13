@@ -44,10 +44,15 @@ final class RequirementsService {
     private RequirementsService() {
     }
 
+    // cameo_get_requirements_capabilities: the generic FeatureProbes answer for the ReqIF product classes.
     static JsonObject requirementsCapabilities() {
         return FeatureProbes.capability("requirements");
     }
 
+    /*
+     * cameo_get_import_export_capabilities: CSV/JSON import/export is implemented here and always available;
+     * native ReqIF is only probed, never driven.
+     */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("importExport", "bridge-owned-plus-native-probe");
         response.addProperty("available", true);
@@ -78,6 +83,7 @@ final class RequirementsService {
         JsonArray requirements = new JsonArray();
         int visited = 0;
         boolean truncated = false;
+        // Overlapping roots (one scope inside another) would otherwise list the same requirement twice.
         java.util.Set<String> seen = new java.util.HashSet<>();
         outer:
         for (Element root : roots) {
@@ -118,6 +124,10 @@ final class RequirementsService {
         return out;
     }
 
+    /*
+     * SysML requirement detection without depending on the SysML profile API: the element's class name or any
+     * applied stereotype name containing "requirement" (so also matches e.g. extendedRequirement or custom profiles).
+     */
     static boolean isRequirementLike(Element element) {
         String className = element.getClass().getSimpleName();
         if (className != null && className.toLowerCase(Locale.ROOT).contains("requirement")) {
@@ -139,6 +149,7 @@ final class RequirementsService {
         return false;
     }
 
+    // scope_ids plus root_id (or legacy package_id) placed first, so the first root reported is the one named.
     private static List<String> scopeIds(JsonObject p) {
         List<String> ids = new ArrayList<>(Gs.strList(p, "scope_ids"));
         String rootId = Gs.str(p, "root_id");
@@ -151,6 +162,10 @@ final class RequirementsService {
         return ids;
     }
 
+    /*
+     * cameo_export_requirements: collects requirements under the scope (default primary model) and returns them as JSON
+     * or CSV, optionally written to output_path. "reqif" is accepted but only returns JSON and writes no file.
+     */
     static JsonObject exportRequirements(JsonObject p) throws Exception {
         String format = Gs.str(p, "format", "json").trim().toLowerCase(Locale.ROOT);
         if (!Arrays.asList("json", "csv", "reqif").contains(format)) {
@@ -196,6 +211,7 @@ final class RequirementsService {
             response.addProperty("message", "Native ReqIF export is not enabled; the requirements are returned as JSON. "
                     + "Use Cameo's File > Export To > ReqIF for a native ReqIF file.");
         }
+        // Re-check to obtain the File, and in case the file appeared while the model was being read.
         if (outputPath != null) {
             if (content == null) {
                 response.addProperty("fileWritten", false);
@@ -218,11 +234,12 @@ final class RequirementsService {
         return response;
     }
 
+    // cameo_export_requirements_preview: count plus five sample CSV rows, scoped like cameo_export_requirements.
     static JsonObject exportRequirementsPreview(JsonObject p) throws Exception {
         String format = Gs.str(p, "format", "csv").trim().toLowerCase(Locale.ROOT);
         JsonObject response = FeatureProbes.guardedAction("requirements", "cameo_export_requirements_preview", Support.request(p));
         if (Support.currentProject() != null) {
-            JsonObject collected = Edt.read(project -> collect(project, Gs.strList(p, "scope_ids"), 5000));
+            JsonObject collected = Edt.read(project -> collect(project, scopeIds(p), 5000));
             JsonArray reqs = collected.getAsJsonArray("requirements");
             response.addProperty("requirementCount", reqs.size());
             response.addProperty("truncated", collected.get("truncated").getAsBoolean());
@@ -249,6 +266,7 @@ final class RequirementsService {
     static List<Map<String, String>> rows(JsonObject p) {
         List<Map<String, String>> rows = new ArrayList<>();
         boolean explicit = false;
+        // Explicit sources are additive; a patch_plan is only used when none of them is given.
         for (String key : new String[]{"requirements", "rows", "source_rows"}) {
             if (Gs.has(p, key)) {
                 if (!p.get(key).isJsonArray()) {
@@ -290,6 +308,7 @@ final class RequirementsService {
         return rows;
     }
 
+    // target_package_id, else the targetPackageId recorded in a patch_plan from a previous preview.
     private static String targetPackageId(JsonObject p) {
         String id = Gs.str(p, "target_package_id");
         if (id == null) {
@@ -299,6 +318,10 @@ final class RequirementsService {
         return id == null || id.trim().isEmpty() ? null : id.trim();
     }
 
+    /*
+     * Shared body of cameo_preview_requirements_import and the dry-run path of cameo_apply_requirements_import:
+     * normalizes and validates rows and returns a patch plan that can be fed back as patch_plan.
+     */
     static JsonObject importPreview(JsonObject p, String message) throws Exception {
         JsonObject request = Support.request(p);
         JsonObject response = Support.previewAccepted("importExport", request, message);
@@ -309,6 +332,7 @@ final class RequirementsService {
             normalized.add(RequirementsCodec.normalize(rows.get(i), i));
         }
         JsonObject validation = RequirementsCodec.validate(rows);
+        // Matching against existing requirements needs the model, so it is skipped when no project is open.
         if (target != null && Support.currentProject() != null) {
             JsonObject targetInfo = Edt.read(project -> compareWithTarget(project, target, normalized));
             response.add("target", targetInfo);
@@ -362,6 +386,7 @@ final class RequirementsService {
             JsonObject row = e.getAsJsonObject();
             String ext = Gs.str(row, "externalId");
             String name = Gs.str(row, "name");
+            // Match by requirement Id tag first, then by case-insensitive name.
             String match = ext != null ? byReqId.get(ext) : null;
             if (match == null && name != null) {
                 match = byName.get(name.toLowerCase(Locale.ROOT));
@@ -383,6 +408,7 @@ final class RequirementsService {
         return info;
     }
 
+    // cameo_import_requirements_preview: guarded-action envelope plus the import preview's key fields.
     static JsonObject importRequirementsPreview(JsonObject p) throws Exception {
         JsonObject response = FeatureProbes.guardedAction("requirements", "cameo_import_requirements_preview", Support.request(p));
         JsonObject preview = importPreview(p, "Requirements import preview accepted. No model write was performed.");
@@ -394,6 +420,10 @@ final class RequirementsService {
         return response;
     }
 
+    /*
+     * cameo_apply_requirements_import: dry_run defaults to true, so a real write needs dry_run=false AND allow_write=true.
+     * Rows are validated before the write session so a bad row imports nothing; all creations are one undoable session.
+     */
     static JsonObject apply(JsonObject p) throws Exception {
         String format = Gs.str(p, "format", "json");
         if (format == null || format.trim().isEmpty()) {
@@ -446,6 +476,7 @@ final class RequirementsService {
             Stereotype requirementStereo = findStereotype(project, "requirement");
             JsonArray created = new JsonArray();
             JsonArray warnings = new JsonArray();
+            // Each row becomes a Class with the SysML Requirement stereotype (when available), Id/Text tags and a comment.
             for (Map<String, String> row : rows) {
                 String name = RequirementsCodec.name(row);
                 com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Class requirement = ef.createClassInstance();
@@ -470,6 +501,7 @@ final class RequirementsService {
                         textTagged = setTag(requirement, requirementStereo, "Text", text, warnings);
                     }
                 }
+                // When Text went into the tag, the comment carries only documentation; otherwise text (or documentation) is the comment.
                 String body = textTagged ? documentation : firstNonBlank(text, documentation);
                 if (body != null) {
                     Comment comment = ef.createCommentInstance();
@@ -500,6 +532,7 @@ final class RequirementsService {
         }, 120);
     }
 
+    // Sets a stereotype tag only if the stereotype defines it; returns whether the value was stored.
     private static boolean setTag(Element element, Stereotype stereotype, String tag, String value, JsonArray warnings) {
         try {
             boolean hasTag = false;
@@ -520,6 +553,10 @@ final class RequirementsService {
         }
     }
 
+    /*
+     * Finds a stereotype by name, preferring one owned (at any depth) by a SysML/Requirements profile, since
+     * other loaded profiles can define a stereotype with the same name.
+     */
     private static Stereotype findStereotype(Project project, String stereotypeName) {
         Collection<Stereotype> all = StereotypesHelper.getAllStereotypes(project);
         if (all == null) {
@@ -541,6 +578,7 @@ final class RequirementsService {
         return matches.isEmpty() ? null : matches.get(0);
     }
 
+    // True if the element or any owner up the chain has the given name (case-insensitive).
     private static boolean ownerChainContains(Element element, String ownerName) {
         Element current = element;
         while (current != null) {

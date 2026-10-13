@@ -11,11 +11,13 @@ import static com.cameomcp.mcp.ToolSpec.tool;
 /** Connection health, capability discovery and recovery tools. */
 public final class ServerTools {
 
+    // Family name used in docs and in cameo_list_tools filters.
     public static final String FAMILY = "server";
 
     private ServerTools() {
     }
 
+    /** The server family's specs, in the order clients see them. */
     public static List<ToolSpec> specs() {
         return Arrays.asList(
                 tool("cameo_status", FAMILY).noProject().readOnly()

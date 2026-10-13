@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: `cameo_repair_conveyed_item_labels` now shows conveyed-item labels (it was hiding them).
+- Fixed: `cameo_detect_remediation` now suggests best-match fixes (the term lists were dropped).
+- Fixed: a `cameo_run_validation` TIMEOUT now names the `run_id` to fetch the result later.
+- Fixed: `cameo_export_requirements_preview` honors `root_id` / `package_id` like the export.
+- Port verification also reports owner ids (`duplicateFlowPropertyOwnerIds`); remediation receipts use them.
+- Idle client sessions (1 hour without a request) are dropped; the client re-initializes on its next call.
+- A read that collides with a running change is retried once, then fails with `MODEL_CHANGED`.
+- Macro scripts are now off by default; turn them on in MCP > MCP Server Status > Settings.
+- Saving settings no longer writes port, host or token values that come from environment variables or JVM options.
+- The installers no longer register the server with a specific client CLI.
+- CI: GitHub Actions runs `devtools/compile-check.sh all --tests` on every push and pull request.
+
 ## 1.0.0
 
 First release.

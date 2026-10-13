@@ -12,10 +12,18 @@ import java.util.Map;
  */
 public final class ToolResult {
 
+    // MCP content blocks (text, image) in the order the client should show them.
     private final List<Map<String, Object>> content = new ArrayList<>();
+    // The structuredContent object; only a Map is sent, since MCP requires an object there.
     private Object structured;
     private boolean error;
 
+    /**
+     * Wraps a handler's return value. A {@code ToolResult} passes through; a {@code String} becomes
+     * one text block; a {@code Map} becomes structuredContent plus the same JSON as text (clients
+     * that ignore structuredContent still see the data); anything else is wrapped as
+     * {@code {"result": value}} first.
+     */
     public static ToolResult of(Object value) {
         if (value instanceof ToolResult) {
             return (ToolResult) value;
@@ -34,6 +42,10 @@ public final class ToolResult {
         return r;
     }
 
+    /**
+     * Builds the error result for a failed tool call. Tool failures are results with
+     * {@code isError: true}, not JSON-RPC errors, so the agent sees the message and can recover.
+     */
     public static ToolResult error(String code, String message, Map<String, Object> details) {
         ToolResult r = new ToolResult();
         Map<String, Object> payload = Json.obj("error", true, "code", code, "message", message);
@@ -46,6 +58,7 @@ public final class ToolResult {
         return r;
     }
 
+    /** Appends a text content block. */
     public ToolResult text(String text) {
         content.add(Json.obj("type", "text", "text", text));
         return this;
@@ -63,6 +76,7 @@ public final class ToolResult {
         return this;
     }
 
+    /** Replaces the structured content. */
     public ToolResult structured(Map<String, Object> value) {
         this.structured = value;
         return this;
@@ -80,6 +94,7 @@ public final class ToolResult {
         return content;
     }
 
+    /** The CallToolResult object sent back to the client. */
     public Map<String, Object> toMcp() {
         Map<String, Object> out = Json.obj("content", content);
         if (structured instanceof Map) {

@@ -26,6 +26,7 @@ final class DiagramImageService {
     private DiagramImageService() {
     }
 
+    // Shared scale_percentage argument of both image tools: 100 by default, 25-1000 allowed.
     static int scalePercentage(Args a) {
         Integer scale = a.integerOrNull("scale_percentage");
         if (scale == null) {
@@ -39,6 +40,11 @@ final class DiagramImageService {
 
     // ------------------------------------------------------------------ inline image
 
+    /*
+     * cameo_get_diagram_image: renders the diagram with Cameo's ImageExporter and returns it as an MCP
+     * image content block plus JSON metadata. Optional downscale (max_width/max_height) and JPEG/WebP
+     * transcoding happen off the EDT in ImageTransform; include_image=false returns only the metadata.
+     */
     static ToolResult getImage(Args a, ToolContext ctx) throws Exception {
         String diagramId = a.reqStr("diagram_id");
         boolean includeImage = a.bool("include_image", true);
@@ -48,6 +54,7 @@ final class DiagramImageService {
         int quality = Math.max(1, Math.min(a.integer("quality", 85), 100));
         int scale = scalePercentage(a);
 
+        // Rendering must happen on the EDT; 180 s limit because large diagrams at high scale render slowly.
         Object[] exported = Edt.onEdt("Export Diagram Image", project -> {
             DiagramPresentationElement dpe = DiagramSupport.loadedDiagram(project, diagramId);
             BufferedImage image = ImageExporter.export(dpe, false, scale);
@@ -70,6 +77,7 @@ final class DiagramImageService {
         boolean resize = maxWidth != null || maxHeight != null;
         boolean transcode = !"png".equals(format);
         ImageTransform.Encoded encoded;
+        // No transform requested (or the image is not returned at all): plain PNG of the export.
         if (!includeImage || (!resize && !transcode)) {
             byte[] png = ImageTransform.png(image);
             encoded = new ImageTransform.Encoded(png, "png", "image/png", image.getWidth(), image.getHeight(), null);
@@ -113,6 +121,7 @@ final class DiagramImageService {
         return result;
     }
 
+    // In-process calls (Internal.call) have no MCP session and the client name "internal".
     private static boolean isInternal(ToolContext ctx) {
         return ctx != null && ctx.sessionId() == null && "internal".equals(ctx.clientName());
     }
@@ -123,6 +132,10 @@ final class DiagramImageService {
 
     // ------------------------------------------------------------------ export to file
 
+    /*
+     * cameo_export_diagram_image: writes the diagram to an absolute file path as PNG, JPEG or SVG via
+     * ImageExporter. The format comes from the format argument or else the file extension.
+     */
     static Map<String, Object> exportToFile(Args a) throws Exception {
         String diagramId = a.reqStr("diagram_id");
         String path = a.reqStr("file_path").trim();
@@ -174,11 +187,14 @@ final class DiagramImageService {
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new ToolException("TOOL_FAILED", "Cannot create directory '" + parent + "'.");
         }
+        // Resolved before the EDT call so an unsupported format fails without touching the diagram.
         int formatCode = exporterConstant(constant);
         final String fmt = format;
         Object[] exported = Edt.onEdt("Export Diagram Image File", project -> {
             DiagramPresentationElement dpe = DiagramSupport.loadedDiagram(project, diagramId);
             Rectangle bounds;
+            // The simple overload covers the default case; otherwise the extended one, with 72 dpi when only
+            // scale was given.
             if (dpi == null && scale == 100) {
                 bounds = ImageExporter.export(dpe, formatCode, file);
             } else {
@@ -186,6 +202,7 @@ final class DiagramImageService {
             }
             return new Object[]{bounds, DiagramSupport.name(dpe)};
         }, 300);
+        // The exporter's return value alone does not prove a file was written, so check the file itself.
         if (!file.isFile() || file.length() == 0) {
             throw new ToolException("TOOL_FAILED", "Cameo did not write '" + path + "' (the diagram may be empty or "
                     + "the location is not writable).");
@@ -193,6 +210,8 @@ final class DiagramImageService {
         Rectangle bounds = (Rectangle) exported[0];
         Integer width = null;
         Integer height = null;
+        // Report pixel size read back from the written raster file (it reflects scale/dpi); SVG and
+        // unreadable files fall back to the diagram bounds.
         if (!"svg".equals(fmt)) {
             int[] dims = rasterSize(file);
             if (dims != null) {
@@ -233,6 +252,7 @@ final class DiagramImageService {
         }
     }
 
+    // Width/height of the first image in a raster file via ImageIO, without decoding the pixels; null if unreadable.
     private static int[] rasterSize(File file) {
         try (ImageInputStream in = ImageIO.createImageInputStream(file)) {
             if (in == null) {

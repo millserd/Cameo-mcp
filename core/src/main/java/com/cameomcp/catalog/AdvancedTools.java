@@ -16,18 +16,25 @@ import static com.cameomcp.mcp.ToolSpec.tool;
  */
 public final class AdvancedTools {
 
+    // Family name used in docs and in cameo_list_tools filters.
     public static final String FAMILY = "advanced";
 
+    // Appended to every capability-probe description so agents know those tools are safe to call any time.
     private static final String PROBE_NOTE = " Probe-first: reports class/plugin evidence (available, status, classProbe, "
             + "pluginDirectoriesFound, projectState); never changes anything.";
 
     private AdvancedTools() {
     }
 
+    // A read-only, project-independent capability probe for one optional Cameo feature.
     private static ToolSpec caps(String name, String what) {
         return tool(name, FAMILY).noProject().readOnly().desc(what + PROBE_NOTE);
     }
 
+    /**
+     * The family's specs, in the order clients see them. Descriptions and parameter help are the
+     * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     */
     public static List<ToolSpec> specs() {
         return Arrays.asList(
                 // ------------------------------------------------------------ validation
@@ -182,6 +189,8 @@ public final class AdvancedTools {
                                 + "executed=false, capabilityProbe) plus requirementCount, five sampleRows, the CSV columns and an "
                                 + "outputPathCheck. Use cameo_export_requirements to export.")
                         .strArray("scope_ids", "Roots to export from (default: primary model).")
+                        .str("root_id", "Single root element id (combined with scope_ids).")
+                        .str("package_id", "Alias of root_id.")
                         .enumStrDefault("format", "Planned export format.", "csv", "csv", "json", "reqif")
                         .str("output_path", "Planned absolute output path (checked, not written)."),
                 tool("cameo_import_requirements_preview", FAMILY).readOnly()

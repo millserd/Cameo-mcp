@@ -26,12 +26,14 @@ public final class OfficeImages {
     /** One exported diagram image. */
     public record Image(String stem, int width, int height, BufferedImage rgb) {
 
+        /** Lossless PNG encoding of the flattened RGB image (used for PPTX slides). */
         public byte[] png() throws IOException {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             ImageIO.write(rgb, "png", out);
             return out.toByteArray();
         }
 
+        /** JPEG at the given quality (0..1); used for PDF pages, which embed images as DCTDecode streams. */
         public byte[] jpeg(float quality) throws IOException {
             Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
             if (!writers.hasNext()) {
@@ -52,6 +54,10 @@ public final class OfficeImages {
         }
     }
 
+    /*
+     * Copies the image into an opaque RGB buffer over a white background. JPEG cannot carry alpha
+     * and ImageIO's JPEG writer does not handle alpha reliably, so transparency is flattened here.
+     */
     public static Image fromBufferedImage(String stem, BufferedImage source) {
         BufferedImage rgb = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_RGB);
         Graphics2D g = rgb.createGraphics();
@@ -79,6 +85,7 @@ public final class OfficeImages {
         return images;
     }
 
+    /** File name without its extension; used to derive slide titles. */
     static String stem(Path path) {
         String name = path.getFileName().toString();
         int dot = name.lastIndexOf('.');

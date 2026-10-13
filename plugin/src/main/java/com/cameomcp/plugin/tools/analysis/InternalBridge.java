@@ -19,6 +19,11 @@ public final class InternalBridge implements Bridge {
     static final int MAX_SHAPES = 20000;
     private static final int SHAPE_PAGE = 1000;
 
+    /*
+     * Pages through cameo_list_diagram_shapes and merges all pages into one response shaped like a
+     * single unpaged page. Stops at MAX_SHAPES, when hasMore is false, or when nextOffset fails to
+     * advance (guards against an infinite loop if the tool misreports paging).
+     */
     @Override
     public Map<String, Object> listDiagramShapes(String diagramId) throws Exception {
         List<Object> shapes = new ArrayList<>();
@@ -38,6 +43,7 @@ public final class InternalBridge implements Bridge {
             }
             offset = next;
         }
+        // Reuse the first page's metadata (diagram info etc.) and overwrite the paging fields.
         Map<String, Object> merged = new LinkedHashMap<>(first == null ? obj() : first);
         merged.put("shapes", shapes);
         merged.put("count", shapes.size());
@@ -67,6 +73,8 @@ public final class InternalBridge implements Bridge {
         return InterfaceFlowReader.read(interfaceBlockIds);
     }
 
+    // cameo_query_elements: null-valued params are dropped so the tool sees them as absent, and the
+    // legacy "package" key is renamed to the tool's "package_id" parameter.
     @Override
     public Map<String, Object> queryElements(Map<String, Object> params) throws Exception {
         Map<String, Object> args = new LinkedHashMap<>();
@@ -112,6 +120,8 @@ public final class InternalBridge implements Bridge {
         return Internal.call("cameo_get_matrix", "matrix_id", matrixId);
     }
 
+    // Methodology recipe operations map 1:1 onto public tools named "cameo_" + operation;
+    // null parameters are dropped so optional tool arguments fall back to their defaults.
     @Override
     public Map<String, Object> invoke(String operation, Map<String, Object> params) throws Exception {
         Map<String, Object> args = new LinkedHashMap<>();

@@ -13,8 +13,10 @@ import static com.cameomcp.mcp.ToolSpec.tool;
 /** Diagram creation, images, shapes, paths and presentation repair tools. */
 public final class DiagramTools {
 
+    // Family name used in docs and in cameo_list_tools filters.
     public static final String FAMILY = "diagrams";
 
+    // Parameter help reused by many diagram tools, so every tool says the same thing.
     private static final String DIAGRAM_ID = "Diagram ID from cameo_list_diagrams or cameo_create_diagram.";
     private static final String PRESENTATION_IDS = "Optional presentationIds (from cameo_list_diagram_shapes) to "
             + "limit the operation to; omit to target every eligible presentation on the diagram.";
@@ -23,6 +25,7 @@ public final class DiagramTools {
     private DiagramTools() {
     }
 
+    // Raw JSON-schema fragments for the item properties of objArray(...) parameters.
     private static Map<String, Object> str(String desc) {
         return Json.obj("type", "string", "description", desc);
     }
@@ -37,6 +40,10 @@ public final class DiagramTools {
                 Arrays.asList("x", "y"));
     }
 
+    /**
+     * The family's specs, in the order clients see them. Descriptions and parameter help are the
+     * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     */
     public static List<ToolSpec> specs() {
         return Arrays.asList(
                 tool("cameo_list_diagram_types", FAMILY).noProject().readOnly()

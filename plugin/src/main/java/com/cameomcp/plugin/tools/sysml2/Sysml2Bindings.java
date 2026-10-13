@@ -11,15 +11,21 @@ public final class Sysml2Bindings {
     private Sysml2Bindings() {
     }
 
+    /** A sysml2 tool body: reads typed arguments from Args and returns a Gson result. */
     @FunctionalInterface
     private interface Impl {
         JsonObject run(Args a) throws Exception;
     }
 
+    // Adapts an Impl to the core registry, converting its Gson result to the plain-Map JSON the core expects.
     private static void bind(ToolRegistry r, String name, Impl impl) {
         r.bind(name, (a, c) -> Gs.fromGson(impl.run(a)));
     }
 
+    /*
+     * Registers every cameo_sysml2_* tool. Argument defaults and clamping ranges live here (intIn
+     * min/max), so Sysml2Service methods receive already-validated values.
+     */
     public static void bind(ToolRegistry r) {
         bind(r, "cameo_sysml2_status", a -> Sysml2Service.status());
         bind(r, "cameo_sysml2_list_roots", a -> Sysml2Service.listRoots(a.bool("include_libraries", false),

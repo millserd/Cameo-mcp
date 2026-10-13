@@ -15,6 +15,7 @@ import static com.cameomcp.mcp.ToolSpec.tool;
  */
 public final class ArtifactTools {
 
+    // Family name used in docs and in cameo_list_tools filters.
     public static final String FAMILY = "artifacts";
 
     /** Seconds a relation-map refresh/expand/render may take at most (the tools clamp to 600). */
@@ -26,6 +27,10 @@ public final class ArtifactTools {
     private ArtifactTools() {
     }
 
+    /**
+     * The family's specs, in the order clients see them. Descriptions and parameter help are the
+     * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     */
     public static List<ToolSpec> specs() {
         return Arrays.asList(
                 // ------------------------------------------------------------ matrices

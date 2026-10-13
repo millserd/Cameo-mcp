@@ -12,6 +12,10 @@ final class Resources {
     private Resources() {
     }
 
+    /**
+     * Adds the resources (cameo://guide, cameo://tools, cameo://status) and the workflow prompts.
+     * Each resource is read on demand, so the tool reference and status always reflect the live server.
+     */
     static void register(McpServer server, McpRuntime runtime) {
         server.addResource(new McpResource("cameo://guide", "Cameo MCP agent guide",
                 "How to use this server: workflows, conventions, pitfalls.", "text/markdown", CatalogDocs::guide));

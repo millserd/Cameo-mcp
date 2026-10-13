@@ -50,11 +50,14 @@ public final class ArtifactSupport {
      */
     public static JsonObject params(Args args, ToolContext ctx) {
         JsonObject out = new JsonObject();
+        // Copy everything the client sent, under whatever key spelling it used.
         for (Map.Entry<String, Object> e : args.raw().entrySet()) {
             if (e.getValue() != null) {
                 out.add(e.getKey(), Gs.toElement(e.getValue()));
             }
         }
+        // Then fill each spec parameter that is missing under its snake_case name; args.get(name) is
+        // expected to find the value under an alternative spelling (see the javadoc above).
         if (ctx != null && ctx.spec() != null) {
             for (String name : ctx.spec().parameters().keySet()) {
                 if (!Gs.has(out, name)) {
@@ -77,6 +80,7 @@ public final class ArtifactSupport {
         if (e.isJsonPrimitive()) {
             String s = e.getAsString().trim();
             List<String> out = new ArrayList<>();
+            // A string that looks like a JSON array (some clients stringify arrays) is parsed as one.
             if (s.startsWith("[")) {
                 try {
                     JsonElement parsed = com.google.gson.JsonParser.parseString(s);
@@ -128,6 +132,7 @@ public final class ArtifactSupport {
         return Gs.bool(o, key, false);
     }
 
+    /** Clamps value to [min, max]; null (parameter absent) yields dflt. */
     public static int clamp(Integer value, int min, int max, int dflt) {
         if (value == null) {
             return dflt;
@@ -144,6 +149,7 @@ public final class ArtifactSupport {
         return (int) Math.max(1, Math.min(600, Math.floor(d)));
     }
 
+    /** Exception class name plus message, or just the class name when the message is blank. */
     public static String describe(Throwable e) {
         String message = e.getMessage();
         if (message == null || message.trim().isEmpty()) {
@@ -154,6 +160,10 @@ public final class ArtifactSupport {
 
     // ------------------------------------------------------------------ lookup
 
+    /**
+     * Element by id; anything else (missing id, or a non-UML object) becomes the error produced by
+     * ProjectKind.notUmlElement, pointing the caller to cameo_query_elements.
+     */
     public static Element element(Project project, String id, String label) {
         Object o = id == null ? null : project.getElementByID(id);
         if (o instanceof Element) {
@@ -163,6 +173,7 @@ public final class ArtifactSupport {
                 + "cameo_query_elements to find valid element IDs.");
     }
 
+    /** All elements for the ids, in order; fails on the first unknown id. */
     public static List<Element> elements(Project project, List<String> ids, String label) {
         List<Element> out = new ArrayList<>(ids.size());
         for (String id : ids) {
@@ -175,11 +186,13 @@ public final class ArtifactSupport {
     public static DiagramPresentationElement diagram(Project project, String id, String label) {
         Object o = id == null ? null : project.getElementByID(id);
         if (o instanceof Diagram) {
+            // Fast path: map the Diagram element to its presentation element.
             DiagramPresentationElement dpe = project.getDiagram((Diagram) o);
             if (dpe != null) {
                 return dpe;
             }
         }
+        // Fallback: linear scan of the project's diagram list by diagram id.
         Collection<DiagramPresentationElement> all = project.getDiagrams();
         if (all != null && id != null) {
             for (DiagramPresentationElement dpe : all) {
@@ -193,6 +206,10 @@ public final class ArtifactSupport {
                 + "valid diagram IDs.");
     }
 
+    /**
+     * Native diagram type name (e.g. "Generic Table"), or "" when unknown; never throws, because
+     * getDiagramType() can fail for diagrams whose defining plugin is not loaded.
+     */
     public static String diagramType(DiagramPresentationElement dpe) {
         try {
             return dpe != null && dpe.getDiagramType() != null ? dpe.getDiagramType().getType() : "";
@@ -201,6 +218,7 @@ public final class ArtifactSupport {
         }
     }
 
+    /** True when the diagram's native type is "Relation Map Diagram". */
     public static boolean isRelationMap(DiagramPresentationElement dpe) {
         return RELATION_MAP_TYPE.equals(diagramType(dpe));
     }
@@ -238,6 +256,7 @@ public final class ArtifactSupport {
         return json;
     }
 
+    /** Compact JSON for each non-null element. */
     public static JsonArray compactArray(Collection<? extends Element> elements) {
         JsonArray array = new JsonArray();
         if (elements != null) {
@@ -250,6 +269,7 @@ public final class ArtifactSupport {
         return array;
     }
 
+    /** String values as a JSON array; null entries are kept as JSON null. */
     public static JsonArray stringArray(Collection<?> values) {
         JsonArray array = new JsonArray();
         if (values != null) {
@@ -267,6 +287,7 @@ public final class ArtifactSupport {
         if (typeName == null || typeName.trim().isEmpty()) {
             throw ToolException.invalid(what + " type tokens must not be empty.");
         }
+        // Stereotypes take precedence, so "Block" resolves to the SysML stereotype rather than a metaclass.
         Stereotype stereotype = resolveStereotype(project, typeName);
         if (stereotype != null) {
             return stereotype;
@@ -279,6 +300,7 @@ public final class ArtifactSupport {
                 + "UseCase, Activity or Property, or a stereotype such as Block, Requirement or valueProperty.");
     }
 
+    /** resolveTypeReference for every token, in order; throws on the first unknown token. */
     public static List<Object> resolveTypes(Project project, List<String> tokens, String what) {
         List<Object> out = new ArrayList<>(tokens.size());
         for (String t : tokens) {
@@ -287,6 +309,7 @@ public final class ArtifactSupport {
         return out;
     }
 
+    /** First stereotype in the project whose normalized name equals the normalized input, or null. */
     public static Stereotype resolveStereotype(Project project, String name) {
         String wanted = normalizeTypeToken(name);
         Collection<Stereotype> all = StereotypesHelper.getAllStereotypes(project);
@@ -301,6 +324,10 @@ public final class ArtifactSupport {
         return null;
     }
 
+    /**
+     * Metaclass element (from the UML profile) for a type name. Tries the name as given, then the
+     * CamelCase form ("opaque action" to "OpaqueAction"); null when neither is a known class type.
+     */
     public static Element resolveMetaClass(Project project, String rawTypeName) {
         Class<?> metaclass = ClassTypes.getClassType(rawTypeName.trim());
         if (metaclass == null) {

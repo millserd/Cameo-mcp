@@ -36,10 +36,12 @@ import java.util.concurrent.TimeoutException;
 /** Native Cameo validation (reference ValidationHandler + ValidationSerializer). */
 final class ValidationService {
 
+    // Cameo's built-in UML correctness suite, used when neither a suite nor constraints are given.
     static final String DEFAULT_SUITE = "UML Standard Profile::Validation Profile::Active Validation::UML Correctness";
     private static final int DISCOVERY_LIMIT = 250;
     private static final int RESULT_STORE_LIMIT = 50;
     private static final int DEFAULT_PAGE = 500;
+    // In-memory result cache keyed by runId; LRU-by-insertion, oldest dropped past RESULT_STORE_LIMIT. Lost on restart.
     private static final Map<String, JsonObject> RESULTS = Collections.synchronizedMap(
             new LinkedHashMap<String, JsonObject>() {
                 @Override
@@ -51,6 +53,7 @@ final class ValidationService {
     private ValidationService() {
     }
 
+    // cameo_get_validation_capabilities: native validation ships with core Cameo, so this only checks the classes load.
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("validation", "native");
         JsonObject probe = Support.classProbe(
@@ -73,6 +76,10 @@ final class ValidationService {
         return response;
     }
 
+    /*
+     * cameo_list_validation_suites: the two well-known suites by qualified name (high confidence), plus packages and
+     * constraints whose own or owner's name looks validation-related (heuristic, capped at DISCOVERY_LIMIT each).
+     */
     static JsonObject suites() throws Exception {
         return Edt.read(project -> {
             JsonArray knownSuites = new JsonArray();
@@ -133,6 +140,10 @@ final class ValidationService {
         JsonObject request;
     }
 
+    /*
+     * cameo_run_native_validation: full option set, runs on the calling thread with no time limit.
+     * whole_project defaults to true only when no scope elements are given.
+     */
     static JsonObject runNative(JsonObject p) throws Exception {
         RunOptions o = new RunOptions();
         o.suiteId = Gs.str(p, "suite_id");
@@ -150,6 +161,10 @@ final class ValidationService {
         return run(o);
     }
 
+    /*
+     * cameo_run_validation: simplified scope_mode/min_severity arguments and a timeout (1 s .. 10 min, default 30 s).
+     * The other options are not exposed: read-only elements are excluded, no native window, Cameo's recursion default.
+     */
     static JsonObject runBounded(JsonObject p) throws Exception {
         RunOptions o = new RunOptions();
         o.suiteId = Gs.str(p, "suite_id");
@@ -176,15 +191,18 @@ final class ValidationService {
         return result;
     }
 
+    // A positive timeout runs the validation on a daemon worker thread so the call can give up waiting.
     private static JsonObject run(RunOptions o) throws Exception {
         if (o.timeoutMs <= 0) {
-            return Edt.read(project -> execute(project, o));
+            return Edt.read(project -> execute(project, o, UUID.randomUUID().toString()));
         }
         Project project = Edt.project();
+        // Created here so a TIMEOUT can name the run the worker will still store.
+        String runId = UUID.randomUUID().toString();
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
         Thread worker = new Thread(() -> {
             try {
-                future.complete(execute(project, o));
+                future.complete(execute(project, o, runId));
             } catch (Throwable t) {
                 future.completeExceptionally(t);
             }
@@ -193,9 +211,12 @@ final class ValidationService {
         worker.start();
         try {
             return future.get(o.timeoutMs, TimeUnit.MILLISECONDS);
+        // Cameo's validation cannot be cancelled from here: the worker keeps running and its result is still cached later.
         } catch (TimeoutException e) {
-            throw new ToolException("TIMEOUT", "Validation did not finish within " + o.timeoutMs + " ms. It may still be "
-                    + "running in Cameo; narrow the scope (scope_mode=elements with scope_element_ids) or raise timeout_ms.");
+            throw new ToolException("TIMEOUT", "Validation did not finish within " + o.timeoutMs + " ms. It is still "
+                    + "running in Cameo; fetch the result later with cameo_get_validation_result run_id=" + runId
+                    + ", or narrow the scope (scope_mode=elements with scope_element_ids) or raise timeout_ms.");
+        // Rethrow the worker's own exception (ToolException etc.) rather than the ExecutionException wrapper.
         } catch (ExecutionException e) {
             Throwable c = e.getCause();
             if (c instanceof Exception) {
@@ -205,9 +226,12 @@ final class ValidationService {
         }
     }
 
-    private static JsonObject execute(Project project, RunOptions o) {
+    /*
+     * Runs ValidationHelper.validate, caches the full serialized result under a new runId and returns the first page.
+     * The settings dialog is disabled so the run never blocks on UI input.
+     */
+    private static JsonObject execute(Project project, RunOptions o, String runId) {
         long started = System.currentTimeMillis();
-        String runId = UUID.randomUUID().toString();
         String taskName = o.name != null && !o.name.trim().isEmpty() ? o.name.trim() : "MCP native validation";
         ValidationRunData runData = buildRunData(project, o, taskName);
         runData.setEnableSettingsDialog(false);
@@ -215,6 +239,7 @@ final class ValidationService {
             runData.setAddElementsRecursively(o.recursive);
         }
         Collection<RuleViolationResult> findings = ValidationHelper.validate(runData, taskName, null);
+        // The native Validation Results window is optional and opened asynchronously so it cannot delay or fail the tool.
         if (o.openNativeWindow) {
             final Collection<RuleViolationResult> shown = findings;
             SwingUtilities.invokeLater(() -> {
@@ -242,6 +267,7 @@ final class ValidationService {
         return page(stored, 0, o.maxFindings);
     }
 
+    // cameo_get_validation_result: pages through a cached run by offset/limit.
     static JsonObject result(JsonObject p) {
         String runId = Gs.reqStr(p, "run_id").trim();
         JsonObject stored = RESULTS.get(runId);
@@ -280,6 +306,7 @@ final class ValidationService {
         return out;
     }
 
+    // Tally of findings by annotation severity name; findings without a severity count as "unknown".
     private static JsonObject countsBySeverity(JsonArray findings) {
         Map<String, Integer> counts = new LinkedHashMap<>();
         for (JsonElement f : findings) {
@@ -296,6 +323,11 @@ final class ValidationService {
         return o;
     }
 
+    /*
+     * Builds the native run data from explicit constraints, else from a suite package (suite_id, qualified name, default).
+     * The overloads taking a wholeProject flag are deprecated in 2024x (hence the suppression) and may be absent
+     * in later releases, so a LinkageError (NoSuchMethodError) falls back to the overload without the flag.
+     */
     @SuppressWarnings("deprecation")
     private static ValidationRunData buildRunData(Project project, RunOptions o, String taskName) {
         EnumerationLiteral severity = severity(project, o.minimumSeverity);
@@ -335,6 +367,7 @@ final class ValidationService {
         }
     }
 
+    // Explicit scope elements, or the primary model (which fails clearly on a SysML v2 project).
     private static Collection<Element> scopeElements(Project project, List<String> ids) {
         if (ids == null || ids.isEmpty()) {
             return Collections.singletonList(com.cameomcp.plugin.cameo.ProjectKind.primaryModel(project));
@@ -346,6 +379,7 @@ final class ValidationService {
         return elements;
     }
 
+    // Maps a severity name to Cameo's severity literal for this project; null (no filter) for blank or "any".
     private static EnumerationLiteral severity(Project project, String requested) {
         if (requested == null || requested.trim().isEmpty() || "any".equalsIgnoreCase(requested.trim())) {
             return null;
@@ -376,6 +410,7 @@ final class ValidationService {
         return Annotation.getSeverityLevel(project, constant);
     }
 
+    // Adds a suite to the list only when the qualified name resolves to a Package in this project.
     private static void addKnownSuite(Project project, JsonArray array, String qualifiedName) {
         Element element = Finder.byQualifiedName().find(project, qualifiedName);
         if (element instanceof Package) {
@@ -386,6 +421,7 @@ final class ValidationService {
         }
     }
 
+    // Keyword heuristic on the element's name plus its owner's name.
     private static boolean looksValidationRelated(Element element) {
         String text = element instanceof NamedElement ? ((NamedElement) element).getName() : "";
         if (text == null) {
@@ -405,6 +441,7 @@ final class ValidationService {
 
     // ------------------------------------------------------------------ serialization (ValidationSerializer)
 
+    // Suite package reference with suite-specific aliases for the ID and name.
     static JsonObject suite(Package suite) {
         JsonObject json = Support.ref(suite);
         json.addProperty("suiteId", suite.getID());
@@ -413,6 +450,7 @@ final class ValidationService {
         return json;
     }
 
+    // Constraint reference with constraint-specific aliases for the ID and name.
     static JsonObject constraint(Constraint constraint) {
         JsonObject json = Support.ref(constraint);
         json.addProperty("constraintId", constraint.getID());
@@ -421,6 +459,10 @@ final class ValidationService {
         return json;
     }
 
+    /*
+     * One violation: message, rule, annotation (kind/text/severity) and target. The target prefers getTargetObject(),
+     * then getElement(), and finally a class/string description for non-element targets such as diagram symbols.
+     */
     static JsonObject finding(RuleViolationResult result) {
         JsonObject json = new JsonObject();
         json.addProperty("message", Support.safe(result.getErrorMessage()));
@@ -460,6 +502,7 @@ final class ValidationService {
         return json;
     }
 
+    // A finding that fails to serialize becomes a placeholder entry rather than failing the whole run.
     static JsonArray findings(Collection<RuleViolationResult> results) {
         JsonArray array = new JsonArray();
         if (results == null) {

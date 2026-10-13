@@ -18,10 +18,12 @@ public final class PdfWriter {
     private PdfWriter() {
     }
 
+    /** Writes the PDF to {@code output}, replacing any existing file. */
     public static void write(List<OfficeImages.Image> images, Path output) throws IOException {
         Files.write(output, toBytes(images));
     }
 
+    /** Builds the PDF in memory; throws IllegalArgumentException for an empty image list. */
     public static byte[] toBytes(List<OfficeImages.Image> images) throws IOException {
         if (images.isEmpty()) {
             throw new IllegalArgumentException("cannot assemble PDF without exported images");
@@ -29,10 +31,13 @@ public final class PdfWriter {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         List<Integer> offsets = new ArrayList<>();
         int pageCount = images.size();
+        // Object layout: 1 = catalog, 2 = page tree, then three objects per page (page, image, content stream).
         int objectCount = 2 + pageCount * 3;
         ascii(out, "%PDF-1.4\n");
+        // Binary comment line: tells transfer tools the file is binary, as the PDF spec recommends.
         out.write(new byte[]{'%', (byte) 0xE2, (byte) 0xE3, (byte) 0xCF, (byte) 0xD3, '\n'});
 
+        // offsets records each object's byte position in object-number order, for the xref table.
         offsets.add(out.size());
         ascii(out, "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
 
@@ -56,6 +61,7 @@ public final class PdfWriter {
                     + "/Resources << /XObject << /Im0 " + imageObj + " 0 R >> /ProcSet [/PDF /ImageC] >> "
                     + "/Contents " + contentObj + " 0 R >>\nendobj\n");
 
+            // Raw JPEG bytes are a valid DCTDecode stream, so no re-encoding is needed.
             byte[] jpeg = image.jpeg(0.92f);
             offsets.add(out.size());
             ascii(out, imageObj + " 0 obj\n<< /Type /XObject /Subtype /Image /Width " + w + " /Height " + h
@@ -64,6 +70,7 @@ public final class PdfWriter {
             out.write(jpeg);
             ascii(out, "\nendstream\nendobj\n");
 
+            // Content stream: scale the unit image square to the full page and draw it.
             byte[] content = String.format(Locale.ROOT, "q\n%d 0 0 %d 0 0 cm\n/Im0 Do\nQ\n", w, h)
                     .getBytes(StandardCharsets.US_ASCII);
             offsets.add(out.size());
@@ -75,6 +82,7 @@ public final class PdfWriter {
         int xref = out.size();
         StringBuilder sb = new StringBuilder();
         sb.append("xref\n0 ").append(objectCount + 1).append('\n');
+        // Entry for the free object 0 required at the head of every xref table.
         sb.append("0000000000 65535 f \n");
         for (int offset : offsets) {
             sb.append(String.format(Locale.ROOT, "%010d 00000 n \n", offset));

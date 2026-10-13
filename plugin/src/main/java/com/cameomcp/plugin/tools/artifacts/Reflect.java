@@ -35,6 +35,7 @@ public final class Reflect {
         }
     }
 
+    /** True when the type has a public method of that name and parameter count (types not checked). */
     public static boolean hasMethod(Class<?> type, String name, int arity) {
         for (Method m : type.getMethods()) {
             if (m.getName().equals(name) && m.getParameterCount() == arity) {
@@ -44,8 +45,11 @@ public final class Reflect {
         return false;
     }
 
+    /** Invokes m, unwrapping InvocationTargetException so callers see the API's own exception. */
     private static Object call(Method m, Object target, Object[] args) throws Exception {
         try {
+            // Public methods declared on non-public implementation classes throw IllegalAccessException
+            // unless made accessible; failing here (e.g. module restrictions) is not fatal.
             m.setAccessible(true);
         } catch (RuntimeException ignored) {
             // public API method; accessibility only matters for non-public declaring classes
@@ -64,6 +68,10 @@ public final class Reflect {
         }
     }
 
+    /**
+     * First public method (including inherited ones) matching name, arity, static-ness and argument
+     * compatibility; with several compatible overloads, getMethods() order decides, so it is not the "most specific".
+     */
     static Method find(Class<?> type, String name, boolean wantStatic, Object[] args) throws NoSuchMethodException {
         for (Method m : type.getMethods()) {
             if (!m.getName().equals(name) || m.getParameterCount() != args.length
@@ -82,6 +90,7 @@ public final class Reflect {
         throw new NoSuchMethodException(type.getName() + "." + name + " with " + args.length + " argument(s)");
     }
 
+    /** Whether arg can be passed for param: null fits any reference type, primitives match their wrapper. */
     static boolean compatible(Class<?> param, Object arg) {
         if (arg == null) {
             return !param.isPrimitive();
@@ -97,6 +106,7 @@ public final class Reflect {
         return false;
     }
 
+    /** Wrapper class for a primitive (void maps to Void); reference types are returned unchanged. */
     static Class<?> box(Class<?> c) {
         if (!c.isPrimitive()) {
             return c;

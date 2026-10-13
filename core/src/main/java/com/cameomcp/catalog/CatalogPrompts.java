@@ -11,11 +11,16 @@ public final class CatalogPrompts {
     private CatalogPrompts() {
     }
 
+    // A prompt argument's value, or the placeholder when the client left it out or blank.
     private static String arg(Map<String, Object> args, String name, String dflt) {
         Object v = args.get(name);
         return v == null || String.valueOf(v).trim().isEmpty() ? dflt : String.valueOf(v);
     }
 
+    /**
+     * Adds the workflow prompts to the server. Each prompt expands into step-by-step instructions
+     * that name the tools to call, so agents follow the tested path through the catalog.
+     */
     public static void register(McpServer server) {
         server.addPrompt(new McpPrompt("model_system_structure", "Model a system structure",
                 "Build a SysML block hierarchy and BDD for a system from a description.",

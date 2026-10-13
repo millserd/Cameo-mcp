@@ -42,15 +42,21 @@ public final class MethodologyService {
 
     // ------------------------------------------------------------------ public services
 
+    // cameo_list_methodology_packs.
     public static Map<String, Object> listMethodologyPacks() {
         List<Map<String, Object>> packs = MethodologyRegistry.listPacks();
         return obj("count", packs.size(), "packs", packs);
     }
 
+    // cameo_get_methodology_pack: the full pack definition (deep copy).
     public static Map<String, Object> getMethodologyPack(String packId) {
         return MethodologyRegistry.getPack(packId);
     }
 
+    /*
+     * cameo_get_methodology_guidance: progress of a recipe (or the first pending one) given the
+     * artifacts the caller says are complete. Parameters are not required, so missing ones become placeholders.
+     */
     public static Map<String, Object> getWorkflowGuidance(String packId, String recipeId,
                                                           Map<String, Object> recipeParameters,
                                                           List<Map<String, Object>> completedArtifacts) {
@@ -63,6 +69,12 @@ public final class MethodologyService {
         return obj("pack", pack, "guidance", guidance.toMap());
     }
 
+    /*
+     * cameo_execute_methodology_recipe: the full pipeline. Seeds the workspace binding, discovers artifacts
+     * that already exist under the root package (so re-runs reuse them), plans and executes the remaining
+     * steps, re-discovers the result, then runs conformance and semantic checks and builds the evidence
+     * bundle and Markdown review packet. Required parameters are enforced (strict) here.
+     */
     public static Map<String, Object> executeMethodologyRecipe(String packId, String recipeId,
                                                                Map<String, Object> recipeParameters,
                                                                String rootPackageId,
@@ -76,6 +88,7 @@ public final class MethodologyService {
         artifacts.addAll(referenceArtifacts(recipeId, params));
         artifacts = discoverLiveArtifacts(recipe, artifacts, params, rootPackageId, bridge);
         RecipeExecutionPlan plan = MethodologyRuntime.buildRecipeExecutionPlan(runtimePack, recipeId, artifacts);
+        // Diagram snapshots taken before execution go into the evidence bundle as the "before" state.
         List<String> beforeIds = diagramIdsForEvidence(plan.artifactBindings());
         List<Map<String, Object>> beforeSnapshots = captureDiagramSnapshots(beforeIds, bridge);
         RecipeExecutionResult result = MethodologyRuntime.executeRecipe(plan, bridge);
@@ -102,6 +115,10 @@ public final class MethodologyService {
                 "reviewPacketMarkdown", renderReviewPacket(pack, bundle));
     }
 
+    /*
+     * cameo_validate_methodology_recipe: read-only conformance and semantic validation of the current
+     * artifacts (given plus discovered) against a recipe.
+     */
     public static Map<String, Object> validateMethodologyRecipe(String packId, String recipeId,
                                                                 Map<String, Object> recipeParameters,
                                                                 List<Map<String, Object>> currentArtifacts,
@@ -126,6 +143,10 @@ public final class MethodologyService {
                 "semanticValidations", semantic);
     }
 
+    /*
+     * cameo_generate_review_packet: evidence bundle and Markdown review packet for the current state,
+     * without executing anything (an empty execution result stands in for a run).
+     */
     public static Map<String, Object> generateReviewPacket(String packId, String recipeId,
                                                            Map<String, Object> recipeParameters,
                                                            List<Map<String, Object>> currentArtifacts,
@@ -161,6 +182,7 @@ public final class MethodologyService {
 
     // ------------------------------------------------------------------ artifact snapshots
 
+    /** Parses caller-supplied artifact objects (key, kind and name required) into snapshots. */
     static List<ArtifactSnapshot> artifactSnapshots(List<Map<String, Object>> artifacts) {
         List<ArtifactSnapshot> snapshots = new ArrayList<>();
         if (artifacts == null) {
@@ -198,6 +220,10 @@ public final class MethodologyService {
         return snapshots;
     }
 
+    /*
+     * Caller artifacts plus a "workspace" Package bound to the root package (unless the caller supplied one).
+     * Every recipe creates its top-level package under {"ref": "workspace"}.
+     */
     static List<ArtifactSnapshot> seedCompletedArtifacts(String rootPackageId, List<Map<String, Object>> completed) {
         List<ArtifactSnapshot> artifacts = artifactSnapshots(completed);
         boolean hasWorkspace = false;
@@ -213,6 +239,10 @@ public final class MethodologyService {
         return artifacts;
     }
 
+    /*
+     * Existing model elements that some recipes take as ID parameters (source needs, requirements),
+     * exposed as artifacts so relationship requirements can refer to them by key.
+     */
     static List<ArtifactSnapshot> referenceArtifacts(String recipeId, Map<String, Object> params) {
         List<ArtifactSnapshot> out = new ArrayList<>();
         if ("system_requirements_package".equals(recipeId)) {
@@ -232,6 +262,11 @@ public final class MethodologyService {
         return out;
     }
 
+    /*
+     * The artifact list after execution: required artifacts that got bound, relationships created by
+     * the plan's create_relationship steps (attached to their source artifact), and the created and
+     * updated snapshots from the result, keeping richer existing data where present.
+     */
     static List<ArtifactSnapshot> mergeCurrentArtifacts(RecipeDefinition recipe, List<ArtifactSnapshot> existing,
                                                         RecipeExecutionPlan plan, RecipeExecutionResult result) {
         Map<String, ArtifactSnapshot> index = new LinkedHashMap<>();
@@ -311,6 +346,7 @@ public final class MethodologyService {
         return reverse;
     }
 
+    // Resolves only top-level {"ref": key} values; unlike MethodologyRuntime.resolveValue an unknown key becomes null.
     static Map<String, Object> resolveRuntimeParameters(Map<String, Object> parameters, Map<String, String> bindings) {
         Map<String, Object> resolved = new LinkedHashMap<>();
         for (Map.Entry<String, Object> e : parameters.entrySet()) {
@@ -326,6 +362,10 @@ public final class MethodologyService {
 
     // ------------------------------------------------------------------ runtime pack
 
+    /*
+     * Turns the pack JSON into runtime definitions: one recipe (when targetRecipeId is set) or all recipes
+     * in pack order. strict=true makes missing required parameters an error instead of a placeholder.
+     */
     static PackDefinition buildRuntimePack(Map<String, Object> pack, Map<String, Object> params,
                                            String targetRecipeId, boolean strict) {
         String packId = J.str(pack.get("id"));
@@ -348,6 +388,8 @@ public final class MethodologyService {
                 phases, built, checklist, J.strings(pack.get("required_profiles")));
     }
 
+    // Recipe structure (artifacts, operations, relationships) is defined in code per recipe ID; the pack
+    // JSON supplies the metadata and parameter definitions.
     static RecipeDefinition buildRuntimeRecipe(String packId, Map<String, Object> recipe, Map<String, Object> provided,
                                                boolean strict) {
         Map<String, Object> params = materializeParameters(J.maps(recipe.get("parameters")), provided, strict);
@@ -379,6 +421,10 @@ public final class MethodologyService {
         }
     }
 
+    /*
+     * Parameter values: provided, else the definition's default, else (for required parameters) a
+     * "<name>" placeholder when not strict. Extra provided values are passed through.
+     */
     static Map<String, Object> materializeParameters(List<Map<String, Object>> definitions, Map<String, Object> provided,
                                                      boolean strict) {
         Map<String, Object> values = new LinkedHashMap<>();
@@ -404,6 +450,7 @@ public final class MethodologyService {
 
     // ------------------------------------------------------------------ recipe builder helpers
 
+    /** {"ref": key} placeholder resolved to the bound element ID at execution time. */
     private static Map<String, Object> ref(String key) {
         return obj("ref", key);
     }
@@ -420,6 +467,7 @@ public final class MethodologyService {
         return new ArtifactRequirement(key, kind, name, parent);
     }
 
+    /** An operation with its parameters given as alternating key/value pairs. */
     private static RecipeOperationDefinition op(String kind, String artifactKey, Object... kv) {
         return new RecipeOperationDefinition(kind, artifactKey, obj(kv));
     }
@@ -432,17 +480,20 @@ public final class MethodologyService {
         return op("create_diagram", key, "type", type, "name", name, "parent_id", ref(parentKey));
     }
 
+    /** Draws an existing relationship as a path between two already placed shapes. */
     private static RecipeOperationDefinition addPath(String key, String diagramKey, String relKey, String sourceShape,
                                                      String targetShape) {
         return op("add_diagram_paths", key, "diagram_id", ref(diagramKey), "paths", J.arr(obj(
                 "relationshipId", ref(relKey), "sourceShapeId", ref(sourceShape), "targetShapeId", ref(targetShape))));
     }
 
+    /** Re-routes a path and resets its label positions so labels do not overlap after placement. */
     private static RecipeOperationDefinition routePath(String diagramKey, String pathKey) {
         return op("route_paths", null, "diagram_id", ref(diagramKey), "routes", J.arr(obj(
                 "presentationId", ref(pathKey), "resetLabels", true)));
     }
 
+    /** Wraps built artifacts/operations with the recipe's metadata from the pack JSON. */
     private static RecipeDefinition recipe(Map<String, Object> recipe, List<ArtifactRequirement> artifacts,
                                            List<RelationshipRequirement> relationships,
                                            List<RecipeOperationDefinition> operations,
@@ -453,6 +504,7 @@ public final class MethodologyService {
                 recipe.get("layout_profile") == null ? null : J.str(recipe.get("layout_profile")), List.of(), validations);
     }
 
+    /** prefix1 .. prefixN. */
     private static List<String> keys(String prefix, int count) {
         List<String> out = new ArrayList<>();
         for (int i = 1; i <= count; i++) {
@@ -463,6 +515,10 @@ public final class MethodologyService {
 
     // ------------------------------------------------------------------ recipe builders
 
+    /*
+     * Stakeholder needs: a package and requirement diagram, one Actor per stakeholder, one Requirement
+     * per need statement (placed on the diagram), and "originates" Trace links from stakeholders to needs.
+     */
     private static RecipeDefinition stakeholderNeeds(Map<String, Object> recipe, Map<String, Object> params) {
         String subject = J.str(params.get("subject_name"));
         String packageName = subject + " Needs";
@@ -498,6 +554,10 @@ public final class MethodologyService {
         return recipe(recipe, arts, rels, ops, List.of());
     }
 
+    /*
+     * Use case model with an explicit subject: the subject Block is drawn as a boundary, each use case
+     * gets its subject set and is placed inside the boundary shape, and actors are associated with use cases.
+     */
     private static RecipeDefinition useCase(Map<String, Object> recipe, Map<String, Object> params) {
         String subject = J.str(params.get("subject_name"));
         String packageName = subject + " Use Cases";
@@ -515,6 +575,7 @@ public final class MethodologyService {
                 op("add_to_diagram", "subject_boundary_shape", "diagram_id", ref("use_case_diagram"),
                         "element_id", ref("subject_boundary"), "x", 280, "y", 60, "width", 420,
                         "height", Math.max(220, 140 + useCases.size() * 90)),
+                // Hide the subject block's compartments so it reads as a plain system boundary.
                 op("set_shape_compartments", null, "diagram_id", ref("use_case_diagram"),
                         "presentation_id", ref("subject_boundary_shape"),
                         "compartments", obj("properties", false, "operations", false, "attributes", false, "stereotype", false))));
@@ -549,6 +610,10 @@ public final class MethodologyService {
         return recipe(recipe, arts, rels, ops, List.of());
     }
 
+    /*
+     * System requirements with IDs and texts on a requirement diagram; when source need IDs are given,
+     * each requirement refines the need at the same position. Adds a requirement-quality semantic check.
+     */
     private static RecipeDefinition systemRequirements(Map<String, Object> recipe, Map<String, Object> params) {
         String system = J.str(params.get("system_name"));
         String packageName = system + " Requirements";
@@ -577,6 +642,7 @@ public final class MethodologyService {
                     "x", 180, "y", 80 + (i - 1) * 110));
             if (i - 1 < sourceNeeds.size()) {
                 rels.add(new RelationshipRequirement("Refine", "source_need_" + i, key, "refines", true));
+                // Source needs are existing elements, so their raw ID is passed instead of a ref.
                 ops.add(op("create_relationship", null, "type", "Refine", "source_id", sourceNeeds.get(i - 1),
                         "target_id", ref(key), "name", "refines"));
             }
@@ -590,6 +656,7 @@ public final class MethodologyService {
         return recipe(recipe, arts, rels, ops, validations);
     }
 
+    /** Block definition diagram with one Block per name; optional Satisfy links from existing requirement IDs. */
     private static RecipeDefinition architecture(Map<String, Object> recipe, Map<String, Object> params) {
         String name = J.str(params.get("architecture_name"));
         String packageName = name + " Architecture";
@@ -616,6 +683,12 @@ public final class MethodologyService {
         return recipe(recipe, arts, List.of(), ops, List.of());
     }
 
+    /*
+     * Logical activity: one swimlane partition per performer (each representing a performer Block), actions
+     * distributed round-robin across lanes, and a single control-flow chain Start -> actions -> Done.
+     * Default performer and action names are generated when none are given. Validated by the
+     * activity-flow semantic check.
+     */
     private static RecipeDefinition logicalActivityFlow(Map<String, Object> recipe, Map<String, Object> params) {
         String activity = J.str(params.get("activity_name"));
         String packageName = activity + " Activity";
@@ -637,6 +710,7 @@ public final class MethodologyService {
                 createElement("logical_activity", "Activity", activity, "logical_activity_package"),
                 createDiagram("logical_activity_diagram", "Activity Diagram", packageName, "logical_activity")));
 
+        // Lanes grow with the number of actions so every action row fits inside its partition.
         int laneHeight = Math.max(240, 140 + actions.size() * 90);
         int performerCount = Math.max(performers.size(), 1);
         int laneWidth = 220;
@@ -659,6 +733,7 @@ public final class MethodologyService {
         ops.add(op("add_to_diagram", "initial_node_shape", "diagram_id", ref("logical_activity_diagram"),
                 "element_id", ref("initial_node"), "x", 104, "y", 112));
         ops.add(op("add_to_diagram", "activity_final_shape", "diagram_id", ref("logical_activity_diagram"),
+                // The final node sits right of the last lane, level with the last action row.
                 "element_id", ref("activity_final"), "x", 80 + (performerCount - 1) * laneWidth + 150,
                 "y", 124 + (Math.max(actions.size(), 1) - 1) * 80));
 
@@ -666,6 +741,7 @@ public final class MethodologyService {
             String actionKey = "action_" + i;
             String shapeKey = actionKey + "_shape";
             actionShapeKeys.add(shapeKey);
+            // Round-robin lane placement: action i goes to lane (i-1) mod lanes, next row after each full sweep.
             int laneIndex = (i - 1) % performerCount;
             int rowIndex = (i - 1) / performerCount;
             int laneX = 80 + laneIndex * laneWidth;
@@ -694,6 +770,11 @@ public final class MethodologyService {
                         "allow_stereotype_partition_labels", false))));
     }
 
+    /*
+     * Port BDD: a system Block shown with its ports compartment, one InterfaceBlock per interface definition
+     * (with directed flow properties) and one typed Port on the system per interface, placed on the block border.
+     * A default request/response interface is used when none is given. Validated by the port-boundary check.
+     */
     @SuppressWarnings("unchecked")
     private static RecipeDefinition logicalPortBdd(Map<String, Object> recipe, Map<String, Object> params) {
         String system = J.str(params.get("system_name"));
@@ -725,6 +806,7 @@ public final class MethodologyService {
             List<Map<String, Object>> flows = J.maps(def.get("flow_properties"));
             String interfaceKey = "interface_block_" + i;
             interfaceKeys.add(interfaceKey);
+            // Interfaces alternate left and right of the system block; ports alternate between its left and right edges.
             int x = i % 2 != 0 ? 100 : 760;
             int y = 100 + (i - 1) * 140;
             ops.add(op("create_element", interfaceKey, "type", "InterfaceBlock", "name", def.get("name"),
@@ -736,6 +818,7 @@ public final class MethodologyService {
                 String fpKey = interfaceKey + "_flow_property_" + f;
                 ops.add(op("create_element", fpKey, "type", "FlowProperty", "name", flows.get(f - 1).get("name"),
                         "parent_id", ref(interfaceKey)));
+                // Flow property direction and port type are set through cameo_set_specification after creation.
                 ops.add(op("set_specification", fpKey, "element_id", ref(fpKey),
                         "properties", obj("direction", flows.get(f - 1).get("direction"))));
             }
@@ -754,6 +837,11 @@ public final class MethodologyService {
                 obj("interface_block_ids", refs(interfaceKeys)))));
     }
 
+    /*
+     * Context IBD: a context Block containing one typed part per external system, a port pair and a Connector
+     * per part, and InformationFlows realized by those connectors. Missing parts or flow names are derived
+     * from each other. Ports are typed by the given interface blocks, reused round-robin.
+     */
     private static RecipeDefinition logicalIbdTraceability(Map<String, Object> recipe, Map<String, Object> params) {
         String context = J.str(params.get("context_name"));
         String packageName = context + " Context";
@@ -834,6 +922,7 @@ public final class MethodologyService {
             ops.add(op("add_to_diagram", externalPortShapeKey, "diagram_id", ref("logical_context_ibd"),
                     "element_id", ref(externalPortKey), "container_presentation_id", ref(partShapeKey),
                     "x", 150, "y", 18, "width", 28, "height", 18));
+            // target_part_with_port_id makes the connector end attach to the port as seen through the part (SysML "part.port").
             ops.add(op("create_relationship", connectorKey, "type", "Connector", "name", partName + " Connector",
                     "source_id", ref(contextPortKey), "target_id", ref(externalPortKey),
                     "owner_id", ref("logical_context_block"), "target_part_with_port_id", ref(partKey)));
@@ -843,6 +932,7 @@ public final class MethodologyService {
             connectorRefs.add(new String[]{connectorKey, contextPortKey, externalPortKey, partKey});
         }
         for (int i = 1; i <= flows.size(); i++) {
+            // Flows are assigned to connectors round-robin when there are more flows than parts.
             String[] refsOf = connectorRefs.get((i - 1) % connectorRefs.size());
             String flowKey = "information_flow_" + i;
             ops.add(op("create_relationship", flowKey, "type", "InformationFlow", "name", flows.get(i - 1),
@@ -852,6 +942,7 @@ public final class MethodologyService {
             ops.add(routePath("logical_context_ibd", flowKey + "_path"));
         }
         List<SemanticValidationDefinition> validations = new ArrayList<>();
+        // Cross-diagram traceability is only checked when an activity diagram to compare against is provided.
         if (activityDiagramId != null) {
             Map<String, Object> semanticParameters = obj("activity_diagram_id", activityDiagramId,
                     "ibd_diagram_id", ref("logical_context_ibd"));
@@ -863,6 +954,10 @@ public final class MethodologyService {
         return recipe(recipe, arts, List.of(), ops, validations);
     }
 
+    /*
+     * Allocation BDD: one Block per name, each satisfying the existing requirement at the same position
+     * (passed by raw ID); requirement_ref_N artifacts stand for those requirements in conformance checks.
+     */
     private static RecipeDefinition requirementsToArchitecture(Map<String, Object> recipe, Map<String, Object> params) {
         String name = J.str(params.get("architecture_name"));
         String packageName = name + " Allocation";
@@ -903,6 +998,7 @@ public final class MethodologyService {
         return recipe(recipe, arts, rels, ops, validations);
     }
 
+    /** Verification scaffold: one Constraint per requirement ID with a Verify link to it, documenting the method (default "analysis"). */
     private static RecipeDefinition verification(Map<String, Object> recipe, Map<String, Object> params) {
         String name = J.str(params.get("verification_name"));
         String packageName = name + " Verification";
@@ -928,6 +1024,7 @@ public final class MethodologyService {
         return recipe(recipe, arts, rels, ops, List.of());
     }
 
+    /** UAF operational starter: an operational package and activity diagram with one Activity per action name placed in a row. */
     private static RecipeDefinition uafOperationalActivity(Map<String, Object> recipe, Map<String, Object> params) {
         String activity = J.str(params.get("activity_name"));
         String packageName = activity + " Operational View";
@@ -951,6 +1048,7 @@ public final class MethodologyService {
 
     // ------------------------------------------------------------------ parameter helpers
 
+    /** List-valued parameter as strings; a falsy value gives an empty list and a bare string a one-item list. */
     static List<String> stringList(Object value) {
         if (!J.truthy(value)) {
             return new ArrayList<>();
@@ -958,11 +1056,13 @@ public final class MethodologyService {
         return J.strings(value);
     }
 
+    /** Identifier-style name ("Ground Station" -> "ground_station"), used for generated port names. */
     static String defaultPortName(String value) {
         String normalized = J.strip(value.replaceAll("[^a-zA-Z0-9]+", "_"), "_").toLowerCase(Locale.ROOT);
         return normalized.isEmpty() ? "port" : normalized;
     }
 
+    /** Maps direction synonyms (input, send, provided, both ...) to SysML in/out/inout; unknown values default to out. */
     static String normalizeFlowPropertyDirection(Object value) {
         String direction = defaultPortName(J.str(J.or(value, "out"))).replace("_", "");
         switch (direction) {
@@ -977,6 +1077,10 @@ public final class MethodologyService {
         }
     }
 
+    /*
+     * Normalizes the interface_definitions parameter. Accepts a single object or string, or a list of them;
+     * strings become interfaces without flow properties, and missing names and port names are generated.
+     */
     static List<Map<String, Object>> interfaceDefinitions(Object value) {
         List<Map<String, Object>> normalized = new ArrayList<>();
         if (!J.truthy(value)) {
@@ -1019,6 +1123,7 @@ public final class MethodologyService {
         return normalized;
     }
 
+    /** Requirement IDs as given, or REQ-001, REQ-002 ... generated for each requirement text. */
     static List<String> coalesceRequirementIds(List<String> ids, List<String> texts) {
         if (!ids.isEmpty()) {
             return new ArrayList<>(ids);
@@ -1030,6 +1135,10 @@ public final class MethodologyService {
         return out;
     }
 
+    /*
+     * Pairs for relationship fan-out: one-to-many, many-to-one, position by position when the lists are the
+     * same length, else each right item paired with left items round-robin.
+     */
     static List<String[]> broadcastPairs(List<String> left, List<String> right) {
         List<String[]> out = new ArrayList<>();
         if (left.isEmpty() || right.isEmpty()) {
@@ -1063,6 +1172,10 @@ public final class MethodologyService {
         return text.isEmpty() ? null : text;
     }
 
+    /*
+     * Kind to report for a discovered artifact. Generic live types ("Diagram", "Model") are less specific
+     * than the expected kind, so the expected kind is kept in those cases; otherwise the live type wins.
+     */
     static String preferredLiveKind(String existingKind, Object liveKind) {
         String liveText = optionalStr(liveKind);
         if (liveText == null) {
@@ -1079,6 +1192,7 @@ public final class MethodologyService {
         return liveText;
     }
 
+    /** root_package_id parameter, else the element bound to the "workspace" artifact. */
     static String rootPackageId(Map<String, Object> params, List<ArtifactSnapshot> artifacts) {
         String root = optionalStr(params.get("root_package_id"));
         if (root != null) {
@@ -1099,6 +1213,7 @@ public final class MethodologyService {
         Map<String, Object> call() throws Exception;
     }
 
+    // UnsupportedOperationException from a Bridge fake lands here too; LinkageError covers missing Cameo classes.
     static Map<String, Object> safe(BridgeCall call) {
         try {
             return call.call();
@@ -1107,6 +1222,11 @@ public final class MethodologyService {
         }
     }
 
+    /*
+     * Binds required artifacts that already exist in the model, so executing a recipe twice reuses them.
+     * Bindings are recomputed per pass, so each pass can find artifacts whose parent was found in the
+     * previous one; three passes cover the nesting depth of the built-in recipes (package, owner, diagram).
+     */
     static List<ArtifactSnapshot> discoverLiveArtifacts(RecipeDefinition recipe, List<ArtifactSnapshot> artifacts,
                                                         Map<String, Object> params, String rootPackageId, Bridge bridge) {
         Map<String, ArtifactSnapshot> index = new LinkedHashMap<>();
@@ -1138,6 +1258,10 @@ public final class MethodologyService {
         return hydrateLiveArtifacts(new ArrayList<>(index.values()), bridge);
     }
 
+    /*
+     * Looks up one required artifact by type and exact name under its bound parent (or the workspace).
+     * Only direct children of the parent are accepted, even though the query is recursive.
+     */
     static ArtifactSnapshot findLiveArtifact(ArtifactRequirement req, Map<String, String> bindings, String workspaceId,
                                              Bridge bridge) {
         boolean hasWorkspace = workspaceId != null && !workspaceId.isEmpty();
@@ -1170,6 +1294,7 @@ public final class MethodologyService {
         return null;
     }
 
+    /** Diagram counterpart of findLiveArtifact: matches name, owner and diagram type from cameo_list_diagrams. */
     static ArtifactSnapshot findLiveDiagram(ArtifactRequirement req, String parentId, Bridge bridge) {
         Map<String, Object> result = safe(bridge::listDiagrams);
         for (Map<String, Object> diagram : J.maps(result == null ? null : result.get("diagrams"))) {
@@ -1190,6 +1315,10 @@ public final class MethodologyService {
         return null;
     }
 
+    /*
+     * Refreshes bound artifacts from the model: kind, name, stereotypes, specification properties (plus
+     * constraints), owner-derived parent key and relationships to other bound artifacts.
+     */
     public static List<ArtifactSnapshot> hydrateLiveArtifacts(List<ArtifactSnapshot> artifacts, Bridge bridge) {
         Map<String, String> bindings = MethodologyRuntime.bindingsOf(artifacts);
         Map<String, String> reverse = reverseBindings(bindings);
@@ -1209,6 +1338,8 @@ public final class MethodologyService {
                     properties.put("constraints", J.copy(spec.get("constraints")));
                 }
             }
+            // UseCase subjects are a property, not a relationship; they are turned into "Subject" relationship
+            // snapshots below so the use case recipe's Subject requirements can be checked.
             List<Object> subjectIds = new ArrayList<>();
             for (Map<String, Object> item : J.maps(properties.get("subject"))) {
                 String sid = optionalStr(item.get("id"));
@@ -1236,6 +1367,7 @@ public final class MethodologyService {
         return hydrated;
     }
 
+    /** Relationships between this artifact and other bound artifacts (by reverse binding lookup), plus subject links. */
     static List<RelationshipSnapshot> collectLiveRelationships(String artifactKey, String elementId,
                                                                Map<String, String> reverse, Map<String, Object> properties,
                                                                Bridge bridge) {
@@ -1271,6 +1403,7 @@ public final class MethodologyService {
         return uniqueRelationships(snapshots);
     }
 
+    /** De-duplicates by type, endpoints and name (case-insensitive on type and endpoints); the last occurrence wins. */
     static List<RelationshipSnapshot> uniqueRelationships(List<RelationshipSnapshot> relationships) {
         Map<List<String>, RelationshipSnapshot> unique = new LinkedHashMap<>();
         for (RelationshipSnapshot r : relationships) {
@@ -1285,6 +1418,7 @@ public final class MethodologyService {
         return k.contains("diagram") || k.equals("bdd") || k.equals("ibd");
     }
 
+    // Block is a stereotyped UML Class, so the element query filters on its metaclass.
     static String queryType(String kind) {
         switch (kind.toLowerCase(Locale.ROOT)) {
             case "sysml block definition diagram":
@@ -1299,6 +1433,7 @@ public final class MethodologyService {
         }
     }
 
+    // Suffix match lets a qualified live type match a shorter expected kind.
     static boolean kindMatches(String actual, String expected) {
         String a = actual.toLowerCase(Locale.ROOT).replace("_", " ").replace("-", " ");
         String e = expected.toLowerCase(Locale.ROOT).replace("_", " ").replace("-", " ");
@@ -1307,6 +1442,7 @@ public final class MethodologyService {
 
     // ------------------------------------------------------------------ evidence
 
+    // Diagram artifacts are recognized by key naming convention (..._diagram, ..._bdd, ..._ibd).
     static List<String> diagramIdsForEvidence(Map<String, String> bindings) {
         List<String> ids = new ArrayList<>();
         for (Map.Entry<String, String> e : bindings.entrySet()) {
@@ -1346,6 +1482,10 @@ public final class MethodologyService {
         return snapshots;
     }
 
+    /*
+     * Runs the recipe's semantic validators with refs resolved against current bindings. An unresolved
+     * ref or a validator exception is reported as a failed check instead of aborting the tool call.
+     */
     static List<Map<String, Object>> runSemanticValidations(RecipeDefinition recipe, List<ArtifactSnapshot> artifacts,
                                                             Bridge bridge) {
         List<Map<String, Object>> results = new ArrayList<>();
@@ -1377,11 +1517,13 @@ public final class MethodologyService {
         return results;
     }
 
+    /** A validator result containing one failed check with the given message. */
     private static Map<String, Object> failure(String validatorId, String checkName, String message) {
         return obj("validatorId", validatorId, "ok", false,
                 "checks", J.arr(obj("name", checkName, "ok", false, "details", obj("message", message))));
     }
 
+    /** Dispatches a validator ID to the corresponding {@link SemanticValidation} entry point. */
     static Map<String, Object> invokeSemanticValidator(String validatorId, Map<String, Object> p, Bridge bridge)
             throws Exception {
         switch (validatorId) {
@@ -1404,6 +1546,7 @@ public final class MethodologyService {
                         J.strings(p.get("interface_block_ids")), optionalStr(p.get("ibd_diagram_id")),
                         J.strings(p.get("requirement_ids")), J.strings(p.get("architecture_element_ids")), bridge);
             case "requirements_to_architecture_trace":
+                // Requirement-to-architecture trace is the traceability validator restricted to its requirement pairing.
                 return SemanticValidation.crossDiagramTraceability(null, List.of(), null,
                         J.strings(p.get("requirement_ids")), J.strings(p.get("architecture_element_ids")), bridge);
             default:
@@ -1411,6 +1554,10 @@ public final class MethodologyService {
         }
     }
 
+    /*
+     * Evidence section of the bundle: IDs created by the run (classified by receipt shape and operation),
+     * raw receipts, hydrated artifacts, semantic results and before/after diagram snapshots.
+     */
     static Map<String, Object> buildBridgeEvidence(List<ArtifactSnapshot> artifacts, RecipeExecutionResult result,
                                                    List<Map<String, Object>> beforeSnapshots, List<String> afterDiagramIds,
                                                    List<Map<String, Object>> semanticValidations, Bridge bridge) {
@@ -1448,9 +1595,11 @@ public final class MethodologyService {
                         "after", captureDiagramSnapshots(afterDiagramIds, bridge)));
     }
 
+    // Detail keys whose values are listed under a failed semantic check in the review packet.
     private static final List<String> HIGHLIGHT_KEYS = List.of("missing", "missingIdIds", "blankTextIds", "weakTextIds",
             "missingPortTerms", "missingIbdTerms", "missingRequirementTraceIds", "isolatedActionIds", "unreachableActionIds");
 
+    /** Markdown review packet: header, artifact keys, guidance, evidence counts, findings, semantic results, assumptions. */
     static String renderReviewPacket(Map<String, Object> pack, EvidenceBundle bundle) {
         ConformanceReport conformance = bundle.conformance();
         List<String> lines = new ArrayList<>();

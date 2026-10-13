@@ -26,16 +26,24 @@ import java.util.Map;
 /** Diagnostic dumps of diagram and presentation property managers (cameo_dump_*_properties). */
 final class PropertyDumpService {
 
+    // Cap on items serialized per collection or map value, to keep dumps of large values bounded.
     private static final int MAX_ITEMS = 250;
 
     private PropertyDumpService() {
     }
 
+    /*
+     * cameo_dump_diagram_properties: the diagram's own presentation properties, counts of symbols by
+     * class, and a page (offset/limit) of symbols, optionally each with its full property manager.
+     * Read-only, so it runs on the EDT without a session; 120 s limit for big diagrams.
+     */
     static JsonObject dumpDiagram(String diagramId, boolean includeRaw, boolean includePresentationProperties,
                                   boolean summaryOnly, int limit, int offset) throws Exception {
         return Edt.onEdt("Dump Diagram Properties", project -> {
             DiagramPresentationElement dpe = DiagramSupport.findDiagram(project, diagramId);
             JsonArray warnings = new JsonArray();
+            // Unlike loadedDiagram, a failing ensureLoaded is reported as a warning so the dump still returns
+            // whatever is readable.
             try {
                 dpe.ensureLoaded();
                 warnings.add("Diagram ensureLoaded() was called before presentation inspection");
@@ -44,6 +52,7 @@ final class PropertyDumpService {
             }
             JsonObject response = new JsonObject();
             response.add("diagram", diagramSummary(dpe));
+            // The Diagram is an Element, so this yields its compact element JSON.
             response.add("diagramProperties", serializeValue(dpe.getDiagram(), includeRaw, true));
             try {
                 response.add("diagramPresentationProperties",
@@ -79,10 +88,12 @@ final class PropertyDumpService {
         }, 120);
     }
 
+    // cameo_dump_presentation_properties: one symbol with its full property manager and direct children.
     static JsonObject dumpPresentation(String diagramId, String presentationId, boolean includeRaw,
                                        boolean summaryOnly) throws Exception {
         return Edt.onEdt("Dump Presentation Properties", project -> {
             DiagramPresentationElement dpe = DiagramSupport.loadedDiagram(project, diagramId);
+            // Only the parent map is needed, to report the target's parentPresentationId.
             Map<String, String> parentById = new LinkedHashMap<>();
             DiagramSupport.collect(dpe.getPresentationElements(), new ArrayList<>(), parentById, null);
             PresentationElement target = DiagramSupport.requirePresentation(dpe, presentationId);
@@ -109,6 +120,8 @@ final class PropertyDumpService {
         return json;
     }
 
+    // Identity of one symbol (full and simple class name, element, bounds, child count); read failures
+    // become *Warning fields instead of errors.
     static JsonObject summary(PresentationElement pe, String parentId) {
         JsonObject json = new JsonObject();
         json.addProperty("presentationId", pe.getID());
@@ -142,6 +155,7 @@ final class PropertyDumpService {
         return json;
     }
 
+    // summary() plus the serialized property manager and one-level summaries of the direct children.
     static JsonObject withProperties(PresentationElement pe, String parentId, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = summary(pe, parentId);
         try {
@@ -162,6 +176,7 @@ final class PropertyDumpService {
         return json;
     }
 
+    // Symbol counts keyed by presentation class simple name, in first-seen order.
     static JsonObject countByType(Collection<PresentationElement> elements) {
         Map<String, Integer> map = new LinkedHashMap<>();
         for (PresentationElement pe : elements) {
@@ -174,6 +189,7 @@ final class PropertyDumpService {
 
     // ------------------------------------------------------------------ property serializer
 
+    // Every property of a manager; a failure while listing becomes a warning on the result.
     static JsonObject serializeManager(PropertyManager manager, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = new JsonObject();
         JsonArray properties = new JsonArray();
@@ -201,6 +217,8 @@ final class PropertyDumpService {
         return json;
     }
 
+    // One property: name, id, class type, value (with its Java type and string form) and, with includeRaw,
+    // the raw class/string of the value. Each read is guarded so one bad getter does not hide the rest.
     static JsonObject serializeProperty(Property property, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = new JsonObject();
         JsonArray warnings = new JsonArray();
@@ -236,6 +254,11 @@ final class PropertyDumpService {
         return json;
     }
 
+    /*
+     * Best-effort JSON for an arbitrary property value: primitives as-is, Elements as compact JSON,
+     * collections/maps as a count plus up to MAX_ITEMS entries (items omitted with summaryOnly). Anything
+     * else becomes class name + toString, and with includeRaw also the results of its no-arg getters.
+     */
     static JsonElement serializeValue(Object value, boolean includeRaw, boolean summaryOnly) {
         if (value == null) {
             return JsonNull.INSTANCE;
@@ -259,6 +282,7 @@ final class PropertyDumpService {
             JsonArray array = new JsonArray();
             if (!summaryOnly) {
                 int n = 0;
+                // Nested values are serialized in summary mode so a dump does not expand recursively.
                 for (Object item : (Collection<?>) value) {
                     if (n++ >= MAX_ITEMS) {
                         break;
@@ -293,6 +317,7 @@ final class PropertyDumpService {
         fallback.addProperty("className", value.getClass().getName());
         fallback.addProperty("string", String.valueOf(value));
         if (includeRaw) {
+            // Reflective getter sweep: diagnostic only, used to discover how an unfamiliar value type is structured.
             JsonObject getters = new JsonObject();
             for (Method m : value.getClass().getMethods()) {
                 String n = m.getName();
@@ -313,6 +338,7 @@ final class PropertyDumpService {
         return fallback;
     }
 
+    // A Supplier that is allowed to throw from Cameo getters, used by safeAdd.
     private interface StringSupplier {
         String get();
     }

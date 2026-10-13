@@ -19,11 +19,16 @@ import java.util.concurrent.Callable;
 /** Best-effort JSON for Cameo property managers and arbitrary reflected values. */
 public final class PropertyJson {
 
+    // Cap on collection/map entries serialized per value, to keep responses bounded.
     private static final int MAX_ITEMS = 250;
 
     private PropertyJson() {
     }
 
+    /**
+     * Serializes every property of a Cameo PropertyManager (e.g. a table/matrix settings panel).
+     * Never throws: a null manager or a failing getProperties() is reported under "warnings".
+     */
     public static JsonObject serializeManager(PropertyManager manager, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = new JsonObject();
         JsonArray properties = new JsonArray();
@@ -54,6 +59,10 @@ public final class PropertyJson {
         return json;
     }
 
+    /**
+     * One Property as {name, id, classType, value, valueType, valueString}; each read is guarded
+     * separately so one failing accessor does not lose the rest. includeRaw adds a "raw" block.
+     */
     public static JsonObject serializeProperty(Property property, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = new JsonObject();
         JsonArray warnings = new JsonArray();
@@ -89,6 +98,11 @@ public final class PropertyJson {
         return json;
     }
 
+    /**
+     * Converts any value to JSON: primitives directly, Elements via ElementJson.toJsonCompact,
+     * collections/maps as {count, items|entries} wrappers, anything else as {className, string}.
+     * Nested items are always serialized summary-only, so only the top level is expanded.
+     */
     public static JsonElement serializeValue(Object value, boolean includeRaw, boolean summaryOnly) {
         if (value == null) {
             return JsonNull.INSTANCE;
@@ -120,6 +134,7 @@ public final class PropertyJson {
         }
         if (value instanceof Collection<?>) {
             JsonArray array = new JsonArray();
+            // summaryOnly keeps just the type and count; the items array stays empty.
             if (!summaryOnly) {
                 int count = 0;
                 for (Object item : (Collection<?>) value) {
@@ -155,6 +170,7 @@ public final class PropertyJson {
         JsonObject fallback = new JsonObject();
         fallback.addProperty("className", value.getClass().getName());
         fallback.addProperty("string", String.valueOf(value));
+        // includeRaw on an unknown type dumps its getters; that dump passes includeRaw=false, so it cannot recurse.
         if (includeRaw) {
             appendGetterValues(fallback, value);
         }
@@ -206,6 +222,7 @@ public final class PropertyJson {
         return array;
     }
 
+    /** Adds {getterValues: {...}} with summary-only values of every public no-arg get/is method of value. */
     private static void appendGetterValues(JsonObject json, Object value) {
         JsonObject getters = new JsonObject();
         for (Method m : value.getClass().getMethods()) {
@@ -227,6 +244,7 @@ public final class PropertyJson {
         }
     }
 
+    /** Adds the supplier's string under key when non-null; a thrown exception becomes a warning instead. */
     private static void safeAdd(JsonObject json, String key, Callable<String> supplier, JsonArray warnings) {
         try {
             String v = supplier.call();

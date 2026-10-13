@@ -28,6 +28,8 @@ public final class GenericTableService implements GsonService {
     public GenericTableService() {
     }
 
+    // A LinkageError means the installed Generic Table API differs from the one compiled against;
+    // surface it as UNSUPPORTED rather than an internal error.
     @Override
     public JsonObject call(String operation, JsonObject params) throws Exception {
         try {
@@ -38,6 +40,7 @@ public final class GenericTableService implements GsonService {
         }
     }
 
+    /** Routes "get", "columns" and "create" (bound in ArtifactBindings) to their implementations. */
     private JsonObject dispatch(String operation, JsonObject params) throws Exception {
         switch (operation) {
             case "get": {
@@ -53,6 +56,10 @@ public final class GenericTableService implements GsonService {
         }
     }
 
+    /**
+     * cameo_list_generic_table_columns: column ids the Generic Table plugin offers for a basis, given
+     * either a concrete element or a type token (resolved to its stereotype or metaclass).
+     */
     private JsonObject columns(JsonObject p) throws Exception {
         String elementId = ArtifactSupport.optStr(p, "element_id");
         String elementType = ArtifactSupport.optStr(p, "element_type");
@@ -67,6 +74,7 @@ public final class GenericTableService implements GsonService {
             Collection<String> ids = GenericTableManager.getPossibleColumnIDs(basis);
             if (ids != null) {
                 for (String id : ids) {
+                    // The API only returns ids, so the id doubles as the display name here.
                     JsonObject column = new JsonObject();
                     column.addProperty("id", id);
                     column.addProperty("name", id);
@@ -81,6 +89,10 @@ public final class GenericTableService implements GsonService {
         });
     }
 
+    /**
+     * cameo_create_generic_table: creates the table under a Namespace parent, then applies the optional
+     * element types, scope, explicit rows and columns, and returns it in the cameo_get_generic_table shape.
+     */
     private JsonObject create(JsonObject p) throws Exception {
         String parentId = Gs.reqStr(p, "parent_id").trim();
         String name = ArtifactSupport.optStr(p, "name");
@@ -123,6 +135,10 @@ public final class GenericTableService implements GsonService {
         }, 120);
     }
 
+    /**
+     * cameo_get_generic_table: scope, rows, columns and every cell as display text. A diagram of another
+     * type is rejected; the table is refreshed first so the cell values are current.
+     */
     private JsonObject serializeTable(Project project, String tableId) {
         Object o = project.getElementByID(tableId);
         if (!(o instanceof Diagram)) {
@@ -149,6 +165,7 @@ public final class GenericTableService implements GsonService {
             for (int i = 0; i < columnIds.size(); i++) {
                 JsonObject column = new JsonObject();
                 column.addProperty("id", columnIds.get(i));
+                // Column names may be missing or shorter than the id list; fall back to the id.
                 column.addProperty("name", columnNames != null && i < columnNames.size()
                         ? columnNames.get(i) : columnIds.get(i));
                 columns.add(column);
@@ -171,6 +188,7 @@ public final class GenericTableService implements GsonService {
                     cell.addProperty("columnId", cellEntry.getKey());
                     Property value = cellEntry.getValue();
                     String text;
+                    // Prefer the property's display text; some property kinds throw, so fall back to the raw value.
                     try {
                         text = value != null ? value.getValueStringRepresentation() : "";
                     } catch (RuntimeException e) {
@@ -186,6 +204,10 @@ public final class GenericTableService implements GsonService {
         return response;
     }
 
+    /**
+     * Recomputes the table and waits for its cell values. Values still loading after the API's
+     * timeout are serialized as they are; an interrupt is re-flagged rather than swallowed.
+     */
     private static void refresh(Diagram diagram) {
         GenericTableManager.refreshTable(diagram);
         try {

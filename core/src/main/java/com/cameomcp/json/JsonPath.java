@@ -31,11 +31,13 @@ public final class JsonPath {
         return cur;
     }
 
+    /** The value at path as a string (numbers and booleans converted), or null. */
     public static String str(Object root, Object... path) {
         Object v = get(root, path);
         return v == null ? null : String.valueOf(v);
     }
 
+    /** The value at path as a long; numeric strings are parsed; anything else gives {@code dflt}. */
     public static long num(Object root, long dflt, Object... path) {
         Object v = get(root, path);
         if (v instanceof Number) {
@@ -51,6 +53,7 @@ public final class JsonPath {
         return dflt;
     }
 
+    /** The value at path as a boolean; "true"/"false" strings are accepted; otherwise {@code dflt}. */
     public static boolean bool(Object root, boolean dflt, Object... path) {
         Object v = get(root, path);
         if (v instanceof Boolean) {
@@ -62,6 +65,7 @@ public final class JsonPath {
         return dflt;
     }
 
+    /** The object at path, or null if absent or not an object. */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> map(Object root, Object... path) {
         Object v = get(root, path);

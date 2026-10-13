@@ -33,6 +33,7 @@ public final class Internal {
         if (spec == null || handler == null) {
             throw new ToolException("NOT_IMPLEMENTED", "Internal tool " + tool + " is not available.");
         }
+        // Goes straight to the handler: no CallGuard, no session counters, and the caller's write session (if any) is shared.
         Object value = handler.call(new Args(args == null ? Json.obj() : args), new ToolContext(spec, null, "internal"));
         ToolResult r = ToolResult.of(value);
         Object structured = r.structured();
@@ -42,6 +43,7 @@ public final class Internal {
         return Json.obj("result", structured);
     }
 
+    /** Same as {@link #call(String, Map)} with arguments given as key/value pairs. */
     public static Map<String, Object> call(String tool, Object... keyValues) throws Exception {
         return call(tool, Json.obj(keyValues));
     }

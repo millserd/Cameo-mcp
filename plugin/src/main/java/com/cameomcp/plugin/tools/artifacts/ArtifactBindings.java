@@ -22,6 +22,7 @@ import static com.cameomcp.plugin.tools.artifacts.ArtifactSupport.RELATION_MAP_S
  */
 public final class ArtifactBindings {
 
+    /** A tool body taking canonicalized snake_case params and returning Gson JSON. */
     @FunctionalInterface
     private interface Impl {
         JsonObject call(JsonObject params) throws Exception;
@@ -30,6 +31,10 @@ public final class ArtifactBindings {
     private ArtifactBindings() {
     }
 
+    /**
+     * Registers every artifacts-family tool. "local" tools run in this jar; "optional" tools are
+     * forwarded by name to an operation of a service class in the optional jar.
+     */
     public static void bind(ToolRegistry r) {
         // matrices
         r.bind("cameo_list_matrix_kinds", (a, c) -> MatrixKinds.catalog());
@@ -72,15 +77,21 @@ public final class ArtifactBindings {
         local(r, "cameo_execute_probe", Probes::execute);
     }
 
+    /** Binds a tool implemented in the main plugin jar. */
     private static void local(ToolRegistry r, String tool, Impl impl) {
         r.bind(tool, (Args a, ToolContext c) -> out(impl.call(ArtifactSupport.params(a, c))));
     }
 
+    /**
+     * Binds a tool that delegates to {@code service.operation} in the optional jar; if that jar or the
+     * Cameo plugin it needs is missing, OptionalModules turns the load failure into an UNSUPPORTED error.
+     */
     private static void optional(ToolRegistry r, String tool, String service, String operation) {
         r.bind(tool, (Args a, ToolContext c) ->
                 out(OptionalModules.call(service, operation, ArtifactSupport.params(a, c))));
     }
 
+    /** Converts the Gson result to the plain Map the registry serializes; null becomes {}. */
     private static Map<?, ?> out(JsonObject result) {
         return result == null ? Json.obj() : (Map<?, ?>) Gs.fromGson(result);
     }
@@ -89,6 +100,8 @@ public final class ArtifactBindings {
      * Roots come from root_element_ids / context_element_id; with only relation_map_id the map's
      * context element (read by the Relation Map module) is the root.
      */
+    // cameo_get_traceability_graph: only the map-context case needs the Relation Map API, so plain
+    // graphs are built here and keep working when the optional Relation Map plugin is absent.
     static JsonObject traceabilityGraph(JsonObject p) throws Exception {
         String relationMapId = ArtifactSupport.optStr(p, "relation_map_id");
         if (relationMapId != null && !TraceabilityGraph.hasExplicitRoots(p)) {

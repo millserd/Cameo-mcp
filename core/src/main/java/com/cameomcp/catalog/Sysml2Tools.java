@@ -14,14 +14,20 @@ import static com.cameomcp.mcp.ToolSpec.tool;
  */
 public final class Sysml2Tools {
 
+    // Family name used in docs and in cameo_list_tools filters.
     public static final String FAMILY = "sysml2";
 
+    // SysML v2 elements have both a Cameo id and a SysML v2 elementId (UUID); tools accept either.
     private static final String ID_HELP = "Element id from cameo_sysml2_list_roots, cameo_sysml2_list_children or "
             + "cameo_sysml2_query (the 'id' field; the SysML v2 'elementId' UUID is accepted too).";
 
     private Sysml2Tools() {
     }
 
+    /**
+     * The family's specs, in the order clients see them. Descriptions and parameter help are the
+     * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     */
     public static List<ToolSpec> specs() {
         return Arrays.asList(
                 tool("cameo_sysml2_status", FAMILY).noProject().readOnly()

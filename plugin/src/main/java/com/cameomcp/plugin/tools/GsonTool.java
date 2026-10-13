@@ -8,5 +8,6 @@ import com.google.gson.JsonObject;
  */
 @FunctionalInterface
 public interface GsonTool {
+    /** Runs the tool; {@code params} holds the client's arguments, the result becomes structuredContent. */
     JsonObject call(JsonObject params) throws Exception;
 }

@@ -29,6 +29,8 @@ final class Sysml2Model {
     /** Upper bound on elements visited by one tree walk. */
     static final int WALK_LIMIT = 200_000;
 
+    // Reflective method cache keyed by "class#name,paramTypes"; MISSING marks a lookup that found nothing,
+    // so absent methods are not searched for again on every element.
     private static final Map<String, Method> METHODS = new ConcurrentHashMap<>();
     private static final Method MISSING;
 
@@ -47,6 +49,7 @@ final class Sysml2Model {
 
     /** Whether {@code o} implements the KerML Element interface. */
     static boolean isElement(Object o) {
+        // Walk superclasses because the KerML interface may be implemented by a base class of the runtime type.
         for (Class<?> c = o == null ? null : o.getClass(); c != null; c = c.getSuperclass()) {
             if (implementsNamed(c, KERML_ELEMENT)) {
                 return true;
@@ -55,6 +58,7 @@ final class Sysml2Model {
         return false;
     }
 
+    // Recursive check through super-interfaces, by name, since the interface class is not on our compile classpath.
     private static boolean implementsNamed(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) {
             if (name.equals(i.getName()) || implementsNamed(i, name)) {
@@ -69,6 +73,10 @@ final class Sysml2Model {
         return callWith(target, name, new Class<?>[0]);
     }
 
+    /*
+     * Invokes a public method with explicit parameter types; null when the target is null or the method is absent.
+     * Runtime exceptions from the call propagate unchanged; checked ones become TOOL_FAILED.
+     */
     static Object callWith(Object target, String name, Class<?>[] types, Object... args) {
         if (target == null) {
             return null;
@@ -117,6 +125,11 @@ final class Sysml2Model {
         return found;
     }
 
+    /*
+     * Resolution order: the method itself if declared by a public class; else the same method on a public
+     * superclass or interface (callable through the non-public implementation); else setAccessible as a last resort,
+     * which can fail under module/security restrictions, in which case the method is treated as missing.
+     */
     private static Method publicMethod(Class<?> type, String name, Class<?>[] types) {
         Method m;
         try {
@@ -139,6 +152,7 @@ final class Sysml2Model {
         }
     }
 
+    // Searches public superclasses and every (super-)interface of the type hierarchy for an invocable declaration.
     private static Method fromInterfaces(Class<?> type, String name, Class<?>[] types) {
         for (Class<?> c = type; c != null; c = c.getSuperclass()) {
             if (c != type && Modifier.isPublic(c.getModifiers())) {
@@ -158,6 +172,7 @@ final class Sysml2Model {
         return null;
     }
 
+    // Depth-first through an interface and its super-interfaces; only public ones yield a usable Method.
     private static Method fromInterface(Class<?> i, String name, Class<?>[] types) {
         if (Modifier.isPublic(i.getModifiers())) {
             try {
@@ -177,6 +192,7 @@ final class Sysml2Model {
 
     // ------------------------------------------------------------------ element properties
 
+    // toString of an optional property, or null when missing or failing.
     static String str(Object target, String name) {
         Object v = quiet(target, name);
         return v == null ? null : v.toString();
@@ -188,6 +204,7 @@ final class Sysml2Model {
         return id != null && !id.isEmpty() ? id : str(element, "getElementId");
     }
 
+    // Effective name, falling back to the declared name; never null.
     static String name(Object element) {
         String n = str(element, "getName");
         if (n == null) {
@@ -198,6 +215,7 @@ final class Sysml2Model {
 
     /** SysML v2 metaclass name, such as PartDefinition. */
     static String type(Object element) {
+        // The implementations are EMF objects: eClass().getName() is the metaclass; otherwise strip "Impl" from the class name.
         Object eClass = quiet(element, "eClass");
         String n = eClass == null ? null : str(eClass, "getName");
         if (n != null && !n.isEmpty()) {
@@ -207,6 +225,7 @@ final class Sysml2Model {
         return simple.endsWith("Impl") ? simple.substring(0, simple.length() - 4) : simple;
     }
 
+    // Standard-library (read-only) elements such as the KerML/SysML libraries report true.
     static boolean isLibrary(Object element) {
         return Boolean.TRUE.equals(quiet(element, "isLibraryElement"));
     }
@@ -226,6 +245,7 @@ final class Sysml2Model {
         return out;
     }
 
+    // Owner, or the owning namespace when getOwner is absent or returns null.
     static Object owner(Object element) {
         Object o = quiet(element, "getOwner");
         return o != null ? o : quiet(element, "getOwningNamespace");
@@ -308,12 +328,15 @@ final class Sysml2Model {
      * The part of {@code text} between two generator indexes, widened to the closing ';' or '}' when
      * the end index is inclusive, with the indentation of nested lines removed.
      */
+    // Indexes outside the text or an empty range give "".
     static String slice(String text, int start, int end) {
         if (text == null || start < 0 || start >= text.length() || end <= start) {
             return "";
         }
         int stop = Math.min(end, text.length());
         String body = text.substring(start, stop);
+        // The generator's end index can stop just before the closing brace or semicolon; include it when the slice
+        // would otherwise end unbalanced (open brace) or without its terminating ';'.
         if (stop < text.length()) {
             char next = text.charAt(stop);
             String trimmed = body.trim();
@@ -323,6 +346,7 @@ final class Sysml2Model {
                 body = text.substring(start, stop + 1);
             }
         }
+        // Indentation of the first line in the source; that much leading whitespace is removed from following lines.
         int lineStart = text.lastIndexOf('\n', start - 1) + 1;
         int indent = 0;
         while (lineStart + indent < start && Character.isWhitespace(text.charAt(lineStart + indent))) {
@@ -361,6 +385,7 @@ final class Sysml2Model {
     // ------------------------------------------------------------------ traversal
 
     /** Element with this id or KerML elementId under the given roots, or null. */
+    // Depth-first, bounded by WALK_LIMIT; returns null (not found) when the limit is hit.
     static Object findUnder(Collection<?> roots, String id) {
         Deque<Object> stack = new ArrayDeque<>(roots);
         int visited = 0;
@@ -380,6 +405,7 @@ final class Sysml2Model {
     /** Depth-first search by name substring and metaclass, paged. */
     static JsonObject query(Collection<?> roots, String name, String type, boolean includeLibraries, int limit,
                             int offset) {
+        // Name match is a case-insensitive substring; type match is an exact case-insensitive metaclass name.
         String needle = name == null || name.trim().isEmpty() ? null : name.trim().toLowerCase(Locale.ROOT);
         String wanted = type == null || type.trim().isEmpty() ? null : type.trim();
         JsonArray matches = new JsonArray();
@@ -394,12 +420,14 @@ final class Sysml2Model {
                 break;
             }
             Object e = stack.pop();
+            // Library elements are skipped together with their whole subtree.
             if (!includeLibraries && isLibrary(e)) {
                 continue;
             }
             boolean ok = (wanted == null || wanted.equalsIgnoreCase(type(e)))
                     && (needle == null || name(e).toLowerCase(Locale.ROOT).contains(needle));
             if (ok) {
+                // Matches before offset are counted but not returned; one match past the page sets hasMore and stops the walk.
                 if (matched >= offset && matches.size() < limit) {
                     matches.add(compact(e));
                 } else if (matches.size() >= limit) {

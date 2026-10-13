@@ -20,6 +20,11 @@ public final class AdvancedBindings {
         Bind.gson(r, name, p -> tool.call(snakeAliases(p)));
     }
 
+    /*
+     * Adds a snake_case copy of every camelCase key, mutating and returning p (null becomes {}).
+     * Unlike Bind's own aliasing this splits on lower/digit-to-upper boundaries only, so "elementID"
+     * becomes "element_id", and it also fills a snake key the client sent as explicit JSON null.
+     */
     static JsonObject snakeAliases(JsonObject p) {
         if (p == null) {
             return new JsonObject();
@@ -36,6 +41,7 @@ public final class AdvancedBindings {
         return p;
     }
 
+    /** Registers every advanced-family tool name against its service method. All go through {@link #gson}. */
     public static void bind(ToolRegistry r) {
         // validation
         gson(r, "cameo_get_validation_capabilities", p -> ValidationService.capabilities());
@@ -72,9 +78,11 @@ public final class AdvancedBindings {
         // teamwork
         gson(r, "cameo_get_teamwork_capabilities", p -> TeamworkService.capabilities());
         gson(r, "cameo_get_teamwork_project", p -> TeamworkService.project());
+        // Teamwork commit/update are preview-only: the second argument just labels which operation is previewed.
         gson(r, "cameo_preview_teamwork_commit", p -> TeamworkService.preview(p, "commit"));
         gson(r, "cameo_preview_teamwork_update", p -> TeamworkService.preview(p, "update"));
         gson(r, "cameo_list_teamwork_descriptors", p -> TeamworkService.descriptors());
+        // Branches, history and locks have no typed readback yet; placeholder() reports project mode and a probe-required status.
         gson(r, "cameo_list_teamwork_branches", p -> TeamworkService.placeholder("branches"));
         gson(r, "cameo_get_teamwork_history", p -> TeamworkService.placeholder("history"));
         gson(r, "cameo_get_teamwork_locks", p -> TeamworkService.placeholder("locks"));

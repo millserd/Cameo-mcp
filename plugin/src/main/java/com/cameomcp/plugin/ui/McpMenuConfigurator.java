@@ -22,8 +22,13 @@ import java.util.List;
  */
 public final class McpMenuConfigurator implements AMConfigurator {
 
+    // Action id of the menu category; reused so a second configure() call doesn't add a second menu.
     static final String CATEGORY_ID = "CAMEO_MCP_MENU";
 
+    /**
+     * Called by Cameo when it builds the main menu. Each item's last argument decides when it is
+     * enabled (for example Stop only while the server runs).
+     */
     @Override
     public void configure(ActionsManager manager) {
         NMAction existing = manager.getActionFor(CATEGORY_ID);
@@ -45,11 +50,12 @@ public final class McpMenuConfigurator implements AMConfigurator {
         category.addAction(new Item("CAMEO_MCP_RESTART", "Restart Server", () -> run("Restart", McpRuntime::restart),
                 McpRuntime::isRunning));
         category.addAction(new Item("CAMEO_MCP_TEST", "Test Connection", McpMenuConfigurator::test, rt -> true));
-        category.addAction(new Item("CAMEO_MCP_COPY", "Copy Claude Code Command", () -> {
+        category.addAction(new Item("CAMEO_MCP_COPY", "Copy Client Config (JSON)", () -> {
             McpRuntime rt = McpRuntime.get();
-            String cmd = ClientConfigs.claudeCode(rt);
+            String cmd = ClientConfigs.httpJson(rt);
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(cmd), null);
-            CameoLog.info("Copied to clipboard: " + cmd.replaceAll("Bearer \\S+\"", "Bearer ***\""));
+            // Mask the token in the log line; the clipboard keeps the real value.
+            CameoLog.info("Copied to clipboard: " + cmd.replaceAll("Bearer [^\"]+", "Bearer ***"));
         }, rt -> true));
     }
 
@@ -58,10 +64,12 @@ public final class McpMenuConfigurator implements AMConfigurator {
         return AMConfigurator.MEDIUM_PRIORITY;
     }
 
+    // A start/stop/restart step; returns false on failure so the UI can show rt.lastError().
     private interface RuntimeAction {
         boolean run(McpRuntime rt) throws Exception;
     }
 
+    // Runs a server action off the Swing thread (binding a port can block) and reports failure in a dialog.
     private static void run(String label, RuntimeAction action) {
         McpRuntime rt = McpRuntime.get();
         if (rt == null) {
@@ -87,6 +95,7 @@ public final class McpMenuConfigurator implements AMConfigurator {
         }.execute();
     }
 
+    // Runs the connection self-test in the background, then shows each step's PASS/FAIL in a dialog and the log.
     private static void test() {
         McpRuntime rt = McpRuntime.get();
         if (rt == null) {
@@ -140,6 +149,7 @@ public final class McpMenuConfigurator implements AMConfigurator {
         }
 
         @Override
+        // Cameo calls this before showing the menu, so enablement tracks the live server state.
         public void updateState() {
             McpRuntime rt = McpRuntime.get();
             setEnabled(rt != null && enabled.test(rt));

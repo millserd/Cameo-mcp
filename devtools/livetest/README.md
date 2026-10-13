@@ -14,7 +14,8 @@ after installing the plugin into a real Cameo 2024x or 2026x.
 
 1. Copy this folder into the Cameo install folder as `cameo-mcp-livetest`, next to `plugins`
    (the runners use `..\plugins\com.cameomcp.plugin\lib\gson-2.10.1.jar`).
-2. Start Cameo with the plugin installed and open the right kind of project.
+2. Start Cameo with the plugin installed and open the right kind of project. Turn on
+   MCP > MCP Server Status > Settings > Allow macro scripts (off by default), or the macro steps fail.
 3. Run `run-live-test.bat` (SysML v1) or `run-sysml2-test.bat` (SysML v2), or directly:
 
    ```

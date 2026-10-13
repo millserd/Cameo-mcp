@@ -21,6 +21,7 @@ public final class CriteriaTemplates {
         public final String expression;
         public final String relationshipType;
         public final String direction;
+        // True when the template's effect was confirmed by diffing settings against one made in the Cameo UI.
         public final boolean verifiedWithUiDiff;
         /** Stereotype for DSL templates; null for raw templates. */
         public final String stereotypeName;
@@ -44,6 +45,7 @@ public final class CriteriaTemplates {
             return stereotypeName != null;
         }
 
+        // DSL templates have no stored expression, so "rawExpression" reports "Type:direction" for display only.
         public JsonObject toJson() {
             JsonObject json = new JsonObject();
             json.addProperty("key", key);
@@ -69,6 +71,7 @@ public final class CriteriaTemplates {
     private CriteriaTemplates() {
     }
 
+    /** Template by key (surrounding whitespace ignored), or null. */
     public static Template get(String key) {
         return key == null ? null : TEMPLATES.get(key.trim());
     }
@@ -89,6 +92,7 @@ public final class CriteriaTemplates {
         return response;
     }
 
+    // Keys are "<relationship>.<direction>"; "allocatedTo" is an alias with the same settings as allocate.both.
     private static Map<String, Template> build() {
         Map<String, Template> m = new LinkedHashMap<>();
         raw(m, "dependency.direct", "Dependency", "Dependency", "both", false);
@@ -109,11 +113,13 @@ public final class CriteriaTemplates {
         return Collections.unmodifiableMap(m);
     }
 
+    /** Registers a raw template whose criterion is the literal expression text. */
     private static void raw(Map<String, Template> m, String key, String expression, String type, String direction,
                             boolean verified) {
         m.put(key, new Template(key, expression, type, direction, verified, null, null, null));
     }
 
+    /** Registers a DSL template; relationshipType is the stereotype name itself. */
     private static void dsl(Map<String, Template> m, String key, String stereotype, String dslDirection,
                             String displayName, String direction, boolean verified) {
         m.put(key, new Template(key, null, stereotype, direction, verified, stereotype, dslDirection, displayName));

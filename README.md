@@ -9,8 +9,7 @@ so there is nothing else to install or keep in sync:
 
 ```
  AI agent / MCP client ──Streamable HTTP──▶ Cameo MCP plugin (inside Cameo's JVM) ──▶ Cameo Java API
- (Claude Code, Cursor,      127.0.0.1:18740/mcp     menu + status window + log
-  VS Code, ...)
+ (Cursor, VS Code, ...)    127.0.0.1:18740/mcp     menu + status window + log
  stdio-only clients ──stdio──▶ cameo-mcp-stdio.jar ──HTTP──▶ (same plugin)
 ```
 
@@ -55,8 +54,7 @@ so there is nothing else to install or keep in sync:
    - **macOS / Linux**: `sh install/install.sh`
 
    The installer finds your Cameo installation (or pass `-CameoHome "C:\Program Files\..."` /
-   `--cameo-home /path`), copies `plugin/com.cameomcp.plugin` into `<Cameo>/plugins/`, and, if the
-   `claude` CLI is present, registers the server with Claude Code.
+   `--cameo-home /path`), copies `plugin/com.cameomcp.plugin` into `<Cameo>/plugins/`.
    Manual install is the same copy: put the folder `plugin/com.cameomcp.plugin` into
    `<Cameo install>/plugins/`.
 
@@ -75,19 +73,13 @@ Uninstall: `install.ps1 -Uninstall` / `install.sh --uninstall`, or delete
 The **Connect a client** tab of the status window shows these snippets with your real port,
 token and paths filled in, ready to copy.
 
-**Claude Code**
-
-```sh
-claude mcp add --transport http cameo http://127.0.0.1:18740/mcp
-```
-
-**Any client with Streamable HTTP support** (Cursor, VS Code, Windsurf, Claude Code `.mcp.json`):
+**Any client with Streamable HTTP support** (Cursor, VS Code, Windsurf, ...):
 
 ```json
 { "mcpServers": { "cameo": { "type": "http", "url": "http://127.0.0.1:18740/mcp" } } }
 ```
 
-**stdio-only clients** (for example Claude Desktop): run the bundled launcher with Cameo's Java.
+**stdio-only clients** (desktop chat apps and other clients without HTTP support): run the bundled launcher with Cameo's Java.
 The jar is in the plugin folder.
 
 ```json
@@ -115,7 +107,7 @@ Set in **MCP > MCP Server Status > Settings** (saved to `~/.cameo-mcp/settings.p
 | Bind address | `127.0.0.1` | `0.0.0.0` exposes Cameo to the network; only with a token |
 | Bearer token | off | Clients send `Authorization: Bearer <token>`; launcher: `--token` or `CAMEO_MCP_TOKEN` |
 | Auto-start | on | Start the server when Cameo starts |
-| Allow macro scripts | on | Gates `cameo_execute_macro` and `cameo_execute_probe` |
+| Allow macro scripts | off | Gates `cameo_execute_macro` and `cameo_execute_probe` |
 | Notification window | errors | Which tool calls are echoed to the Notification window (`off`, `errors`, `all`); md.log gets all |
 
 The launcher accepts `--port`, `--host`, `--url`, `--token`, `--timeout` and the matching
@@ -154,8 +146,10 @@ for the code layout and how to add tools.
 ## Security
 
 The server can read and change your model and, with macros on, run arbitrary code inside Cameo.
+Macros are off by default: on a machine shared by several users, anyone logged in can reach
+127.0.0.1, so turn them on only on your own machine or together with a token.
 Keep the default `127.0.0.1` binding; requests from non-local browser origins are rejected.
-If you bind to another address, set a token. Turn macros off if your agents do not need them.
+If you bind to another address, set a token. Leave macros off if your agents do not need them.
 
 ## License and credits
 
