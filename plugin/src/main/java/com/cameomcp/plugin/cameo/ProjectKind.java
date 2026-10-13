@@ -15,9 +15,11 @@ import java.util.Collection;
  */
 public final class ProjectKind {
 
+    // Values reported as projectKind by cameo_get_project and cameo_status.
     public static final String UML = "uml";
     public static final String SYSML2 = "sysml2";
 
+    // 2026x foundation classes, looked up by name because 2024x doesn't have them.
     private static final String MODEL_ROOT_BRIDGE = "com.dassault_systemes.modeler.foundation.model.ModelRootBridge";
     private static final String KERML_ELEMENT = "com.dassault_systemes.modeler.kerml.model.kerml.Element";
     private static final String MODEL_ELEMENT_PROJECT = "com.dassault_systemes.modeler.foundation.project.ModelElementProject";
@@ -30,6 +32,10 @@ public final class ProjectKind {
         return isSysml2(project) ? SYSML2 : UML;
     }
 
+    /**
+     * True for a Cameo 2026x SysML v2 project. Prefers {@code Project.isUMLProject()} where it
+     * exists; otherwise a project with no UML primary model but with model roots is SysML v2.
+     */
     public static boolean isSysml2(Project project) {
         if (project == null) {
             return false;
@@ -61,6 +67,7 @@ public final class ProjectKind {
         throw new ToolException("NO_PROJECT", "The open project has no root model.");
     }
 
+    /** The error UML / SysML v1 tools return when they are called on a SysML v2 project. */
     public static ToolException sysml2Project() {
         return new ToolException("SYSML2_PROJECT", "The open project is a SysML v2 project. This tool works on "
                 + "UML / SysML v1 models. Use the cameo_sysml2_* tools instead (start with cameo_sysml2_list_roots "
@@ -90,6 +97,7 @@ public final class ProjectKind {
         return false;
     }
 
+    // Walks the interface hierarchy, since KerML element classes implement it indirectly.
     private static boolean implementsKerml(Class<?> c) {
         for (Class<?> i : c.getInterfaces()) {
             if (KERML_ELEMENT.equals(i.getName()) || implementsKerml(i)) {

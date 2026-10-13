@@ -15,6 +15,7 @@ public final class CameoInfo {
     private CameoInfo() {
     }
 
+    /** True when a project is open. Never throws, so status checks work even outside Cameo. */
     public static boolean hasProject() {
         try {
             return Application.getInstance().getProject() != null;
@@ -23,6 +24,10 @@ public final class CameoInfo {
         }
     }
 
+    /**
+     * Product name, version, install folder and open project (name, file, dirty, remote).
+     * Keys whose value is unknown are left out rather than set to null, except {@code project}.
+     */
     public static Map<String, Object> describe() {
         Map<String, Object> m = Json.obj();
         // There is no public version API in 2024x/2026x; read the product info the launcher
@@ -37,6 +42,7 @@ public final class CameoInfo {
         put(m, "product", firstProperty("md.product.name", "product.name", "APP_NAME"));
         String version = firstProperty("md.version", "product.version", "md.build.version", "magicdraw.version");
         if (version == null && installRoot != null) {
+            // Install folders are usually named like "Cameo Systems Modeler 2026x Refresh1".
             java.util.regex.Matcher x = java.util.regex.Pattern.compile("(20\\d\\dx(?:[ _]?Refresh\\d+)?)",
                     java.util.regex.Pattern.CASE_INSENSITIVE).matcher(installRoot);
             if (x.find()) {
@@ -58,12 +64,14 @@ public final class CameoInfo {
         return m;
     }
 
+    // Adds the entry only when there is a value.
     private static void put(Map<String, Object> m, String key, String value) {
         if (value != null && !value.isEmpty()) {
             m.put(key, value);
         }
     }
 
+    // The first non-blank system property among the names, or null.
     private static String firstProperty(String... names) {
         for (String n : names) {
             String v = System.getProperty(n);

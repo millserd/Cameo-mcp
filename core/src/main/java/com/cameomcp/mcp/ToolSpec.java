@@ -49,7 +49,7 @@ public final class ToolSpec {
     private boolean requiresProject = true;
     private boolean idempotent;
     private boolean openWorld;
-    // Upper bound the plugin's CallGuard enforces; long operations (reports, simulation) raise it.
+    // Declared time limit, published for reference. Nothing enforces it centrally; Edt applies its own limits.
     private long timeoutSeconds = 60;
     // JSON Schema "properties", in declaration order so tools/list reads naturally.
     private final Map<String, Object> properties = new LinkedHashMap<>();
@@ -125,7 +125,7 @@ public final class ToolSpec {
         return this;
     }
 
-    /** Overrides the 60-second default time limit. */
+    /** Overrides the declared 60-second time limit. */
     public ToolSpec timeout(long seconds) {
         this.timeoutSeconds = seconds;
         return this;
@@ -303,7 +303,7 @@ public final class ToolSpec {
         return kind == Kind.READ;
     }
 
-    /** Time limit for one call, in seconds. */
+    /** Declared time limit for one call, in seconds. */
     public long timeoutSeconds() {
         return timeoutSeconds;
     }

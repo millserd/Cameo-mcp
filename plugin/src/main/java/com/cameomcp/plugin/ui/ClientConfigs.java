@@ -14,6 +14,7 @@ public final class ClientConfigs {
     private ClientConfigs() {
     }
 
+    // The configured bearer token, or null when the server runs without one.
     static String token(McpRuntime rt) {
         String t = rt.settings().token;
         return t == null || t.isEmpty() ? null : t;
@@ -37,6 +38,7 @@ public final class ClientConfigs {
         if (t != null) {
             server.put("env", Json.obj("CAMEO_MCP_TOKEN", t));
         }
+        // The launcher defaults to 127.0.0.1, so only a specific non-default bind address needs passing on.
         if (!rt.settings().host.equals(Settings.DEFAULT_HOST) && !rt.settings().host.equals("0.0.0.0")) {
             ((java.util.List<Object>) server.get("args")).add("--host");
             ((java.util.List<Object>) server.get("args")).add(rt.settings().host);
@@ -44,12 +46,14 @@ public final class ClientConfigs {
         return Json.pretty(Json.obj("mcpServers", Json.obj("cameo", server)));
     }
 
+    /** Cameo's own java executable, so the launcher needs no separate Java install. Falls back to "java". */
     public static String javaExecutable() {
         File bin = new File(System.getProperty("java.home"), "bin");
         File exe = new File(bin, System.getProperty("os.name", "").toLowerCase().contains("win") ? "java.exe" : "java");
         return exe.isFile() ? exe.getAbsolutePath() : "java";
     }
 
+    /** Absolute path of the bundled stdio launcher jar, or a placeholder the user must fill in. */
     public static String launcherJar() {
         File dir = CameoMcpPlugin.pluginDirectory();
         File jar = dir == null ? null : new File(dir, "cameo-mcp-stdio.jar");

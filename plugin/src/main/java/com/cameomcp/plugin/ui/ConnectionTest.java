@@ -44,6 +44,10 @@ public final class ConnectionTest {
     private ConnectionTest() {
     }
 
+    /**
+     * Runs every step in order against the live endpoint and returns their results. Steps after a
+     * failure still run, so the report shows everything that is wrong at once. Blocks; call off the EDT.
+     */
     public static List<Step> run(McpRuntime rt) {
         List<Step> steps = new ArrayList<>();
         if (!rt.isRunning()) {
@@ -53,6 +57,7 @@ public final class ConnectionTest {
         }
         String endpoint = rt.endpointUrl();
         String token = rt.settings().token;
+        // Holder so the lambdas below can share the session id created by the initialize step.
         String[] session = {null};
 
         steps.add(step("Health check GET /status", () -> {
@@ -105,20 +110,24 @@ public final class ConnectionTest {
 
     // ------------------------------------------------------------------ helpers
 
+    // A step body: returns a detail string on success, or throws Failure via fail(...).
     private interface Check {
         String run() throws Exception;
     }
 
+    // An expected failure with a readable message (as opposed to an unexpected exception).
     private static final class Failure extends Exception {
         Failure(String m) {
             super(m);
         }
     }
 
+    // Declared to return String so a check can write "return fail(...)".
     private static String fail(String message) throws Failure {
         throw new Failure(message);
     }
 
+    // Times one check and turns its outcome into a Step.
     private static Step step(String name, Check check) {
         long t0 = System.nanoTime();
         try {
@@ -137,6 +146,7 @@ public final class ConnectionTest {
         String sessionId;
     }
 
+    // Plain HttpURLConnection with no proxy, exactly what a local MCP client would send.
     private static Response http(String method, String url, String body, String token, String sessionId) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection(Proxy.NO_PROXY);
         c.setRequestMethod(method);

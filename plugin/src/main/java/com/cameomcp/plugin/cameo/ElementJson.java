@@ -25,11 +25,17 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Converts Cameo model {@link Element} objects into JSON representations
- * suitable for the bridge REST API.
+ * Converts Cameo model {@link Element} objects into the JSON that tools return.
  * <p>
- * Produces a standard envelope with id, type, name, owner, stereotypes,
- * documentation, and tagged values for any element.
+ * Three levels of detail, each a superset of the previous one:
+ * <ul>
+ *   <li>{@link #toJsonCompact}: id, type, humanType, name, owner and type reference,</li>
+ *   <li>{@link #toJsonReference}: adds qualified name, stereotypes, multiplicity and the
+ *       property/port/parameter fields that apply to the element,</li>
+ *   <li>{@link #toJson}: adds documentation, tagged values, flow and connector detail and childCount.</li>
+ * </ul>
+ * Every optional field is read defensively: a failure to read one field is logged at FINE level
+ * and the field is left out, so one odd element never breaks a whole query result.
  */
 public final class ElementJson {
     private static final Logger LOG = Logger.getLogger(ElementJson.class.getName());
@@ -138,8 +144,8 @@ public final class ElementJson {
     }
 
     /**
-     * Serialize an element with minimal detail (id, type, name only).
-     * Useful for listing children or search results where full detail is excessive.
+     * Serialize an element with minimal detail: id, type, humanType, name, owner (id, name, type)
+     * and, for typed elements, the type reference. Used for listings and search results.
      *
      * @param element the Cameo model element
      * @return a compact JsonObject representation
@@ -155,6 +161,11 @@ public final class ElementJson {
         JsonObject json = toJsonCompact(element);
         appendQualifiedName(json, element);
         appendStereotypeNames(json, element);
+        /**
+         * The compact form plus qualified name, stereotype names, multiplicity, and the fields that apply
+         * to properties, ports, parameters, information flows and connectors. The default for references
+         * to other elements inside a result.
+         */
         appendMultiplicityFields(json, element);
         appendPropertyLikeFields(json, element);
         appendPortLikeFields(json, element);
@@ -172,6 +183,7 @@ public final class ElementJson {
     public static JsonObject toJsonConnectorEnd(ConnectorEnd end) {
         JsonObject json = new JsonObject();
         if (end == null) {
+            /** One end of a connector: its role, the part owning the port (if any) and the defining association end. */
             return json;
         }
 
@@ -197,6 +209,7 @@ public final class ElementJson {
         JsonArray array = new JsonArray();
         if (elements == null) {
             return array;
+        /** Reference-level JSON for each non-null element. */
         }
         for (Element element : elements) {
             if (element != null) {
@@ -210,6 +223,7 @@ public final class ElementJson {
         try {
             Stereotype flowProperty = StereotypesHelper.getAppliedStereotypeByString(
                     element,
+                    /** The SysML FlowProperty stereotype applied to the element, or null; both name spellings are tried. */
                     "FlowProperty");
             if (flowProperty == null) {
                 flowProperty = StereotypesHelper.getAppliedStereotypeByString(
@@ -227,6 +241,7 @@ public final class ElementJson {
         if (property == null || flowPropertyStereo == null) {
             return null;
         }
+        /** The flow property's direction (in, out, inout), or null if unset or unreadable. */
         try {
             Object direction = StereotypesHelper.getStereotypePropertyFirst(
                     property,
@@ -243,10 +258,12 @@ public final class ElementJson {
         JsonObject json = new JsonObject();
         json.addProperty("id", element.getID());
 
+        // Just id, type and name; no owner, so it is safe to use for type references without recursion.
         try {
             String shortName = ClassTypes.getShortName(element.getClassType());
             json.addProperty("type", shortName != null ? shortName : element.getClassType().getSimpleName());
         } catch (Exception e) {
+            // The metaclass short name (Class, Package, ...); falls back to the human type if Cameo can't name it.
             json.addProperty("type", element.getHumanType());
         }
 
@@ -264,6 +281,7 @@ public final class ElementJson {
             JsonObject json,
             InformationFlow informationFlow,
             boolean includeRealizingConnectorDetails) {
+        // Sources, targets, conveyed items, realizing connectors and the SysML ItemFlow itemProperty.
         try {
             json.add("informationSources", toJsonReferenceArray(informationFlow.getInformationSource()));
             json.add("informationTargets", toJsonReferenceArray(informationFlow.getInformationTarget()));
@@ -308,6 +326,7 @@ public final class ElementJson {
         try {
             JsonArray connectorEnds = new JsonArray();
             Collection<ConnectorEnd> ends = connector.getEnd();
+            // Every connector end, plus the end count.
             if (ends != null) {
                 for (ConnectorEnd end : ends) {
                     if (end != null) {
@@ -342,6 +361,7 @@ public final class ElementJson {
         if (owner == null) {
             return;
         }
+        // Owner id, name and type, so agents can navigate up without a second call.
         json.addProperty("ownerId", owner.getID());
         if (owner instanceof NamedElement) {
             String ownerName = ((NamedElement) owner).getName();
@@ -359,6 +379,7 @@ public final class ElementJson {
         Object type = invokeZeroArg(typedElement, "getType");
         if (!(type instanceof Element)) {
             return;
+        // typeId/typeName/typeRef for anything with getType(); reflective because many unrelated metaclasses have one.
         }
         Element typeElement = (Element) type;
         json.addProperty("typeId", typeElement.getID());
@@ -375,6 +396,7 @@ public final class ElementJson {
         appendIntegerProperty(json, "lower", invokeIntegerZeroArg(element, "getLower"));
         appendIntegerProperty(json, "upper", invokeIntegerZeroArg(element, "getUpper"));
         appendBooleanProperty(json, "isOrdered", invokeBooleanZeroArg(element, "isOrdered"));
+        // Lower/upper bounds and collection flags for multiplicity elements; absent for elements without them.
         appendBooleanProperty(json, "isUnique", invokeBooleanZeroArg(element, "isUnique"));
         appendBooleanProperty(json, "isMultivalued", invokeBooleanZeroArg(element, "isMultivalued"));
     }
@@ -383,6 +405,7 @@ public final class ElementJson {
         appendTypedElementFields(json, element);
         if (!(element instanceof Property)) {
             return;
+        // Association, aggregation, composite flag, represented element and SysML flow direction.
         }
 
         Property property = (Property) element;
@@ -417,6 +440,7 @@ public final class ElementJson {
         appendBooleanProperty(json, "isConjugated", firstBoolean(
                 invokeBooleanZeroArg(element, "isConjugated"),
                 invokeBooleanZeroArg(element, "isIsConjugated")));
+        // Port flags. The conjugation getter is named differently across releases, so both spellings are tried.
         appendBooleanProperty(json, "isService", invokeBooleanZeroArg(element, "isService"));
         appendBooleanProperty(json, "isBehavior", invokeBooleanZeroArg(element, "isBehavior"));
     }
@@ -425,6 +449,7 @@ public final class ElementJson {
         if (element instanceof Parameter) {
             String direction = stringifyEnumLike(((Parameter) element).getDirection());
             if (direction != null && !direction.isEmpty()) {
+                // Parameter direction, and the parameter behind an activity parameter node.
                 json.addProperty("direction", direction);
             }
         }
@@ -441,6 +466,7 @@ public final class ElementJson {
         try {
             List<Stereotype> stereotypes = StereotypesHelper.getStereotypes(element);
             if (stereotypes != null && !stereotypes.isEmpty()) {
+                // Names of applied stereotypes, in application order.
                 JsonArray stArray = new JsonArray();
                 for (Stereotype st : stereotypes) {
                     if (st != null && st.getName() != null && !st.getName().isEmpty()) {
@@ -460,6 +486,7 @@ public final class ElementJson {
         if (value == null) {
             return null;
         }
+        // Tagged value to JSON: primitives as-is, elements as compact references, collections recursively.
         if (value instanceof Boolean) {
             return new JsonPrimitive((Boolean) value);
         }
@@ -492,6 +519,7 @@ public final class ElementJson {
         if (target == null) {
             return null;
         }
+        // Calls a no-argument method if the object has one; null when missing or failing.
         try {
             Method method = target.getClass().getMethod(methodName);
             return method.invoke(target);
@@ -540,6 +568,7 @@ public final class ElementJson {
         if (value == null) {
             return null;
         }
+        // Enum literals and enumeration-literal elements become their name; anything else its string form.
         if (value instanceof Enum<?>) {
             return ((Enum<?>) value).name();
         }

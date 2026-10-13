@@ -22,12 +22,14 @@ public final class CameoLog {
 
     public static final String PREFIX = "[Cameo MCP] ";
     private static final Logger JUL = Logger.getLogger("com.cameomcp");
+    // Cameo's md.log logger, resolved lazily once; null if MDLog isn't available.
     private static volatile Object mdLogger;
     private static volatile boolean mdLoggerResolved;
 
     private CameoLog() {
     }
 
+    /** Info that goes to md.log and the Notification window. */
     public static void info(String message) {
         write("info", message, true);
     }
@@ -37,10 +39,12 @@ public final class CameoLog {
         write("info", message, false);
     }
 
+    /** A warning to md.log and the Notification window. */
     public static void warn(String message) {
         write("warn", message, true);
     }
 
+    /** An error to md.log and the Notification window; the stack trace goes to JUL at FINE level. */
     public static void error(String message, Throwable t) {
         write("error", message + (t == null ? "" : ": " + t), true);
         if (t != null) {
@@ -48,6 +52,7 @@ public final class CameoLog {
         }
     }
 
+    // Every message reaches a log file: md.log if possible, java.util.logging otherwise.
     private static void write(String level, String message, boolean gui) {
         String line = PREFIX + message;
         if (!toMdLog(level, line)) {
@@ -58,6 +63,7 @@ public final class CameoLog {
         }
     }
 
+    // The GUI log is a Swing component, so it is only touched on the event thread.
     private static void toGuiLog(String line) {
         Runnable r = () -> {
             try {
@@ -76,6 +82,7 @@ public final class CameoLog {
         }
     }
 
+    // Returns false when md.log can't be written, so the caller falls back to JUL.
     private static boolean toMdLog(String level, String line) {
         Object logger = mdLogger();
         if (logger == null) {
@@ -93,6 +100,7 @@ public final class CameoLog {
         }
     }
 
+    // MDLog's logger is a log4j or SLF4J type depending on the release; find info/warn/error(String) by name.
     private static Method findLogMethod(Class<?> type, String level) {
         for (Method m : type.getMethods()) {
             if (m.getName().equals(level) && m.getParameterCount() == 1
@@ -104,6 +112,7 @@ public final class CameoLog {
         return null;
     }
 
+    // Double-checked lazy lookup: getPluginsLog where present, else the general log.
     private static Object mdLogger() {
         if (!mdLoggerResolved) {
             synchronized (CameoLog.class) {

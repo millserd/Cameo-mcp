@@ -56,7 +56,7 @@ public final class McpServer {
     private final Map<String, McpPrompt> prompts = new LinkedHashMap<>();
     private final Map<String, McpSession> sessions = new ConcurrentHashMap<>();
     private final List<McpListener> listeners = new CopyOnWriteArrayList<>();
-    // Default guard does nothing extra; the plugin installs one that checks project state and timeouts.
+    // Default guard does nothing extra; the plugin installs one that checks the open project and the macro switch.
     private volatile CallGuard guard = new CallGuard() {
     };
     // Off by default: some clients never send the session header, so they share an "implicit" session.

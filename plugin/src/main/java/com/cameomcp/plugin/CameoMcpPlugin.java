@@ -14,8 +14,13 @@ import java.io.File;
  */
 public class CameoMcpPlugin extends Plugin {
 
+    // Set once in init(); read by the UI and by tools that locate bundled files.
     private static volatile File pluginDirectory;
 
+    /**
+     * Called by Cameo at start-up. Any failure is logged and swallowed: a broken MCP plugin must
+     * never stop Cameo from starting.
+     */
     @Override
     public void init() {
         try {
@@ -36,6 +41,7 @@ public class CameoMcpPlugin extends Plugin {
         }
     }
 
+    /** Called by Cameo on exit; stops the server so the port is released. Always allows the exit. */
     @Override
     public boolean close() {
         McpRuntime rt = McpRuntime.get();
@@ -49,6 +55,7 @@ public class CameoMcpPlugin extends Plugin {
         return true;
     }
 
+    /** The plugin has no edition or license requirements. */
     @Override
     public boolean isSupported() {
         return true;
@@ -59,6 +66,10 @@ public class CameoMcpPlugin extends Plugin {
         return pluginDirectory;
     }
 
+    /*
+     * Asks Cameo's plugin descriptor for the install folder (reflectively, because the accessor is
+     * not part of the public Plugin API in every release), else uses the folder of this jar.
+     */
     private File resolvePluginDirectory() {
         try {
             Object descriptor = getClass().getMethod("getDescriptor").invoke(this);
