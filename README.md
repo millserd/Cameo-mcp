@@ -59,6 +59,10 @@ so there is nothing else to install or keep in sync:
    `claude` CLI is present, registers the server with Claude Code.
    Manual install is the same copy: put the folder `plugin/com.cameomcp.plugin` into
    `<Cameo install>/plugins/`.
+
+   **From inside Cameo instead:** build `gradle :plugin:rdzip` (writes
+   `build/dist/cameo-mcp-<version>-rdzip.zip`), then in Cameo open **Help > Resource/Plugin Manager**,
+   click **Import**, pick that zip and restart Cameo when asked.
 3. Start Cameo. The **MCP** menu appears in the main menu bar and the Notification window shows
    `[Cameo MCP] MCP server started. Endpoint http://127.0.0.1:18740/mcp ...`.
 4. Open **MCP > MCP Server Status** and press **Test connection**. Every step should say PASS.
