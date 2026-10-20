@@ -24,7 +24,6 @@
     <edition>Enterprise</edition>
     <installation>
         <file from="plugins/${pluginId}/*.*" to="plugins/${pluginId}/*.*"/>
-        <file from="plugins/${pluginId}/lib/*.*" to="plugins/${pluginId}/lib/*.*"/>
         <file from="${descriptorPath}" to="${descriptorPath}"/>
     </installation>
 </resourceDescriptor>

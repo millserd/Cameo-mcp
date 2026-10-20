@@ -2,7 +2,7 @@ package com.cameomcp.plugin.tools;
 
 import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.CameoLog;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.io.File;
 import java.lang.reflect.Method;
@@ -31,7 +31,7 @@ public final class OptionalModules {
     // Built once on first use, because Cameo's plugin list is only complete after start-up.
     private static volatile ClassLoader loader;
     // One instance per service class, created on first call.
-    private static final Map<String, GsonService> SERVICES = new ConcurrentHashMap<>();
+    private static final Map<String, TreeService> SERVICES = new ConcurrentHashMap<>();
 
     private OptionalModules() {
     }
@@ -64,14 +64,14 @@ public final class OptionalModules {
      * The cached service instance for the class, loading it on first use. Any failure to load
      * (missing jar, missing optional Cameo plugin, linkage error) becomes an UNSUPPORTED tool error.
      */
-    public static GsonService service(String serviceClass) {
-        GsonService s = SERVICES.get(serviceClass);
+    public static TreeService service(String serviceClass) {
+        TreeService s = SERVICES.get(serviceClass);
         if (s != null) {
             return s;
         }
         try {
             Class<?> c = Class.forName(serviceClass, true, loader());
-            s = (GsonService) c.getDeclaredConstructor().newInstance();
+            s = (TreeService) c.getDeclaredConstructor().newInstance();
             SERVICES.put(serviceClass, s);
             return s;
         } catch (ToolException e) {

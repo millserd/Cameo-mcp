@@ -1,4 +1,4 @@
-import com.google.gson.*;
+import com.cameomcp.json.tree.*;
 import java.net.URI;
 import java.net.http.*;
 import java.nio.charset.StandardCharsets;
@@ -14,7 +14,6 @@ import java.util.regex.*;
  * "expectContains" (path -> substring) check holds. "allowError": true accepts either outcome.
  */
 public class LiveTest {
-    static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     static String url = "http://127.0.0.1:18740/mcp";
     static String session;
@@ -137,9 +136,11 @@ public class LiveTest {
         all.addProperty("pass", pass);
         all.addProperty("fail", fail);
         all.addProperty("skipped", skip);
-        all.add("vars", GSON.toJsonTree(vars));
+        JsonObject varsJson = new JsonObject();
+        vars.forEach(varsJson::addProperty);
+        all.add("vars", varsJson);
         all.add("steps", results);
-        Files.writeString(dir.resolve("results" + suffix + ".json"), GSON.toJson(all));
+        Files.writeString(dir.resolve("results" + suffix + ".json"), all.toPrettyString());
         System.out.println(head);
     }
 

@@ -38,7 +38,7 @@ if [[ "$FAMILY" == "artifacts" || "$FAMILY" == "all" ]] && [[ -d "$ROOT/plugin/s
 fi
 
 echo "Compiling ${#srcs[@]} files for family '$FAMILY'..."
-if ! javac --release 17 -nowarn -encoding UTF-8 -cp "$LIB/gson-2.10.1.jar" -d "$OUT/classes" "${srcs[@]}" > "$OUT/javac.log" 2>&1; then
+if ! javac --release 17 -nowarn -encoding UTF-8 -d "$OUT/classes" "${srcs[@]}" > "$OUT/javac.log" 2>&1; then
   grep -v '^Picked up JAVA_TOOL_OPTIONS' "$OUT/javac.log" | head -150
   echo "COMPILE FAILED"; exit 1
 fi
@@ -53,7 +53,7 @@ if [[ "${2:-}" == "--tests" ]]; then
     done < <(find "$dir" -name '*.java')
   done
   if [[ ${#tsrcs[@]} -eq 0 ]]; then echo "No tests for $FAMILY"; exit 0; fi
-  CP="$OUT/classes:$LIB/gson-2.10.1.jar:$LIB/junit-platform-console-standalone-1.10.3.jar"
+  CP="$OUT/classes:$LIB/junit-platform-console-standalone-1.10.3.jar"
   if ! javac --release 17 -nowarn -encoding UTF-8 -cp "$CP" -d "$OUT/test-classes" "${tsrcs[@]}" > "$OUT/javac-test.log" 2>&1; then
     grep -v '^Picked up' "$OUT/javac-test.log" | head -150
     echo "TEST COMPILE FAILED"; exit 1

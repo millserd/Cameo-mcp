@@ -3,7 +3,7 @@ package com.cameomcp.plugin.tools.sysml2;
 import com.cameomcp.mcp.Args;
 import com.cameomcp.mcp.ToolRegistry;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 
 /** Binds the sysml2 family (see {@code com.cameomcp.catalog.Sysml2Tools}). */
 public final class Sysml2Bindings {
@@ -11,15 +11,15 @@ public final class Sysml2Bindings {
     private Sysml2Bindings() {
     }
 
-    /** A sysml2 tool body: reads typed arguments from Args and returns a Gson result. */
+    /** A sysml2 tool body: reads typed arguments from Args and returns a tree result. */
     @FunctionalInterface
     private interface Impl {
         JsonObject run(Args a) throws Exception;
     }
 
-    // Adapts an Impl to the core registry, converting its Gson result to the plain-Map JSON the core expects.
+    // Adapts an Impl to the core registry, converting its tree result to the plain-Map JSON the core expects.
     private static void bind(ToolRegistry r, String name, Impl impl) {
-        r.bind(name, (a, c) -> Gs.fromGson(impl.run(a)));
+        r.bind(name, (a, c) -> Gs.fromTree(impl.run(a)));
     }
 
     /*

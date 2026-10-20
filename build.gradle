@@ -26,7 +26,7 @@ subprojects {
 
 tasks.register('dist', Zip) {
     group = 'distribution'
-    description = 'Builds the portable release zip (plugin + stdio launcher + docs + installers).'
+    description = 'Builds the portable release zip (plugin + stdio launcher with built-in installer + docs).'
     dependsOn ':core:generateToolDocs', ':plugin:assemblePlugin', ':stdio:jar'
     archiveFileName = "cameo-mcp-${project.version}.zip"
     destinationDirectory = layout.buildDirectory.dir('dist')
@@ -37,7 +37,6 @@ tasks.register('dist', Zip) {
         from('CHANGELOG.md')
         into('plugin') { from(project(':plugin').layout.buildDirectory.dir('plugin-dist')) }
         into('launcher') { from(project(':stdio').tasks.named('jar')) }
-        into('install') { from('install') }
         into('docs') { from('docs') }
     }
 }

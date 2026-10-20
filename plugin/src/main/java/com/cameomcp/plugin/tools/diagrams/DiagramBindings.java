@@ -3,7 +3,7 @@ package com.cameomcp.plugin.tools.diagrams;
 import com.cameomcp.mcp.Args;
 import com.cameomcp.mcp.ToolRegistry;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.util.List;
 
@@ -121,8 +121,8 @@ public final class DiagramBindings {
         return a.has(name) ? a.strList(name) : null;
     }
 
-    // Converts the Gson result into plain Java maps/lists for the MCP layer; null becomes an empty object.
+    // Converts the tree result into plain Java maps/lists for the MCP layer; null becomes an empty object.
     private static Object out(JsonObject json) {
-        return json == null ? new java.util.LinkedHashMap<String, Object>() : Gs.fromGson(json);
+        return json == null ? new java.util.LinkedHashMap<String, Object>() : Gs.fromTree(json);
     }
 }

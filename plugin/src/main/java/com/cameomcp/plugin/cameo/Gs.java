@@ -3,12 +3,12 @@ package com.cameomcp.plugin.cameo;
 import com.cameomcp.json.Json;
 import com.cameomcp.mcp.Args;
 import com.cameomcp.mcp.ToolException;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.JsonPrimitive;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonNull;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonParser;
+import com.cameomcp.json.tree.JsonPrimitive;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Gson helpers for the Cameo-facing code, which builds results as Gson trees.
+ * JSON tree helpers for the Cameo-facing code, which builds results as JSON trees.
  * Conversions to/from the core's plain-Java JSON go through text, which is cheap at
  * tool-call granularity and keeps both worlds independent.
  */
@@ -25,22 +25,22 @@ public final class Gs {
     private Gs() {
     }
 
-    /** Converts a core JSON object to Gson; null becomes an empty object. */
-    public static JsonObject toGson(Map<String, Object> map) {
+    /** Converts a core JSON object to a tree; null becomes an empty object. */
+    public static JsonObject toTree(Map<String, Object> map) {
         return map == null ? new JsonObject() : JsonParser.parseString(Json.write(map)).getAsJsonObject();
     }
 
-    /** The tool-call arguments as a Gson object, for services written against Gson. */
-    public static JsonObject toGson(Args args) {
-        return toGson(args.raw());
+    /** The tool-call arguments as a JSON tree object, for services written against JSON trees. */
+    public static JsonObject toTree(Args args) {
+        return toTree(args.raw());
     }
 
-    /** Converts a Gson element back to core JSON values (Map, List, String, Long/Double, Boolean). */
-    public static Object fromGson(JsonElement el) {
+    /** Converts a tree element back to core JSON values (Map, List, String, Long/Double, Boolean). */
+    public static Object fromTree(JsonElement el) {
         return el == null || el.isJsonNull() ? null : Json.parse(el.toString());
     }
 
-    /** Builds a Gson object from key/value pairs; values are converted with {@link #toElement}. */
+    /** Builds a JSON tree object from key/value pairs; values are converted with {@link #toElement}. */
     public static JsonObject obj(Object... kv) {
         JsonObject o = new JsonObject();
         for (int i = 0; i < kv.length; i += 2) {
@@ -49,7 +49,7 @@ public final class Gs {
         return o;
     }
 
-    /** Convert any JSON-shaped Java value (or Gson element) to a Gson element. */
+    /** Convert any JSON-shaped Java value (or tree element) to a tree element. */
     public static JsonElement toElement(Object v) {
         if (v == null) {
             return JsonNull.INSTANCE;
@@ -75,7 +75,7 @@ public final class Gs {
         return new JsonPrimitive(String.valueOf(v));
     }
 
-    /** A Gson array of the given strings; null gives an empty array. */
+    /** A tree array of the given strings; null gives an empty array. */
     public static JsonArray strings(Collection<String> values) {
         JsonArray a = new JsonArray();
         if (values != null) {

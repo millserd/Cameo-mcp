@@ -14,10 +14,10 @@ import com.nomagic.uml2.ext.magicdraw.auxiliaryconstructs.mdinformationflows.Inf
 import com.nomagic.uml2.ext.magicdraw.mdprofiles.Stereotype;
 import com.nomagic.uml2.ext.jmi.helpers.StereotypesHelper;
 import com.nomagic.magicdraw.uml.ClassTypes;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonPrimitive;
 import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.List;

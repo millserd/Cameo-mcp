@@ -2,8 +2,8 @@ package com.cameomcp.plugin.tools.advanced;
 
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.uml2.ext.jmi.helpers.StereotypesHelper;
 import com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Element;

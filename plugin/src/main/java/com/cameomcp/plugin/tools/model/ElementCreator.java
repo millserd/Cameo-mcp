@@ -2,7 +2,7 @@ package com.cameomcp.plugin.tools.model;
 
 import com.cameomcp.mcp.Args;
 import com.cameomcp.mcp.ToolException;
-import com.google.gson.JsonPrimitive;
+import com.cameomcp.json.tree.JsonPrimitive;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
 import com.nomagic.uml2.ext.jmi.helpers.StereotypesHelper;

@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  * java -jar cameo-mcp-stdio.jar [--port 18740] [--host 127.0.0.1] [--url http://...] [--token T]
  * java -jar cameo-mcp-stdio.jar --diagnose
+ * java -jar cameo-mcp-stdio.jar --install | --uninstall [--cameo-home DIR]... [--all]
  * </pre>
  */
 public final class StdioLauncher {
@@ -106,6 +107,10 @@ public final class StdioLauncher {
         String token = System.getenv("CAMEO_MCP_TOKEN");
         int timeout = 600;
         boolean diagnose = false;
+        Boolean install = null;
+        boolean all = false;
+        java.util.List<String> homes = new java.util.ArrayList<>();
+        java.nio.file.Path from = null;
         for (int i = 0; i < argv.length; i++) {
             String a = argv[i];
             switch (a) {
@@ -115,6 +120,11 @@ public final class StdioLauncher {
                 case "--token": token = argv[++i]; break;
                 case "--timeout": timeout = Integer.parseInt(argv[++i]); break;
                 case "--diagnose": diagnose = true; break;
+                case "--install": install = Boolean.TRUE; break;
+                case "--uninstall": install = Boolean.FALSE; break;
+                case "--cameo-home": homes.add(argv[++i]); break;
+                case "--all": all = true; break;
+                case "--from": from = java.nio.file.Paths.get(argv[++i]); break;
                 case "--version":
                     System.out.println("cameo-mcp-stdio " + Version.get());
                     return;
@@ -126,6 +136,10 @@ public final class StdioLauncher {
                     System.err.println("Unknown option " + a + "\n" + usage());
                     System.exit(2);
             }
+        }
+        if (install != null) {
+            System.exit(Installer.run(!install, homes, all, from != null ? from : Installer.defaultSource(),
+                    System.out));
         }
         if (url == null) {
             url = "http://" + (host.contains(":") ? "[" + host + "]" : host) + ":" + port + "/mcp";
@@ -150,6 +164,11 @@ public final class StdioLauncher {
                 "  --token T       bearer token if the plugin requires one (env CAMEO_MCP_TOKEN)",
                 "  --timeout S     max seconds to wait for one tool call (default 600)",
                 "  --diagnose      check the connection to Cameo and exit",
+                "  --install       copy the plugin into Cameo's plugins folder (close Cameo first)",
+                "  --uninstall     remove the plugin from Cameo",
+                "  --cameo-home D  Cameo install folder for --install/--uninstall (repeatable; default: search)",
+                "  --all           with several Cameo installs found, use all of them",
+                "  --from D        plugin folder to install (default: found next to this jar)",
                 "  --version, --help");
     }
 

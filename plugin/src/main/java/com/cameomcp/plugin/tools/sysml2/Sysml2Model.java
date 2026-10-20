@@ -1,8 +1,8 @@
 package com.cameomcp.plugin.tools.sysml2;
 
 import com.cameomcp.mcp.ToolException;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

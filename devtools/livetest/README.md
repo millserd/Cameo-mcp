@@ -5,7 +5,7 @@ after installing the plugin into a real Cameo 2024x or 2026x.
 
 | File | What it does |
 |---|---|
-| `LiveTest.java` | Runs a scenario over HTTP (`http://127.0.0.1:18740/mcp`) and writes `results*.txt` and `results*.json`. Single-file Java program; needs only Gson. |
+| `LiveTest.java` | Runs a scenario over HTTP (`http://127.0.0.1:18740/mcp`) and writes `results*.txt` and `results*.json`. Single-file Java program; needs only Java and the plugin's `cameo-mcp-stdio.jar` (for its JSON classes). |
 | `scenario.json` | UML / SysML v1 scenario: elements, relationships, diagrams, matrices, tables, relation maps, validation, reports, macros, undo/redo. Open a SysML v1 project first. |
 | `scenario-sysml2.json` | SysML v2 scenario (Cameo 2026x): validate text, create from text, query, export text, rename, undo/redo, delete, error cases. Open a SysML v2 project first. It removes what it creates. |
 | `run-live-test.bat`, `run-sysml2-test.bat` | Windows runners. |
@@ -13,13 +13,13 @@ after installing the plugin into a real Cameo 2024x or 2026x.
 ## Running
 
 1. Copy this folder into the Cameo install folder as `cameo-mcp-livetest`, next to `plugins`
-   (the runners use `..\plugins\com.cameomcp.plugin\lib\gson-2.10.1.jar`).
+   (the runners put `..\plugins\com.cameomcp.plugin\cameo-mcp-stdio.jar` on the class path for its JSON classes).
 2. Start Cameo with the plugin installed and open the right kind of project. Turn on
    MCP > MCP Server Status > Settings > Allow macro scripts (off by default), or the macro steps fail.
 3. Run `run-live-test.bat` (SysML v1) or `run-sysml2-test.bat` (SysML v2), or directly:
 
    ```
-   java -cp <path>/gson-2.10.1.jar LiveTest.java <this folder> [scenario-file]
+   java -cp <plugin folder>/cameo-mcp-stdio.jar LiveTest.java <this folder> [scenario-file]
    ```
 
 `scenario.json` writes `results.txt`/`results.json`; `scenario-NAME.json` writes

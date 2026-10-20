@@ -5,9 +5,9 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
 import com.nomagic.uml2.ext.jmi.helpers.StereotypesHelper;
@@ -161,7 +161,7 @@ final class MutationService {
                         + "element. Set the entry's stereotype.");
             }
         }
-        setTags(project, created, st, Gs.toGson(tags));
+        setTags(project, created, st, Gs.toTree(tags));
     }
 
     // Validates every tag name against the stereotype, coerces each value to the tag's type, and sets it.
@@ -386,7 +386,7 @@ final class MutationService {
         if (values == null) {
             throw ToolException.invalid("values must be an object mapping tag name to value.");
         }
-        JsonObject gvalues = Gs.toGson(values);
+        JsonObject gvalues = Gs.toTree(values);
         return Edt.write("Set tagged values", project -> {
             Element element = ModelSupport.element(project, id, "element_id");
             Stereotype st = StereotypesHelper.getAppliedStereotypeByString(element, stereotype);

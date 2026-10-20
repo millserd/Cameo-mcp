@@ -3,9 +3,9 @@ package com.cameomcp.plugin.tools.artifacts;
 
 import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonParser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

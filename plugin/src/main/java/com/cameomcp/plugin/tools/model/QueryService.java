@@ -5,8 +5,8 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.uml.ClassTypes;
 import com.nomagic.magicdraw.uml.Finder;
 import com.nomagic.magicdraw.uml2.Connectors;
@@ -180,7 +180,7 @@ final class QueryService {
         });
     }
 
-    /** Copies plain-JSON paging fields into a Gson response. */
+    /** Copies plain-JSON paging fields into a tree response. */
     static void merge(JsonObject target, Map<String, Object> values) {
         for (Map.Entry<String, Object> e : values.entrySet()) {
             target.add(e.getKey(), Gs.toElement(e.getValue()));

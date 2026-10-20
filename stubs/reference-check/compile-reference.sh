@@ -7,7 +7,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STUBS="$HERE/../src/main/java"
 # REF_SRC: the plugin/src folder of a cameo-mcp-bridge checkout (required).
 REF="${REF_SRC:?set REF_SRC to cameo-mcp-bridge/plugin/src}"
-GSON="${GSON_JAR:-$HERE/../../devtools/lib/gson-2.10.1.jar}"
+# The reference uses Gson; point GSON_JAR at a gson-2.10.1.jar (this project itself does not use it).
+GSON="${GSON_JAR:?set GSON_JAR to a gson-2.10.1.jar}"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 find "$STUBS" -name '*.java' > "$OUT/sources.txt"

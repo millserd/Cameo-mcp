@@ -5,7 +5,7 @@ import com.cameomcp.mcp.Args;
 import com.cameomcp.mcp.ToolHandler;
 import com.cameomcp.mcp.ToolRegistry;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.util.Map;
 
@@ -16,17 +16,17 @@ public final class Bind {
     }
 
     /**
-     * Bind a Gson-style implementation. The tool's arguments arrive as a Gson object holding the
+     * Bind a tree-style implementation. The tool's arguments arrive as a JSON tree object holding the
      * keys the client sent plus their snake_case/camelCase twins; the returned object becomes the
      * tool's structured result.
      */
-    public static void gson(ToolRegistry registry, String name, GsonTool tool) {
-        registry.bind(name, gsonHandler(tool));
+    public static void tree(ToolRegistry registry, String name, TreeTool tool) {
+        registry.bind(name, treeHandler(tool));
     }
 
     /**
      * Adds the other spelling of every top-level key (snake_case and camelCase) when absent,
-     * so Gson-style code written against either convention sees what the client sent.
+     * so tree-style code written against either convention sees what the client sent.
      */
     static JsonObject withAliases(JsonObject in) {
         JsonObject out = in.deepCopy();
@@ -67,11 +67,11 @@ public final class Bind {
         return sb.toString();
     }
 
-    /** Adapts a Gson-style tool to a core handler; a null result becomes an empty object. */
-    public static ToolHandler gsonHandler(GsonTool tool) {
+    /** Adapts a tree-style tool to a core handler; a null result becomes an empty object. */
+    public static ToolHandler treeHandler(TreeTool tool) {
         return (Args args, com.cameomcp.mcp.ToolContext ctx) -> {
-            JsonObject result = tool.call(withAliases(Gs.toGson(args)));
-            return result == null ? Json.obj() : (Map<?, ?>) Gs.fromGson(result);
+            JsonObject result = tool.call(withAliases(Gs.toTree(args)));
+            return result == null ? Json.obj() : (Map<?, ?>) Gs.fromTree(result);
         };
     }
 }

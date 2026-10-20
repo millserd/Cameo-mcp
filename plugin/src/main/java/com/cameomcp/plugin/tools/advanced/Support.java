@@ -4,11 +4,11 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.CameoInfo;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonNull;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonPrimitive;
 import com.nomagic.magicdraw.core.Application;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Element;
@@ -103,7 +103,7 @@ final class Support {
         String reason = Gs.str(payload, "reason", Gs.str(payload, "message", "Operation refused."));
         String next = Gs.str(payload, "nextAction");
         String message = next == null ? reason : reason + " Next: " + next;
-        Object details = Gs.fromGson(payload);
+        Object details = Gs.fromTree(payload);
         return new ToolException(code, message, details instanceof Map ? (Map<String, Object>) details : null);
     }
 

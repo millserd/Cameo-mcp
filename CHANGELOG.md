@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pure Java: the plugin no longer bundles Gson. It builds results with its own JSON classes
+  (`com.cameomcp.json.tree`), so it runs on the JDK and Cameo's API alone.
+- The installer is now part of the launcher jar (`java -jar launcher/cameo-mcp-stdio.jar --install`);
+  the PowerShell and shell scripts are gone.
+- The live-test runners use `cameo-mcp-stdio.jar` for JSON instead of the Gson jar.
 - Fixed: `cameo_repair_conveyed_item_labels` now shows conveyed-item labels (it was hiding them).
 - Fixed: `cameo_detect_remediation` now suggests best-match fixes (the term lists were dropped).
 - Fixed: a `cameo_run_validation` TIMEOUT now names the `run_id` to fetch the result later.

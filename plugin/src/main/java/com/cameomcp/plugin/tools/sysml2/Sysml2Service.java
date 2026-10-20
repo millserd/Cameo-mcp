@@ -5,8 +5,8 @@ import com.cameomcp.plugin.CameoLog;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ProjectKind;
 import com.cameomcp.plugin.tools.OptionalModules;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Application;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
@@ -544,8 +544,8 @@ final class Sysml2Service {
         }
     }
 
-    private static com.google.gson.JsonElement num(Object v) {
-        return v instanceof Number ? new com.google.gson.JsonPrimitive((Number) v) : com.google.gson.JsonNull.INSTANCE;
+    private static com.cameomcp.json.tree.JsonElement num(Object v) {
+        return v instanceof Number ? new com.cameomcp.json.tree.JsonPrimitive((Number) v) : com.cameomcp.json.tree.JsonNull.INSTANCE;
     }
 
     // cameo_sysml2_validate_text: compiles without touching the project; "declares" lists the top-level declarations.
@@ -589,7 +589,7 @@ final class Sysml2Service {
                 Map<String, Object> details = new java.util.LinkedHashMap<>();
                 details.put("errorCount", c.errors);
                 details.put("warningCount", c.warnings);
-                details.put("diagnostics", com.cameomcp.plugin.cameo.Gs.fromGson(c.diagnostics));
+                details.put("diagnostics", com.cameomcp.plugin.cameo.Gs.fromTree(c.diagnostics));
                 throw new ToolException("INVALID_PARAMS", "The SysML v2 text does not compile ("
                         + c.errors + " errors, " + c.warnings + " warnings); nothing was changed. "
                         + firstMessage(c), details);

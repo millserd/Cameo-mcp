@@ -4,12 +4,12 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.cameomcp.plugin.tools.GsonService;
+import com.cameomcp.plugin.tools.TreeService;
 import com.cameomcp.plugin.tools.artifacts.ArtifactListings;
 import com.cameomcp.plugin.tools.artifacts.ArtifactSupport;
 import com.cameomcp.plugin.tools.artifacts.MatrixKinds;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.dependencymatrix.DependencyMatrix;
 import com.nomagic.magicdraw.dependencymatrix.MatrixManager;
@@ -31,7 +31,7 @@ import java.util.Collections;
 import java.util.List;
 
 /** Native matrices through the Dependency Matrix plugin API (cameo_get_matrix, cameo_create_matrix). */
-public final class MatrixService implements GsonService {
+public final class MatrixService implements TreeService {
 
     /** Criterion that makes a plain Dependency Matrix show UML Dependency relationships. */
     static final String UML_DEPENDENCY_CRITERIA = """

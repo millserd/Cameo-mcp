@@ -7,7 +7,7 @@ import com.cameomcp.mcp.Args;
 import com.cameomcp.mcp.ToolContext;
 import com.cameomcp.mcp.ToolRegistry;
 import com.cameomcp.mcp.ToolSpec;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

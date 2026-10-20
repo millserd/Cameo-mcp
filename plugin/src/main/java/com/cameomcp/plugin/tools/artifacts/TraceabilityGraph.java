@@ -2,8 +2,8 @@ package com.cameomcp.plugin.tools.artifacts;
 
 import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.ElementJson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.uml.ClassTypes;
 import com.nomagic.magicdraw.uml2.Connectors;

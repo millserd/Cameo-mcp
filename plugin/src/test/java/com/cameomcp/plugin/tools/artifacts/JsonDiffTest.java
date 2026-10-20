@@ -1,9 +1,9 @@
 // family: artifacts
 package com.cameomcp.plugin.tools.artifacts;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonParser;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

@@ -4,10 +4,10 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.cameomcp.plugin.tools.GsonService;
+import com.cameomcp.plugin.tools.TreeService;
 import com.cameomcp.plugin.tools.artifacts.ArtifactSupport;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.generictable.GenericTableManager;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 /** Native Generic Tables through the Generic Table plugin API. */
-public final class GenericTableService implements GsonService {
+public final class GenericTableService implements TreeService {
 
     public GenericTableService() {
     }

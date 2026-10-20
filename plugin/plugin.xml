@@ -11,6 +11,5 @@
     </requires>
     <runtime>
         <library name="cameo-mcp-plugin.jar"/>
-        <library name="lib/gson-2.10.1.jar"/>
     </runtime>
 </plugin>

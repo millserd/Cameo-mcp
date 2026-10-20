@@ -4,10 +4,9 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
 import com.nomagic.uml2.ext.jmi.helpers.StereotypesHelper;
@@ -206,7 +205,7 @@ final class RequirementsService {
             doc.addProperty("format", "cameo-mcp-requirements");
             doc.addProperty("count", requirements.size());
             doc.add("requirements", requirements);
-            content = new GsonBuilder().setPrettyPrinting().create().toJson(doc);
+            content = doc.toPrettyString();
         } else {
             response.addProperty("message", "Native ReqIF export is not enabled; the requirements are returned as JSON. "
                     + "Use Cameo's File > Export To > ReqIF for a native ReqIF file.");

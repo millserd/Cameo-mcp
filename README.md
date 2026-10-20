@@ -4,8 +4,9 @@ An [MCP](https://modelcontextprotocol.io/) server that lets AI agents work insid
 **Cameo Systems Modeler / CATIA Magic** (2024x and 2026x): query, create, modify, validate,
 diagram, trace and review SysML/UML models in the Cameo instance you have open.
 
-Everything is Java and ships as one package. The Cameo plugin hosts the MCP server itself,
-so there is nothing else to install or keep in sync:
+Everything is Java and ships as one package. The Cameo plugin hosts the MCP server itself and
+calls Cameo's Java API directly, in Cameo's own JVM: no Python, no scripts, no helper process and
+no third-party libraries. The only thing it needs is the Java that comes with Cameo.
 
 ```
  AI agent / MCP client ──Streamable HTTP──▶ Cameo MCP plugin (inside Cameo's JVM) ──▶ Cameo Java API
@@ -20,7 +21,7 @@ so there is nothing else to install or keep in sync:
 ## What you get
 
 - **183 tools** in seven families: server (status, diagnostics, undo/redo), model (elements,
-  stereotypes, relationships, specifications, state-machine semantics, bulk create, Groovy macros),
+  stereotypes, relationships, specifications, state-machine semantics, bulk create, optional script macros),
   diagrams (create, populate, layout, images, labels, compartments, routing), artifacts (native
   dependency matrices, generic tables, relation maps, traceability graphs, snapshots), advanced
   (native validation, Report Wizard, requirements import/export, simulation, Teamwork Cloud,
@@ -48,15 +49,18 @@ so there is nothing else to install or keep in sync:
 ## Install
 
 1. Download or build `cameo-mcp-<version>.zip` and unzip it.
-2. Close Cameo, then run the installer from the unzipped folder:
-   - **Windows** (PowerShell, as administrator if Cameo is under Program Files):
-     `powershell -ExecutionPolicy Bypass -File install\install.ps1`
-   - **macOS / Linux**: `sh install/install.sh`
+2. Close Cameo, then run the installer from the unzipped folder. It is part of the launcher jar,
+   so it needs only Java (Cameo's bundled Java works, e.g. `"<Cameo>\jre\bin\java"`):
 
-   The installer finds your Cameo installation (or pass `-CameoHome "C:\Program Files\..."` /
-   `--cameo-home /path`), copies `plugin/com.cameomcp.plugin` into `<Cameo>/plugins/`.
-   Manual install is the same copy: put the folder `plugin/com.cameomcp.plugin` into
-   `<Cameo install>/plugins/`.
+   ```
+   java -jar launcher/cameo-mcp-stdio.jar --install
+   ```
+
+   It finds your Cameo installation (or pass `--cameo-home "<Cameo install folder>"`, repeatable;
+   `--all` takes every one it finds) and copies `plugin/com.cameomcp.plugin` into
+   `<Cameo>/plugins/`. Run it as administrator (Windows) or with sudo if Cameo is in a
+   protected folder. Manual install is the same copy: put the folder `plugin/com.cameomcp.plugin`
+   into `<Cameo install>/plugins/`.
 
    **From inside Cameo instead:** build `gradle :plugin:rdzip` (writes
    `build/dist/cameo-mcp-<version>-rdzip.zip`), then in Cameo open **Help > Resource/Plugin Manager**,
@@ -65,7 +69,7 @@ so there is nothing else to install or keep in sync:
    `[Cameo MCP] MCP server started. Endpoint http://127.0.0.1:18740/mcp ...`.
 4. Open **MCP > MCP Server Status** and press **Test connection**. Every step should say PASS.
 
-Uninstall: `install.ps1 -Uninstall` / `install.sh --uninstall`, or delete
+Uninstall: `java -jar launcher/cameo-mcp-stdio.jar --uninstall`, or delete
 `<Cameo>/plugins/com.cameomcp.plugin`. Settings live in `~/.cameo-mcp/`.
 
 ## Connect an MCP client

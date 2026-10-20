@@ -1,9 +1,9 @@
 package com.cameomcp.plugin.tools.diagrams;
 
 import com.cameomcp.mcp.ToolException;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.uml.symbols.DiagramPresentationElement;
 import com.nomagic.magicdraw.uml.symbols.PresentationElement;
@@ -409,7 +409,7 @@ final class DiagramSupport {
         // Some MCP clients send nested arrays as a JSON string; parse it before validating.
         if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
             try {
-                e = com.google.gson.JsonParser.parseString(e.getAsString());
+                e = com.cameomcp.json.tree.JsonParser.parseString(e.getAsString());
             } catch (RuntimeException ex) {
                 throw ToolException.invalid("Parameter '" + key + "' must be an array of objects.");
             }
@@ -431,7 +431,7 @@ final class DiagramSupport {
     static JsonObject objectParam(JsonElement e, String key) {
         if (e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
             try {
-                e = com.google.gson.JsonParser.parseString(e.getAsString());
+                e = com.cameomcp.json.tree.JsonParser.parseString(e.getAsString());
             } catch (RuntimeException ex) {
                 e = null;
             }

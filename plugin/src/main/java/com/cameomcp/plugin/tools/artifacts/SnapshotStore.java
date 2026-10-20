@@ -1,6 +1,6 @@
 package com.cameomcp.plugin.tools.artifacts;
 
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.time.Instant;
 import java.util.ArrayList;
