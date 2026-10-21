@@ -15,7 +15,8 @@ stdio/    cameo-mcp-stdio.jar: stdio <-> HTTP launcher for stdio-only MCP client
 stubs/    Compile-only stand-ins for the Cameo OpenAPI, verified against the 2024x and 2026x
           javadoc. Never packaged. See stubs/README.md and stubs/API-DIFFERENCES.md.
 devtools/ compile-check.sh and jars for fast checks without Gradle.
-docs/     AGENT-GUIDE.md (served to agents as cameo://guide), this file.
+docs/     AGENT-GUIDE.md (served to agents as cameo://guide), how-it-works.svg, this file.
+skills/   cameo-mcp/SKILL.md, the agent skill. Copied into the plugin folder and the release zip.
 ```
 
 ## How a tool is wired
@@ -78,3 +79,12 @@ Tests live in `core/src/test/java` or `plugin/src/test/java/com/cameomcp/plugin/
 Logic that does not touch Cameo (analysis, parsing, planning) must have unit tests.
 To check a build inside a running Cameo, use the scenarios in `devtools/livetest` (see its README);
 `gradle dist -PcameoHome=<Cameo install>` compiles against that install's real jars first.
+
+## Packaging
+
+- `gradle :plugin:assemblePlugin` lays out the plugin folder in `plugin/build/plugin-dist/`.
+- `gradle dist` builds the release zip; `gradle :plugin:rdzip` builds the Resource/Plugin Manager
+  bundle from the same folder.
+- The rdzip descriptor (`plugin/resourcemanager-descriptor.xml`) gets one `<file>` entry per file,
+  subfolders included, generated at build time. Do not use `*.*` wildcards there: Cameo 2026x
+  installed them one folder too deep and the plugin did not load.

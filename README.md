@@ -60,9 +60,25 @@ no third-party libraries. The only thing it needs is the Java that comes with Ca
    protected folder. Manual install is the same copy: put the folder `plugin/com.cameomcp.plugin`
    into `<Cameo install>/plugins/`.
 
-   **From inside Cameo instead:** build `gradle :plugin:rdzip` (writes
-   `build/dist/cameo-mcp-<version>-rdzip.zip`), then in Cameo open **Help > Resource/Plugin Manager**,
-   click **Import**, pick that zip and restart Cameo when asked.
+   **From inside Cameo instead:** take `cameo-mcp-<version>-rdzip.zip` (prebuilt next to the release
+   zip, or build it with `gradle :plugin:rdzip`, which writes `build/dist/`), then in Cameo open
+   **Help > Resource/Plugin Manager**, click **Import**, pick that zip and restart Cameo when asked.
+
+   Either way you end up with this folder:
+
+   ```
+   <Cameo install>/plugins/com.cameomcp.plugin/
+     plugin.xml                 tells Cameo to load the plugin
+     cameo-mcp-plugin.jar       the MCP server, menu and status window
+     cameo-mcp-optional.jar     tools for optional Cameo plugins (matrices, tables, relation maps)
+     cameo-mcp-stdio.jar        stdio launcher and installer
+     README.md, AGENT-GUIDE.md
+     skills/cameo-mcp/SKILL.md  the agent skill (see "Agent skill" below)
+     docs/how-it-works.svg      the graphic above, shown by the skill
+   ```
+
+   If the MCP menu does not appear, check that `plugin.xml` sits directly in that folder and not
+   in a nested `com.cameomcp.plugin/com.cameomcp.plugin/` folder.
 3. Start Cameo. The **MCP** menu appears in the main menu bar and the Notification window shows
    `[Cameo MCP] MCP server started. Endpoint http://127.0.0.1:18740/mcp ...`.
 4. Open **MCP > MCP Server Status** and press **Test connection**. Every step should say PASS.
@@ -113,7 +129,9 @@ Windows `java.exe` from the WSL shell.
 
 [skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md) is a skill in the common `SKILL.md` format
 (frontmatter `name` and `description`, then instructions). Copy the `skills/cameo-mcp` folder into
-your agent's skills folder, or paste the file into its instructions. It makes the agent:
+your agent's skills folder, or paste the file into its instructions. The plugin install (rdzip or
+release zip) also puts a copy at `<Cameo install>/plugins/com.cameomcp.plugin/skills/cameo-mcp/SKILL.md`,
+so an agent on the Cameo machine can load it from there. It makes the agent:
 
 1. ask the user for the Cameo MCP host, port and token before its first model call,
 2. check `GET http://<host>:<port>/status`,

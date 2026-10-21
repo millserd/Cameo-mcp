@@ -9,6 +9,9 @@ Cameo MCP is an MCP server that runs **inside** Cameo Systems Modeler / CATIA Ma
 2026x). It works on the live model the user has open, through Cameo's own Java API. Every change
 shows up in the user's Cameo window right away and can be undone there.
 
+This skill ships in the release zip under `skills/cameo-mcp/` and, once the plugin is installed,
+at `<Cameo install>/plugins/com.cameomcp.plugin/skills/cameo-mcp/SKILL.md`.
+
 ![How Cameo MCP works](../../docs/how-it-works.svg)
 
 ## When to use this skill

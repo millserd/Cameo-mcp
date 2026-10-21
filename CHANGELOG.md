@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The rdzip (Help > Resource/Plugin Manager > Import) now installs into
+  `plugins/com.cameomcp.plugin/` itself. Before, Cameo 2026x put the files one folder too deep and
+  the plugin did not load.
+- The installed plugin folder now includes the agent skill at `skills/cameo-mcp/SKILL.md`.
 - `java -jar cameo-mcp-stdio.jar --print-config` prints a ready-to-paste `mcpServers` block for
   this machine, with the running Java and the jar's own path filled in. Docs cover agents in
   sandboxes, VMs and WSL that cannot reach the host's `127.0.0.1`.
