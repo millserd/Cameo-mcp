@@ -10,6 +10,10 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests for {@link McpHttpTransport} on a real loopback socket: a full session lifecycle, the Origin and
+ * bearer-token checks, and which origins count as local.
+ */
 class McpHttpTransportTest {
 
     private McpHttpTransport transport;

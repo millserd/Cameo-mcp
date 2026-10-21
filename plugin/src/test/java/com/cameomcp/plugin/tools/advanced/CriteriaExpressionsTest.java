@@ -15,6 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link CriteriaExpressions}: the template table, filtering by target, kind and direction
+ * canonicalization, building from templates, rejection of bad input and parsing.
+ */
 class CriteriaExpressionsTest {
 
     @Test

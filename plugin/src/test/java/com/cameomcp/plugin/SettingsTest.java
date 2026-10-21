@@ -8,6 +8,10 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests for {@link Settings}: a token supplied by environment or JVM option is not written back to the
+ * settings file.
+ */
 class SettingsTest {
 
     @Test

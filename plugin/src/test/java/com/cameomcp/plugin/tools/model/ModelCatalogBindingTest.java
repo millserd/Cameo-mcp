@@ -15,6 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Checks that every model-family spec in the catalog is bound, that expected tools and required parameters
+ * exist, and that the macro engine falls back from Groovy to JavaScript.
+ */
 class ModelCatalogBindingTest {
 
     private static final List<String> EXPECTED = Arrays.asList(

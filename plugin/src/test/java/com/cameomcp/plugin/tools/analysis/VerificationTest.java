@@ -17,6 +17,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link Verification}: diagram image and visual checks, matrix consistency, activity flow
+ * semantics, port boundary consistency, requirement quality and cross-diagram traceability.
+ */
 class VerificationTest {
 
     @SuppressWarnings("unchecked")

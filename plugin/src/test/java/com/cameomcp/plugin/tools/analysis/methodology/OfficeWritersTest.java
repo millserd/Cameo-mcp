@@ -28,6 +28,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link PptxWriter}, {@link PdfWriter} and {@link OfficeImages}: required PPTX parts and
+ * well-formed XML, a valid PDF xref table, readable JPEG streams, empty-input rejection, alpha flattening
+ * and Python-compatible title case.
+ */
 class OfficeWritersTest {
 
     private static OfficeImages.Image image(String stem, int w, int h, Color color) {

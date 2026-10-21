@@ -20,6 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Checks the artifact tool family against the reference bridge: tool names, parameter names, defaults and
+ * kinds, that every tool is bound, and camelCase argument canonicalization.
+ */
 class ArtifactCatalogTest {
 
     private static final List<String> TOOLS = Arrays.asList(

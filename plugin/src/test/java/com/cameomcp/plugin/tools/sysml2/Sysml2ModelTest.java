@@ -21,6 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link Sysml2Model} against the fake KerML classes in {@link FakeKerml}: element detection by
+ * interface name, compact and detailed JSON, query filters and paging, library handling, lookup by ID, text
+ * slicing, and binding of every sysml2 spec.
+ */
 class Sysml2ModelTest {
 
     private static FakeKerml.Node vehicleModel() {

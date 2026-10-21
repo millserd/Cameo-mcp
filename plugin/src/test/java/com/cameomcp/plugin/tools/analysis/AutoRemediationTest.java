@@ -13,6 +13,10 @@ import static com.cameomcp.plugin.tools.analysis.J.obj;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link AutoRemediation}: remediation plans with previewable receipts, clean and missing inputs,
+ * live detection through the semantic validators, and {@link SequenceMatcher} parity with Python difflib.
+ */
 class AutoRemediationTest {
 
     @SuppressWarnings("unchecked")

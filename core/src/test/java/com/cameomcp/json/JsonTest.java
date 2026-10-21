@@ -8,6 +8,10 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests for the {@link Json} reader and writer: nested round trips, key order, integral doubles written as
+ * integers, control-character escaping, big numbers, empty containers and rejection of malformed input.
+ */
 class JsonTest {
 
     @Test

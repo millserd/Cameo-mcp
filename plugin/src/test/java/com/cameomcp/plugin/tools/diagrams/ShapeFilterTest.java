@@ -10,6 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link ShapeFilter}: paging and nextOffset, case-insensitive and parent filters, offset
+ * clamping, projection without mutating input, and summary ordering.
+ */
 class ShapeFilterTest {
 
     private static JsonArray shapes() {

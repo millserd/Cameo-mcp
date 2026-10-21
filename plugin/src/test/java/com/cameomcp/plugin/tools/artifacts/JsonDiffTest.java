@@ -14,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link JsonDiff}: added, removed and changed paths, null as absent, array comparison, type
+ * changes, ignored path prefixes, change limits and detail copies.
+ */
 class JsonDiffTest {
 
     private static JsonObject j(String s) {

@@ -17,6 +17,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link ImageTransform}: aspect-preserving fit, format normalization, JPEG on white, PNG round
+ * trips, the WebP fallback and quality versus size.
+ */
 class ImageTransformTest {
 
     private static BufferedImage sample(int w, int h, boolean alpha) {
