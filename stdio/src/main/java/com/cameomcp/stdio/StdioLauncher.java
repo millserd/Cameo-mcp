@@ -115,6 +115,8 @@ public final class StdioLauncher {
         String token = System.getenv("CAMEO_MCP_TOKEN");
         int timeout = 600;
         boolean diagnose = false;
+        boolean printConfig = false;
+        java.util.List<String> passOn = new java.util.ArrayList<>();
         Boolean install = null;
         boolean all = false;
         java.util.List<String> homes = new java.util.ArrayList<>();
@@ -122,10 +124,11 @@ public final class StdioLauncher {
         for (int i = 0; i < argv.length; i++) {
             String a = argv[i];
             switch (a) {
-                case "--port": port = Integer.parseInt(argv[++i]); break;
-                case "--host": host = argv[++i]; break;
-                case "--url": url = argv[++i]; break;
+                case "--port": port = Integer.parseInt(argv[++i]); passOn.add(a); passOn.add(argv[i]); break;
+                case "--host": host = argv[++i]; passOn.add(a); passOn.add(argv[i]); break;
+                case "--url": url = argv[++i]; passOn.add(a); passOn.add(argv[i]); break;
                 case "--token": token = argv[++i]; break;
+                case "--print-config": printConfig = true; break;
                 case "--timeout": timeout = Integer.parseInt(argv[++i]); break;
                 case "--diagnose": diagnose = true; break;
                 case "--install": install = Boolean.TRUE; break;
@@ -149,6 +152,10 @@ public final class StdioLauncher {
             // Installer.run's exit status ends the process; nothing below runs for --install/--uninstall.
             System.exit(Installer.run(!install, homes, all, from != null ? from : Installer.defaultSource(),
                     System.out));
+        }
+        if (printConfig) {
+            System.out.println(printConfig(javaExecutable(), jarPath(), passOn, token));
+            return;
         }
         if (url == null) {
             url = "http://" + (host.contains(":") ? "[" + host + "]" : host) + ":" + port + "/mcp";
@@ -177,12 +184,59 @@ public final class StdioLauncher {
                 "  --token T       bearer token if the plugin requires one (env CAMEO_MCP_TOKEN)",
                 "  --timeout S     max seconds to wait for one tool call (default 600)",
                 "  --diagnose      check the connection to Cameo and exit",
+                "  --print-config  print an mcpServers config block for this machine (this Java, this jar) and exit",
                 "  --install       copy the plugin into Cameo's plugins folder (close Cameo first)",
                 "  --uninstall     remove the plugin from Cameo",
                 "  --cameo-home D  Cameo install folder for --install/--uninstall (repeatable; default: search)",
                 "  --all           with several Cameo installs found, use all of them",
                 "  --from D        plugin folder to install (default: found next to this jar)",
                 "  --version, --help");
+    }
+
+    /**
+     * Builds the stdio client config block printed by --print-config. The command is the Java that
+     * runs this jar, so running the jar with Cameo's Java prints a config that uses Cameo's Java.
+     *
+     * @param java absolute path of the java executable
+     * @param jar absolute path of this jar
+     * @param passOn --host/--port/--url options given on the command line, copied into args
+     * @param token bearer token from --token or CAMEO_MCP_TOKEN, or null
+     * @return the pretty-printed JSON
+     */
+    static String printConfig(String java, String jar, java.util.List<String> passOn, String token) {
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        args.add("-jar");
+        args.add(jar);
+        args.addAll(passOn);
+        Map<String, Object> server = Json.obj("command", java, "args", args);
+        if (token != null && !token.trim().isEmpty()) {
+            server.put("env", Json.obj("CAMEO_MCP_TOKEN", token.trim()));
+        }
+        return Json.pretty(Json.obj("mcpServers", Json.obj("cameo", server)));
+    }
+
+    /**
+     * The java executable running this process.
+     *
+     * @return {@code <java.home>/bin/java}, with {@code .exe} on Windows
+     */
+    static String javaExecutable() {
+        boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows");
+        return java.nio.file.Paths.get(System.getProperty("java.home"), "bin", windows ? "java.exe" : "java").toString();
+    }
+
+    /**
+     * The absolute path of this jar (or classes folder when run from a build).
+     *
+     * @return the path, or {@code cameo-mcp-stdio.jar} when it cannot be determined
+     */
+    static String jarPath() {
+        try {
+            return java.nio.file.Paths.get(StdioLauncher.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+                    .toAbsolutePath().toString();
+        } catch (Exception e) {
+            return "cameo-mcp-stdio.jar";
+        }
     }
 
     /**

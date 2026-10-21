@@ -82,7 +82,9 @@ token and paths filled in, ready to copy.
 ```
 
 **stdio-only clients** (desktop chat apps and other clients without HTTP support): run the bundled launcher with Cameo's Java.
-The jar is in the plugin folder. Installs without a `jre` folder (no-install builds) name their Java as
+The jar is in the plugin folder. Easiest: run it once with the Java you want the client to use,
+`"<java>" -jar "<plugin folder>\cameo-mcp-stdio.jar" --print-config`, and paste the block it prints
+(add `--port`/`--host`/`--token` to include them). Or write it by hand. Installs without a `jre` folder (no-install builds) name their Java as
 `JAVA_HOME` in `bin\<product>.properties`; use that `bin\java.exe` as `command`.
 
 ```json
