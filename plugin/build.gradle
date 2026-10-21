@@ -99,5 +99,14 @@ tasks.register('rdzip', Zip) {
         rename { descriptorPath }
         expand(version: project.version, internal: major * 10000 + minor * 100 + patch, rdId: rdId,
                pluginId: pluginId, descriptorPath: descriptorPath, date: new Date().format('yyyy-MM-dd'))
+        // List every file by name, as No Magic's own descriptors do. A "*.*" wildcard made Cameo
+        // 2026x install the files one folder too deep (plugins/<id>/<id>/), so Cameo never saw plugin.xml.
+        filter { line ->
+            if (!line.contains('@PLUGIN_FILES@')) return line
+            tasks.named('assemblePlugin').get().destinationDir.listFiles().findAll { it.isFile() }*.name.sort().collect {
+                def path = "plugins/${pluginId}/${it}"
+                "        <file from=\"${path}\" to=\"${path}\"/>"
+            }.join('\n')
+        }
     }
 }
