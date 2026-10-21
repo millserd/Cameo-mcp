@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `cameo-mcp-stdio.jar` can call tools from a shell, for agents without MCP support:
+  `--list`, `--describe <tool>` and `--call <tool> [key=value ... | JSON | @file | -]`. Each prints
+  JSON and exits (0 ok, 1 tool or connection error, 2 bad usage).
 - The rdzip (Help > Resource/Plugin Manager > Import) now installs into
   `plugins/com.cameomcp.plugin/` itself. Before, Cameo 2026x put the files one folder too deep and
   the plugin did not load.

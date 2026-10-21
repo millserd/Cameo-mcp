@@ -122,7 +122,33 @@ the client's config. It fills in that machine's Java and jar paths. By hand it l
 `CAMEO_MCP_PORT` and `CAMEO_MCP_URL`. `java -jar cameo-mcp-stdio.jar --diagnose --host <host> --port <port>`
 checks the connection from a terminal.
 
-### C. You can only make HTTP requests (no MCP client)
+### C. You can only run shell commands (no MCP client): one-shot calls through the jar
+
+The launcher jar from option B also calls tools directly, one command per call. This is the
+simplest way for an agent that has a shell on the Cameo PC (or can reach it) but cannot register
+MCP servers. Use the Java and jar paths from option B; add `--host`/`--port`/`--url`/`--token`
+when not default.
+
+```
+<java> -jar <plugin folder>/cameo-mcp-stdio.jar --list
+<java> -jar <plugin folder>/cameo-mcp-stdio.jar --describe cameo_query_elements
+<java> -jar <plugin folder>/cameo-mcp-stdio.jar --call cameo_status
+<java> -jar <plugin folder>/cameo-mcp-stdio.jar --call cameo_query_elements type=Block limit=20
+<java> -jar <plugin folder>/cameo-mcp-stdio.jar --call cameo_create_elements @request.json
+```
+
+- `--list` prints every tool name with a one-line summary. `--describe <tool>` prints that tool's
+  description and `inputSchema` as JSON. Both work while Cameo is closed.
+- `--call <tool> [args]` prints the tool's result as JSON on stdout. Exit status 0 means success,
+  1 a tool error (the JSON has `code` and `message`) or connection error, 2 bad usage.
+- Arguments: `key=value` pairs (the value is read as JSON when it can be: `limit=20` is a number,
+  `full=true` a boolean, `ids=["a","b"]` a list; anything else is a string), or one JSON object,
+  or `@file.json`, or `-` to read JSON from stdin. On Windows prefer `key=value` or `@file.json`:
+  PowerShell and cmd mangle the quotes in inline JSON.
+- Each command is its own session, so it is slower than options A and B (Java starts and a new
+  session opens for every call). Batch work with `cameo_create_elements` instead of many single calls.
+
+### D. You can only make HTTP requests (no MCP client)
 
 Speak MCP's JSON-RPC 2.0 directly. Every request is a `POST` to `http://<host>:<port>/mcp` with
 `Content-Type: application/json`, `Accept: application/json, text/event-stream` and, if needed,

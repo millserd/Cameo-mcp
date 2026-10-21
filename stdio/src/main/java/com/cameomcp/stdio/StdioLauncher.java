@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  * java -jar cameo-mcp-stdio.jar [--port 18740] [--host 127.0.0.1] [--url http://...] [--token T]
  * java -jar cameo-mcp-stdio.jar --diagnose
+ * java -jar cameo-mcp-stdio.jar --list | --describe TOOL | --call TOOL [ARGS...]
  * java -jar cameo-mcp-stdio.jar --install | --uninstall [--cameo-home DIR]... [--all]
  * </pre>
  */
@@ -121,6 +122,9 @@ public final class StdioLauncher {
         boolean all = false;
         java.util.List<String> homes = new java.util.ArrayList<>();
         java.nio.file.Path from = null;
+        String oneShot = null;
+        String tool = null;
+        java.util.List<String> callArgs = new java.util.ArrayList<>();
         for (int i = 0; i < argv.length; i++) {
             String a = argv[i];
             switch (a) {
@@ -136,6 +140,16 @@ public final class StdioLauncher {
                 case "--cameo-home": homes.add(argv[++i]); break;
                 case "--all": all = true; break;
                 case "--from": from = java.nio.file.Paths.get(argv[++i]); break;
+                case "--list": oneShot = a; break;
+                case "--describe":
+                case "--call":
+                    oneShot = a;
+                    tool = argv[++i];
+                    // Everything up to the next option is the tool's arguments.
+                    while (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
+                        callArgs.add(argv[++i]);
+                    }
+                    break;
                 case "--version":
                     System.out.println("cameo-mcp-stdio " + Version.get());
                     return;
@@ -163,6 +177,17 @@ public final class StdioLauncher {
         if (diagnose) {
             System.exit(diagnose(url, token));
         }
+        if (oneShot != null) {
+            PrintStream utf8 = new PrintStream(new FileOutputStream(FileDescriptor.out), true, "UTF-8");
+            int code;
+            try {
+                code = oneShot(oneShot, tool, callArgs, url, token, timeout * 1000, utf8);
+            } catch (IllegalArgumentException e) {
+                System.err.println(e.getMessage());
+                code = 2;
+            }
+            System.exit(code);
+        }
         // stdout belongs to the protocol; anything else printed goes to stderr.
         PrintStream protocolOut = new PrintStream(new FileOutputStream(FileDescriptor.out), true, "UTF-8");
         System.setOut(System.err);
@@ -184,6 +209,11 @@ public final class StdioLauncher {
                 "  --token T       bearer token if the plugin requires one (env CAMEO_MCP_TOKEN)",
                 "  --timeout S     max seconds to wait for one tool call (default 600)",
                 "  --diagnose      check the connection to Cameo and exit",
+                "  --list          print every tool name with a one-line summary and exit",
+                "  --describe T    print tool T's description and input schema (JSON) and exit",
+                "  --call T [ARGS] call tool T once, print its result as JSON and exit (1 on tool error)",
+                "                  ARGS: a JSON object, @file.json, - (read JSON from stdin),",
+                "                  or key=value pairs (value parsed as JSON if it can be, else a string)",
                 "  --print-config  print an mcpServers config block for this machine (this Java, this jar) and exit",
                 "  --install       copy the plugin into Cameo's plugins folder (close Cameo first)",
                 "  --uninstall     remove the plugin from Cameo",
@@ -453,6 +483,143 @@ public final class StdioLauncher {
             return null;
         }
         return Json.write(Json.obj("jsonrpc", "2.0", "id", id, "error", Json.obj("code", -32000, "message", message)));
+    }
+
+    // ------------------------------------------------------------------ one-shot CLI
+
+    /**
+     * Runs --list, --describe or --call: one MCP session (initialize, one request, close) through the
+     * same path as stdio serving, so the built-in catalog answers --list and --describe while Cameo is
+     * closed, and --call gives the usual CAMEO_NOT_RUNNING error.
+     *
+     * @param mode "--list", "--describe" or "--call"
+     * @param tool the tool name for --describe and --call
+     * @param args the --call arguments, see {@link #parseCallArgs}
+     * @param endpoint plugin URL
+     * @param token bearer token, or null
+     * @param timeoutMillis longest wait for the reply
+     * @param out where the result is printed
+     * @return exit code: 0 ok, 1 tool or connection error, 2 bad usage
+     * @throws IOException if reading arguments from a file or stdin fails
+     */
+    static int oneShot(String mode, String tool, java.util.List<String> args, String endpoint, String token,
+            int timeoutMillis, PrintStream out) throws IOException {
+        Map<String, Object> arguments = "--call".equals(mode) ? parseCallArgs(args, System.in) : null;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        StdioLauncher l = new StdioLauncher(endpoint, token, new PrintStream(buf, true, "UTF-8"), timeoutMillis);
+        l.handle(Json.write(Json.obj("jsonrpc", "2.0", "id", 1, "method", "initialize", "params",
+                Json.obj("protocolVersion", McpServer.LATEST_PROTOCOL, "capabilities", Json.obj(),
+                        "clientInfo", Json.obj("name", "cameo-mcp-cli", "version", Version.get())))));
+        l.handle("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+        buf.reset();
+        l.handle("--call".equals(mode)
+                ? Json.write(Json.obj("jsonrpc", "2.0", "id", 2, "method", "tools/call",
+                        "params", Json.obj("name", tool, "arguments", arguments)))
+                : "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
+        l.closeRemoteSession();
+        String text = buf.toString("UTF-8").trim();
+        if (text.isEmpty()) {
+            out.println("No reply from Cameo at " + endpoint + ".");
+            return 1;
+        }
+        Map<String, Object> reply = Json.parseObject(text);
+        if (reply.get("error") != null) {
+            out.println(Json.pretty(reply.get("error")));
+            return 1;
+        }
+        Map<String, Object> result = JsonPath.map(reply, "result");
+        if ("--call".equals(mode)) {
+            Object structured = result.get("structuredContent");
+            if (structured != null) {
+                out.println(Json.pretty(structured));
+            } else {
+                for (Map<String, Object> c : JsonPath.maps(result, "content")) {
+                    out.println(c.get("text") != null ? c.get("text") : Json.write(c));
+                }
+            }
+            return Boolean.TRUE.equals(result.get("isError")) ? 1 : 0;
+        }
+        java.util.List<Map<String, Object>> tools = JsonPath.maps(result, "tools");
+        if ("--describe".equals(mode)) {
+            for (Map<String, Object> t : tools) {
+                if (tool.equals(t.get("name"))) {
+                    out.println(Json.pretty(t));
+                    return 0;
+                }
+            }
+            out.println("No tool named " + tool + ". Run --list to see the tool names.");
+            return 1;
+        }
+        for (Map<String, Object> t : tools) {
+            String d = String.valueOf(t.get("description"));
+            int cut = d.indexOf(". ");
+            int nl = d.indexOf('\n');
+            if (nl >= 0 && (cut < 0 || nl < cut)) {
+                cut = nl - 1;
+            }
+            out.println(t.get("name") + "  " + (cut >= 0 ? d.substring(0, cut + 1) : d));
+        }
+        return 0;
+    }
+
+    /**
+     * Turns --call arguments into the tool's argument object. Accepts nothing (empty object), one JSON
+     * object, {@code @file} (JSON read from a file), {@code -} (JSON read from stdin), or
+     * {@code key=value} pairs. A pair's value is parsed as JSON when it can be (numbers, true, lists,
+     * objects), otherwise kept as a string, so {@code name=Engine} and {@code limit=5} both work
+     * without shell quoting.
+     *
+     * @param args the words after the tool name
+     * @param stdin where {@code -} reads from
+     * @return the arguments object
+     * @throws IOException if the file or stdin cannot be read
+     * @throws IllegalArgumentException on JSON that is not an object, or a word that fits no form
+     */
+    static Map<String, Object> parseCallArgs(java.util.List<String> args, InputStream stdin) throws IOException {
+        if (args.isEmpty()) {
+            return Json.obj();
+        }
+        String first = args.get(0).trim();
+        String json = null;
+        if (args.size() == 1 && first.startsWith("{")) {
+            json = first;
+        } else if (args.size() == 1 && first.equals("-")) {
+            json = read(stdin);
+        } else if (args.size() == 1 && first.startsWith("@")) {
+            json = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(first.substring(1))),
+                    StandardCharsets.UTF_8);
+        }
+        if (json != null) {
+            Object o;
+            try {
+                o = Json.parse(json.trim().replaceFirst("^\uFEFF", ""));
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException("--call arguments are not valid JSON: " + e.getMessage());
+            }
+            if (!(o instanceof Map)) {
+                throw new IllegalArgumentException("--call arguments must be a JSON object");
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) o;
+            return m;
+        }
+        Map<String, Object> m = Json.obj();
+        for (String a : args) {
+            int eq = a.indexOf('=');
+            if (eq <= 0) {
+                throw new IllegalArgumentException("Cannot read --call argument '" + a + "'. Use key=value pairs, "
+                        + "one JSON object, @file.json or - for stdin.");
+            }
+            String v = a.substring(eq + 1);
+            Object value;
+            try {
+                value = Json.parse(v);
+            } catch (RuntimeException e) {
+                value = v;
+            }
+            m.put(a.substring(0, eq), value);
+        }
+        return m;
     }
 
     // ------------------------------------------------------------------ HTTP

@@ -118,6 +118,24 @@ The launcher answers `tools/list` even while Cameo is closed, returns a clear "s
 for tool calls until it is up, and reconnects on its own when Cameo starts or restarts.
 `java -jar cameo-mcp-stdio.jar --diagnose` checks the connection from a terminal.
 
+**Agents without MCP support** (they can only run shell commands) can call tools one at a time
+with the same jar. Each command opens a session, makes one request, prints JSON and exits
+(status 0 on success, 1 on a tool or connection error, 2 on bad usage):
+
+```
+java -jar cameo-mcp-stdio.jar --list                         # tool names with one-line summaries
+java -jar cameo-mcp-stdio.jar --describe cameo_query_elements # one tool's description and input schema
+java -jar cameo-mcp-stdio.jar --call cameo_status
+java -jar cameo-mcp-stdio.jar --call cameo_query_elements type=Block limit=20
+java -jar cameo-mcp-stdio.jar --call cameo_create_elements @request.json
+```
+
+Arguments after the tool name are `key=value` pairs (a value is read as JSON when it can be, so
+`limit=20` is a number and `ids=["a","b"]` a list; otherwise it is a string), one JSON object,
+`@file.json`, or `-` to read JSON from stdin. On Windows, `key=value` or `@file.json` avoids
+PowerShell and cmd quoting problems with inline JSON. `--host`, `--port`, `--url` and `--token`
+work as for the launcher.
+
 **Agents whose shell runs in a sandbox, VM, container or WSL** get "connection refused" at
 `127.0.0.1:18740` even when Cameo shows the server running, because their `127.0.0.1` is not the
 Windows host. Register the launcher above in the MCP client's own config instead, so the client
@@ -135,7 +153,8 @@ so an agent on the Cameo machine can load it from there. It makes the agent:
 
 1. ask the user for the Cameo MCP host, port and token before its first model call,
 2. check `GET http://<host>:<port>/status`,
-3. connect over HTTP, through the stdio launcher, or with raw JSON-RPC requests,
+3. connect over HTTP, through the stdio launcher, with raw JSON-RPC requests, or with one-shot
+   `--call` commands of the launcher jar,
 4. follow the working rules for the tools.
 
 ## Configuration
