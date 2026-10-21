@@ -10,11 +10,8 @@ no third-party libraries. The only thing it needs is the Java that comes with Ca
 
 ![How Cameo MCP works: MCP clients reach the plugin inside Cameo over HTTP, directly or through the stdio launcher; the plugin runs each tool on Cameo's UI thread through the Cameo Java API](docs/how-it-works.svg)
 
-> **If you are an AI agent:** load the skill [skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md).
-> It tells you to ask the user for the server's address and port, how to connect to any host and
-> port, and how to use the tools. Then read [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) (also served
-> as the MCP resource `cameo://guide`). Start every session with `cameo_status`, then `cameo_get_project`.
-> The full parameter reference is [docs/TOOLS.md](docs/TOOLS.md) and the resource `cameo://tools`.
+> **If you are an AI agent:** read [AGENTS.md](AGENTS.md), then follow
+> [skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md). Both are also in the installed plugin folder.
 
 ## What you get
 
@@ -72,9 +69,10 @@ no third-party libraries. The only thing it needs is the Java that comes with Ca
      cameo-mcp-plugin.jar       the MCP server, menu and status window
      cameo-mcp-optional.jar     tools for optional Cameo plugins (matrices, tables, relation maps)
      cameo-mcp-stdio.jar        stdio launcher and installer
-     README.md, AGENT-GUIDE.md
-     skills/cameo-mcp/SKILL.md  the agent skill (see "Agent skill" below)
-     docs/how-it-works.svg      the graphic above, shown by the skill
+     AGENTS.md                  start here, for AI agents: points at the skill
+     README.md                  this file
+     skills/cameo-mcp/          the agent skill: SKILL.md, AGENT-GUIDE.md, TOOLS.md
+     docs/how-it-works.svg      the graphic above
    ```
 
    If the MCP menu does not appear, check that `plugin.xml` sits directly in that folder and not
@@ -86,76 +84,35 @@ no third-party libraries. The only thing it needs is the Java that comes with Ca
 Uninstall: `java -jar launcher/cameo-mcp-stdio.jar --uninstall`, or delete
 `<Cameo>/plugins/com.cameomcp.plugin`. Settings live in `~/.cameo-mcp/`.
 
-## Connect an MCP client
+## Connect an AI agent
 
-The **Connect a client** tab of the status window shows these snippets with your real port,
-token and paths filled in, ready to copy.
+1. In Cameo open **MCP > MCP Server Status** and press **Copy for AI agent** (or use the menu item
+   **MCP > Copy Connection for AI Agent**). It copies the endpoint (e.g. `http://127.0.0.1:18740/mcp`),
+   the token if one is set, and where the agent instructions are.
+2. Paste that into your agent's chat. An agent that does not know Cameo MCP yet should be pointed at
+   the plugin folder or given [skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md); agents opened in
+   the plugin folder find it through `AGENTS.md`. Agents with skill support can also copy the
+   `skills/cameo-mcp` folder into their skills folder.
+3. The agent asks for the endpoint if you have not given it, then calls tools. It needs nothing but
+   HTTP: one `POST` of a JSON-RPC `tools/call` to the endpoint, no handshake. Agents that only have
+   a shell with Java can use `java -jar cameo-mcp-stdio.jar --url <endpoint> --call <tool> key=value`.
 
-**Any client with Streamable HTTP support** (Cursor, VS Code, Windsurf, ...):
+### Register Cameo MCP in an MCP client (optional, permanent)
+
+The **Connect a client** tab of the status window shows these with your real port, token and paths.
+
+**Clients with Streamable HTTP support** (Cursor, VS Code, Windsurf, ...):
 
 ```json
 { "mcpServers": { "cameo": { "type": "http", "url": "http://127.0.0.1:18740/mcp" } } }
 ```
 
-**stdio-only clients** (desktop chat apps and other clients without HTTP support): run the bundled launcher with Cameo's Java.
-The jar is in the plugin folder. Easiest: run it once with the Java you want the client to use,
-`"<java>" -jar "<plugin folder>\cameo-mcp-stdio.jar" --print-config`, and paste the block it prints
-(add `--port`/`--host`/`--token` to include them). Or write it by hand. Installs without a `jre` folder (no-install builds) name their Java as
-`JAVA_HOME` in `bin\<product>.properties`; use that `bin\java.exe` as `command`.
-
-```json
-{
-  "mcpServers": {
-    "cameo": {
-      "command": "C:\\Program Files\\Cameo Systems Modeler\\jre\\bin\\java.exe",
-      "args": ["-jar", "C:\\Program Files\\Cameo Systems Modeler\\plugins\\com.cameomcp.plugin\\cameo-mcp-stdio.jar"]
-    }
-  }
-}
-```
-
-The launcher answers `tools/list` even while Cameo is closed, returns a clear "start Cameo" error
-for tool calls until it is up, and reconnects on its own when Cameo starts or restarts.
+**stdio-only clients** (desktop chat apps): copy the **stdio** block from that tab, or run
+`"<java>" -jar "<plugin folder>\cameo-mcp-stdio.jar" --print-config` and paste what it prints. Use
+this also when the agent's shell runs in a sandbox, VM, container or WSL: there `127.0.0.1` is not
+the Cameo PC, so the client must start the launcher on the Cameo PC itself. The launcher answers
+`tools/list` while Cameo is closed and reconnects when Cameo starts.
 `java -jar cameo-mcp-stdio.jar --diagnose` checks the connection from a terminal.
-
-**Agents without MCP support** (they can only run shell commands) can call tools one at a time
-with the same jar. Each command opens a session, makes one request, prints JSON and exits
-(status 0 on success, 1 on a tool or connection error, 2 on bad usage):
-
-```
-java -jar cameo-mcp-stdio.jar --list                         # tool names with one-line summaries
-java -jar cameo-mcp-stdio.jar --describe cameo_query_elements # one tool's description and input schema
-java -jar cameo-mcp-stdio.jar --call cameo_status
-java -jar cameo-mcp-stdio.jar --call cameo_query_elements type=Block limit=20
-java -jar cameo-mcp-stdio.jar --call cameo_create_elements @request.json
-```
-
-Arguments after the tool name are `key=value` pairs (a value is read as JSON when it can be, so
-`limit=20` is a number and `ids=["a","b"]` a list; otherwise it is a string), one JSON object,
-`@file.json`, or `-` to read JSON from stdin. On Windows, `key=value` or `@file.json` avoids
-PowerShell and cmd quoting problems with inline JSON. `--host`, `--port`, `--url` and `--token`
-work as for the launcher.
-
-**Agents whose shell runs in a sandbox, VM, container or WSL** get "connection refused" at
-`127.0.0.1:18740` even when Cameo shows the server running, because their `127.0.0.1` is not the
-Windows host. Register the launcher above in the MCP client's own config instead, so the client
-starts it on Windows. From WSL2 you can also turn on mirrored networking (`networkingMode=mirrored`
-under `[wsl2]` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`) or start the launcher with
-Windows `java.exe` from the WSL shell.
-
-## Agent skill
-
-[skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md) is a skill in the common `SKILL.md` format
-(frontmatter `name` and `description`, then instructions). Copy the `skills/cameo-mcp` folder into
-your agent's skills folder, or paste the file into its instructions. The plugin install (rdzip or
-release zip) also puts a copy at `<Cameo install>/plugins/com.cameomcp.plugin/skills/cameo-mcp/SKILL.md`,
-so an agent on the Cameo machine can load it from there. It makes the agent:
-
-1. ask the user for the Cameo MCP host, port and token before its first model call,
-2. check `GET http://<host>:<port>/status`,
-3. connect over HTTP, through the stdio launcher, with raw JSON-RPC requests, or with one-shot
-   `--call` commands of the launcher jar,
-4. follow the working rules for the tools.
 
 ## Configuration
 

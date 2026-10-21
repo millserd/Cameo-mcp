@@ -53,6 +53,11 @@ public final class McpMenuConfigurator implements AMConfigurator {
         category.addAction(new Item("CAMEO_MCP_RESTART", "Restart Server", () -> run("Restart", McpRuntime::restart),
                 McpRuntime::isRunning));
         category.addAction(new Item("CAMEO_MCP_TEST", "Test Connection", McpMenuConfigurator::test, rt -> true));
+        category.addAction(new Item("CAMEO_MCP_COPY_AGENT", "Copy Connection for AI Agent", () -> {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
+                    new StringSelection(ClientConfigs.agentInfo(McpRuntime.get())), null);
+            CameoLog.info("Copied the connection info for AI agents to the clipboard. Paste it into your agent's chat.");
+        }, rt -> true));
         category.addAction(new Item("CAMEO_MCP_COPY", "Copy Client Config (JSON)", () -> {
             McpRuntime rt = McpRuntime.get();
             String cmd = ClientConfigs.httpJson(rt);

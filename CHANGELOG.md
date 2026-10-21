@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Simpler agent connection. The status window has a **Copy for AI agent** button (also the menu
+  item **MCP > Copy Connection for AI Agent**) that copies the endpoint, the token if set and the
+  skill's path, for pasting into any agent's chat. `AGENTS.md` at the top of the plugin folder and
+  the release zip points agents at the skill. The skill is rewritten as one short flow: ask for
+  the endpoint, call tools with one HTTP `POST` each (or the jar's `--call`), check with
+  `cameo_status`. `AGENT-GUIDE.md` and `TOOLS.md` moved into `skills/cameo-mcp/`, so the skill
+  folder is complete on its own. `GET /mcp` and `GET /` now explain how to call the endpoint.
 - `cameo-mcp-stdio.jar` can call tools from a shell, for agents without MCP support:
   `--list`, `--describe <tool>` and `--call <tool> [key=value ... | JSON | @file | -]`. Each prints
   JSON and exits (0 ok, 1 tool or connection error, 2 bad usage).

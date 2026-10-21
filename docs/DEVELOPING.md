@@ -15,8 +15,9 @@ stdio/    cameo-mcp-stdio.jar: stdio <-> HTTP launcher for stdio-only MCP client
 stubs/    Compile-only stand-ins for the Cameo OpenAPI, verified against the 2024x and 2026x
           javadoc. Never packaged. See stubs/README.md and stubs/API-DIFFERENCES.md.
 devtools/ compile-check.sh and jars for fast checks without Gradle.
-docs/     AGENT-GUIDE.md (served to agents as cameo://guide), how-it-works.svg, this file.
-skills/   cameo-mcp/SKILL.md, the agent skill. Copied into the plugin folder and the release zip.
+docs/     how-it-works.svg, this file.
+skills/   cameo-mcp/: SKILL.md (the agent skill), AGENT-GUIDE.md (served as cameo://guide), TOOLS.md
+          (generated). Copied with AGENTS.md into the plugin folder and the release zip.
 ```
 
 ## How a tool is wired

@@ -18,7 +18,7 @@ public final class CatalogDocs {
     }
 
     /**
-     * Writes the Markdown tool reference to the given file (used by the build to refresh docs/TOOLS.md).
+     * Writes the Markdown tool reference to the given file (used by the build to refresh skills/cameo-mcp/TOOLS.md).
      *
      * @param args optional output file path; with none, the reference is printed to standard output
      * @throws Exception if the catalog cannot be loaded or the file cannot be written
@@ -33,7 +33,7 @@ public final class CatalogDocs {
     }
 
     /**
-     * The bundled AGENT-GUIDE.md (docs/AGENT-GUIDE.md in the source tree).
+     * The bundled AGENT-GUIDE.md (skills/cameo-mcp/AGENT-GUIDE.md in the source tree).
      *
      * @return the guide text; a short fallback built from Catalog.INSTRUCTIONS if the resource is missing or
      *     unreadable

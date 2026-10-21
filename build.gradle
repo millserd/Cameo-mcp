@@ -32,6 +32,7 @@ tasks.register('dist', Zip) {
     destinationDirectory = layout.buildDirectory.dir('dist')
     into("cameo-mcp-${project.version}") {
         from('README.md')
+        from('AGENTS.md')
         from('LICENSE')
         from('NOTICE')
         from('CHANGELOG.md')

@@ -212,7 +212,13 @@ public final class McpStatusWindow extends JDialog {
         endpointRow.add(endpointField, BorderLayout.CENTER);
         JButton copy = new JButton("Copy");
         copy.addActionListener(e -> copy(rt.endpointUrl(), "Endpoint URL"));
-        endpointRow.add(copy, BorderLayout.EAST);
+        JButton forAgent = new JButton("Copy for AI agent");
+        forAgent.setToolTipText("Copies the endpoint, token and skill location; paste it into your AI agent's chat.");
+        forAgent.addActionListener(e -> copy(ClientConfigs.agentInfo(rt), "Connection info for AI agents"));
+        JPanel copyButtons = new JPanel(new BorderLayout(6, 0));
+        copyButtons.add(copy, BorderLayout.WEST);
+        copyButtons.add(forAgent, BorderLayout.EAST);
+        endpointRow.add(copyButtons, BorderLayout.EAST);
         addRow(grid, row++, "MCP endpoint", endpointRow);
         addRow(grid, row++, "Port", portLabel);
         addRow(grid, row++, "Bound to", hostLabel);
