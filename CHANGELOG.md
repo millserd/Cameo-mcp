@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Docs: an architecture graphic (`docs/how-it-works.svg`) in the README, and an agent skill
+  (`skills/cameo-mcp/SKILL.md`, also in the release zip) that tells any AI agent to ask for the
+  server address and port, then connect to any host and port and use the tools.
 - Pure Java: the plugin no longer bundles Gson. It builds results with its own JSON classes
   (`com.cameomcp.json.tree`), so it runs on the JDK and Cameo's API alone.
 - The installer is now part of the launcher jar (`java -jar launcher/cameo-mcp-stdio.jar --install`);

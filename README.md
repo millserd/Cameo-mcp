@@ -8,14 +8,12 @@ Everything is Java and ships as one package. The Cameo plugin hosts the MCP serv
 calls Cameo's Java API directly, in Cameo's own JVM: no Python, no scripts, no helper process and
 no third-party libraries. The only thing it needs is the Java that comes with Cameo.
 
-```
- AI agent / MCP client ──Streamable HTTP──▶ Cameo MCP plugin (inside Cameo's JVM) ──▶ Cameo Java API
- (Cursor, VS Code, ...)    127.0.0.1:18740/mcp     menu + status window + log
- stdio-only clients ──stdio──▶ cameo-mcp-stdio.jar ──HTTP──▶ (same plugin)
-```
+![How Cameo MCP works: MCP clients reach the plugin inside Cameo over HTTP, directly or through the stdio launcher; the plugin runs each tool on Cameo's UI thread through the Cameo Java API](docs/how-it-works.svg)
 
-> **If you are an AI agent:** read [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) (also served as the
-> MCP resource `cameo://guide`). Start every session with `cameo_status`, then `cameo_get_project`.
+> **If you are an AI agent:** load the skill [skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md).
+> It tells you to ask the user for the server's address and port, how to connect to any host and
+> port, and how to use the tools. Then read [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) (also served
+> as the MCP resource `cameo://guide`). Start every session with `cameo_status`, then `cameo_get_project`.
 > The full parameter reference is [docs/TOOLS.md](docs/TOOLS.md) and the resource `cameo://tools`.
 
 ## What you get
@@ -100,6 +98,17 @@ The jar is in the plugin folder.
 The launcher answers `tools/list` even while Cameo is closed, returns a clear "start Cameo" error
 for tool calls until it is up, and reconnects on its own when Cameo starts or restarts.
 `java -jar cameo-mcp-stdio.jar --diagnose` checks the connection from a terminal.
+
+## Agent skill
+
+[skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md) is a skill in the common `SKILL.md` format
+(frontmatter `name` and `description`, then instructions). Copy the `skills/cameo-mcp` folder into
+your agent's skills folder, or paste the file into its instructions. It makes the agent:
+
+1. ask the user for the Cameo MCP host, port and token before its first model call,
+2. check `GET http://<host>:<port>/status`,
+3. connect over HTTP, through the stdio launcher, or with raw JSON-RPC requests,
+4. follow the working rules for the tools.
 
 ## Configuration
 
