@@ -94,14 +94,14 @@ new server. The tools then appear with names like `cameo_status`.
 
 ### B. Your client only starts local stdio servers
 
-Run the bundled launcher with Java (Cameo's own `jre/bin/java` works). The jar is in the plugin
+Run the bundled launcher with Java 11 or newer: Cameo's own `jre/bin/java` if the install has one, otherwise the Java named by `JAVA_HOME` in `<Cameo install>/bin/<product>.properties` (no-install builds have no `jre` folder). The jar is in the plugin
 folder: `<Cameo install>/plugins/com.cameomcp.plugin/cameo-mcp-stdio.jar`.
 
 ```json
 {
   "mcpServers": {
     "cameo": {
-      "command": "<Cameo install>/jre/bin/java",
+      "command": "<Java home>/bin/java",
       "args": ["-jar", "<Cameo install>/plugins/com.cameomcp.plugin/cameo-mcp-stdio.jar",
                "--host", "<host>", "--port", "<port>"],
       "env": { "CAMEO_MCP_TOKEN": "<token>" }
