@@ -11,12 +11,16 @@ import java.util.Map;
 /** Generic criteria expressions (reference CriteriaHandler). Writes stay gated. */
 final class CriteriaService {
 
+    /** Not instantiable; all members are static. */
     private CriteriaService() {
     }
 
-    /*
-     * cameo_get_criteria_capabilities: criteria are bridge-owned templates, always available, but no template
-     * write is verified. The native expression classes are probed only for diagnostics; nothing here calls them.
+    /**
+     * Implements cameo_get_criteria_capabilities. Criteria are templates owned by this server and always
+     * available, but no template write is verified. The native expression classes are probed only for
+     * diagnostics; nothing here calls them.
+     *
+     * @return the capability answer
      */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("criteria", "bridge-owned-plus-ui-diff");
@@ -34,7 +38,13 @@ final class CriteriaService {
         return response;
     }
 
-    // cameo_list_criteria_templates: the template table, optionally filtered by target kind (relationMap, matrix, table).
+    /**
+     * Implements cameo_list_criteria_templates: the template table, optionally filtered by target kind
+     * (relationMap, matrix or table).
+     *
+     * @param p the tool arguments: optional {@code target}
+     * @return the capabilities plus {@code target}, {@code count} and {@code templates}
+     */
     static JsonObject templates(JsonObject p) {
         String target = Gs.str(p, "target");
         JsonArray templates = CriteriaExpressions.templates(target);
@@ -47,7 +57,15 @@ final class CriteriaService {
         return response;
     }
 
-    // cameo_build_criteria_expression: normalizes template id / kind / direction into an expression object; no model write.
+    /**
+     * Implements cameo_build_criteria_expression: normalizes a template id, kind and direction into an
+     * expression object. Does not write to the model.
+     *
+     * @param p the tool arguments: {@code template_id}, {@code relationship_kind}, {@code direction}, {@code
+     *     target}
+     * @return {@code built}, {@code verifiedWithUiDiff} and the {@code expression}
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS as {@link CriteriaExpressions#build}
+     */
     static JsonObject build(JsonObject p) {
         String id = Gs.str(p, "template_id");
         JsonObject expression = CriteriaExpressions.build(id, Gs.str(p, "relationship_kind"), Gs.str(p, "direction"),
@@ -62,7 +80,14 @@ final class CriteriaService {
         return response;
     }
 
-    // cameo_parse_criteria_expression: accepts object, JSON-string or free-text forms and reports issues instead of failing.
+    /**
+     * Implements cameo_parse_criteria_expression: accepts object, JSON-string or free-text forms and reports
+     * issues instead of failing.
+     *
+     * @param p the tool arguments: {@code expression}
+     * @return the parsed expression with its issues, the {@code request} echo and the {@code capabilities}
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS when the expression is missing
+     */
     static JsonObject parse(JsonObject p) {
         JsonObject response = CriteriaExpressions.parse(p.get("expression"));
         response.add("request", Support.request(p));
@@ -70,9 +95,14 @@ final class CriteriaService {
         return response;
     }
 
-    /*
-     * cameo_apply_criteria_template: always refused. target_id is still required first so a malformed call reports
-     * the missing argument rather than the gate. Relation Map criteria have their own dedicated tool.
+    /**
+     * Implements cameo_apply_criteria_template, which is always refused. target_id is still required first,
+     * so a malformed call reports the missing argument rather than the gate. Relation Map criteria have their
+     * own tool.
+     *
+     * @param p the tool arguments: {@code target_id} and the template
+     * @return an "unsupported" answer with the request echo
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS when target_id is missing
      */
     static JsonObject apply(JsonObject p) {
         Gs.reqStr(p, "target_id");
@@ -85,9 +115,14 @@ final class CriteriaService {
         throw Support.refusal("UNSUPPORTED", response);
     }
 
-    /*
-     * cameo_capture_criteria_template_from_diff: records a before/after snapshot pair for a criteria edit made in the UI.
-     * The diff is attached when the snapshot tools can compute it; failures become diffEvidenceError, not a tool error.
+    /**
+     * Implements cameo_capture_criteria_template_from_diff: records a before and after snapshot pair for a
+     * criteria edit made in the UI. The diff is attached when the snapshot tools can compute it; a failure
+     * becomes diffEvidenceError, not a tool error.
+     *
+     * @param p the tool arguments: {@code before_snapshot_id}, {@code after_snapshot_id} and template details
+     * @return a preview-accepted answer with the diff evidence or its error
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS when a snapshot id is missing
      */
     static JsonObject capture(JsonObject p) {
         String before = Gs.reqStr(p, "before_snapshot_id");

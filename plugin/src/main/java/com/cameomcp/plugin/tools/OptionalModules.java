@@ -26,22 +26,42 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class OptionalModules {
 
-    // Where the plugin is installed; set by CameoMcpPlugin.init, null in tests.
+    /** Where the plugin is installed; set by CameoMcpPlugin.init, null in tests. */
     private static volatile File pluginDirectory;
-    // Built once on first use, because Cameo's plugin list is only complete after start-up.
+    /**
+     * The optional-module class loader. Built once on first use, because Cameo's plugin list is only
+     * complete after start-up.
+     */
     private static volatile ClassLoader loader;
-    // One instance per service class, created on first call.
+    /**
+     * One instance per service class, created on first call. Two threads racing on the first call may each
+     * create one; either instance works because services keep no state.
+     */
     private static final Map<String, TreeService> SERVICES = new ConcurrentHashMap<>();
 
+    /** Static methods only. */
     private OptionalModules() {
     }
 
-    /** Records the plugin folder so the optional jar can be found next to the main jar. */
+    /**
+     * Records the plugin folder so the optional jar can be found next to the main jar.
+     *
+     * @param dir the plugin folder, or null
+     */
     public static void setPluginDirectory(File dir) {
         pluginDirectory = dir;
     }
 
-    /** Call {@code operation} on the optional service class (fully qualified name). */
+    /**
+     * Call {@code operation} on the optional service class (fully qualified name).
+     *
+     * @param serviceClass fully qualified class name of a {@link TreeService} in the optional jar
+     * @param operation the operation name the service understands
+     * @param params the tool arguments
+     * @return the service's result
+     * @throws ToolException UNSUPPORTED when the service or the Cameo plugin it needs is not available
+     * @throws Exception whatever the service throws
+     */
     public static JsonObject call(String serviceClass, String operation, JsonObject params) throws Exception {
         return service(serviceClass).call(operation, params);
     }
@@ -49,6 +69,10 @@ public final class OptionalModules {
     /**
      * Loads a class from Cameo or from any loaded Cameo plugin, for APIs of plugins this one does
      * not declare as required (such as SysML v2 in 2026x).
+     *
+     * @param name fully qualified class name
+     * @return the class, initialized
+     * @throws ClassNotFoundException if no loader has it, or the loader chain cannot be built
      */
     public static Class<?> cameoClass(String name) throws ClassNotFoundException {
         try {
@@ -63,6 +87,10 @@ public final class OptionalModules {
     /**
      * The cached service instance for the class, loading it on first use. Any failure to load
      * (missing jar, missing optional Cameo plugin, linkage error) becomes an UNSUPPORTED tool error.
+     *
+     * @param serviceClass fully qualified class name
+     * @return the service
+     * @throws ToolException UNSUPPORTED when it cannot be loaded or instantiated
      */
     public static TreeService service(String serviceClass) {
         TreeService s = SERVICES.get(serviceClass);
@@ -83,10 +111,13 @@ public final class OptionalModules {
         }
     }
 
-    /*
-     * Builds the loader chain: optional jar -> (this plugin's loader, then every other Cameo
+    /**
+     * Builds the loader chain: optional jar, then (this plugin's loader, then every other Cameo
      * plugin's loader). The custom parent only consults the other plugins when our own loader
      * can't find a class, so our bundled classes always win.
+     *
+     * @return the cached or new loader
+     * @throws Exception if the jar URL cannot be formed
      */
     private static synchronized ClassLoader loader() throws Exception {
         if (loader != null) {
@@ -130,7 +161,11 @@ public final class OptionalModules {
         return loader;
     }
 
-    // cameo-mcp-optional.jar next to the plugin jar, or null when running from a build tree.
+    /**
+     * Finds cameo-mcp-optional.jar next to the plugin jar.
+     *
+     * @return the jar, or null when running from a build tree
+     */
     private static File locateJar() {
         File dir = pluginDirectory;
         if (dir == null) {

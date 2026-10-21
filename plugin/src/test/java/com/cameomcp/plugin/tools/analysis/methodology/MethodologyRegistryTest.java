@@ -14,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link MethodologyRegistry}: the embedded packs load, recipes are found, unknown IDs are
+ * NOT_FOUND, returned packs are copies, and every recipe has an executable builder.
+ */
 class MethodologyRegistryTest {
 
     @Test

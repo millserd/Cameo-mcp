@@ -31,7 +31,10 @@ public final class Probes {
             "com.nomagic.uml2.ext.magicdraw.",
     };
 
-    // {key, description}. "relationMap.*" templates are executed by the optional Relation Map module.
+    /**
+     * Built-in probe templates as {key, description}. "relationMap.*" templates are executed by the optional
+     * Relation Map module.
+     */
     private static final String[][] TEMPLATES = {
             {"relationMap.listGraphSettingsMethods", "List public GraphSettings methods"},
             {"relationMap.dumpCriteriaClasses", "Dump GraphSettings criteria value classes"},
@@ -40,10 +43,15 @@ public final class Probes {
             {"ui.dumpSelectionApi", "List likely UI selection APIs by reflection"},
     };
 
+    /** Not instantiable; all members are static. */
     private Probes() {
     }
 
-    /** cameo_list_probe_templates: the built-in templates, all read-only. */
+    /**
+     * cameo_list_probe_templates: the built-in templates, all read-only.
+     *
+     * @return {@code count} and {@code templates} (key, description, mode)
+     */
     public static JsonObject templates() {
         JsonArray templates = new JsonArray();
         for (String[] t : TEMPLATES) {
@@ -59,7 +67,11 @@ public final class Probes {
         return response;
     }
 
-    /** Non-read probe modes need either of these JVM system properties set to true at Cameo start-up. */
+    /**
+     * Non-read probe modes need either of these JVM system properties set to true at Cameo start-up.
+     *
+     * @return true when cameo.mcp.probes.write.enabled or cameo.bridge.probes.write.enabled is true
+     */
     static boolean writeProbesEnabled() {
         return Boolean.getBoolean("cameo.mcp.probes.write.enabled")
                 || Boolean.getBoolean("cameo.bridge.probes.write.enabled");
@@ -68,6 +80,15 @@ public final class Probes {
     /**
      * cameo_execute_probe: runs a named template or a restricted javaReflection operation. Scripts in
      * other languages are refused (not executed); the result says so and points to cameo_execute_macro.
+     *
+     * <p>{@code McpRuntime} also refuses this call unless "Allow macro scripts" is on in Settings.
+     *
+     * @param p the tool arguments: {@code mode}, and a template key or a javaReflection operation
+     * @return the probe output, or a refusal object for unsupported languages
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS for an unknown template or operation or a class outside
+     *     the allow-list, PRECONDITION_FAILED for a non-read mode while write probes are disabled, NOT_FOUND for a
+     *     missing class
+     * @throws Exception any reflective or EDT failure
      */
     public static JsonObject execute(JsonObject p) throws Exception {
         String mode = ArtifactSupport.optStr(p, "mode");
@@ -169,7 +190,12 @@ public final class Probes {
         }
     }
 
-    /** True when className starts with one of ALLOWED_PREFIXES. */
+    /**
+     * True when className starts with one of ALLOWED_PREFIXES.
+     *
+     * @param className a fully qualified class name
+     * @return true when the name is allow-listed
+     */
     static boolean allowedClassName(String className) {
         for (String prefix : ALLOWED_PREFIXES) {
             if (className.startsWith(prefix)) {
@@ -182,6 +208,12 @@ public final class Probes {
     /**
      * Loads an allow-listed class, trying this plugin's loader, then the thread context loader, then
      * the optional-module loader; NOT_FOUND when none has it (e.g. the owning Cameo plugin is absent).
+     *
+     * @param className a fully qualified class name
+     * @return the class
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS when the name is not allow-listed, NOT_FOUND when
+     *     no
+     * loader has it
      */
     static Class<?> safeProbeClass(String className) {
         if (!allowedClassName(className)) {

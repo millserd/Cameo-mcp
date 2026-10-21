@@ -30,14 +30,19 @@ import java.util.Map;
  */
 public final class ArtifactSupport {
 
+    /** Native diagram type name of relation maps. */
     public static final String RELATION_MAP_TYPE = "Relation Map Diagram";
+    /** Native diagram type name of generic tables. */
     public static final String GENERIC_TABLE_TYPE = "Generic Table";
 
     /** Optional-module service classes (src/optional/java). */
     public static final String MATRIX_SERVICE = "com.cameomcp.optional.matrix.MatrixService";
+    /** Optional-module service class for generic tables. */
     public static final String GENERIC_TABLE_SERVICE = "com.cameomcp.optional.generictable.GenericTableService";
+    /** Optional-module service class for relation maps. */
     public static final String RELATION_MAP_SERVICE = "com.cameomcp.optional.relationmap.RelationMapService";
 
+    /** Not instantiable; all members are static. */
     private ArtifactSupport() {
     }
 
@@ -47,6 +52,10 @@ public final class ArtifactSupport {
      * The tool arguments as a JSON tree object keyed by the spec's snake_case names: a camelCase
      * spelling sent by the client is copied to the canonical key, so implementations only
      * read snake_case. JSON nulls are dropped.
+     *
+     * @param args the tool arguments
+     * @param ctx the calling context, used to find the tool's spec
+     * @return a new object keyed by snake_case names
      */
     public static JsonObject params(Args args, ToolContext ctx) {
         JsonObject out = new JsonObject();
@@ -71,7 +80,13 @@ public final class ArtifactSupport {
         return out;
     }
 
-    /** Optional string list: null when absent, a list (possibly empty) when present. Accepts a CSV string. */
+    /**
+     * Optional string list: null when absent, a list (possibly empty) when present. Accepts a CSV string.
+     *
+     * @param o the arguments
+     * @param key the parameter name
+     * @return the strings, trimmed, without blanks; null when absent
+     */
     public static List<String> optStrList(JsonObject o, String key) {
         if (!Gs.has(o, key)) {
             return null;
@@ -106,7 +121,13 @@ public final class ArtifactSupport {
         return Gs.strList(o, key);
     }
 
-    /** Optional trimmed string; null when absent or blank. */
+    /**
+     * Optional trimmed string; null when absent or blank.
+     *
+     * @param o the arguments
+     * @param key the parameter name
+     * @return the trimmed value, or null
+     */
     public static String optStr(JsonObject o, String key) {
         String s = Gs.str(o, key);
         if (s == null) {
@@ -116,7 +137,13 @@ public final class ArtifactSupport {
         return s.isEmpty() ? null : s;
     }
 
-    /** Optional integer; null when absent. */
+    /**
+     * Optional integer; null when absent.
+     *
+     * @param o the arguments
+     * @param key the parameter name
+     * @return the value, or null when absent
+     */
     public static Integer optInt(JsonObject o, String key) {
         if (!Gs.has(o, key)) {
             return null;
@@ -124,7 +151,13 @@ public final class ArtifactSupport {
         return Gs.integer(o, key, 0);
     }
 
-    /** Optional boolean; null when absent. */
+    /**
+     * Optional boolean; null when absent.
+     *
+     * @param o the arguments
+     * @param key the parameter name
+     * @return the value, or null when absent
+     */
     public static Boolean optBool(JsonObject o, String key) {
         if (!Gs.has(o, key)) {
             return null;
@@ -132,7 +165,15 @@ public final class ArtifactSupport {
         return Gs.bool(o, key, false);
     }
 
-    /** Clamps value to [min, max]; null (parameter absent) yields dflt. */
+    /**
+     * Clamps value to [min, max]; null (parameter absent) yields dflt.
+     *
+     * @param value the value, or null
+     * @param min the lowest allowed value
+     * @param max the highest allowed value
+     * @param dflt the value for null
+     * @return the clamped value
+     */
     public static int clamp(Integer value, int min, int max, int dflt) {
         if (value == null) {
             return dflt;
@@ -140,7 +181,13 @@ public final class ArtifactSupport {
         return Math.max(min, Math.min(max, value));
     }
 
-    /** Seconds from a float "timeout" parameter, clamped to 1..600 (default 120). */
+    /**
+     * Seconds from a float "timeout" parameter, clamped to 1..600 (default 120).
+     *
+     * @param o the arguments
+     * @param key the parameter name
+     * @return whole seconds from 1 to 600
+     */
     public static int timeoutSeconds(JsonObject o, String key) {
         if (!Gs.has(o, key)) {
             return 120;
@@ -149,7 +196,12 @@ public final class ArtifactSupport {
         return (int) Math.max(1, Math.min(600, Math.floor(d)));
     }
 
-    /** Exception class name plus message, or just the class name when the message is blank. */
+    /**
+     * Exception class name plus message, or just the class name when the message is blank.
+     *
+     * @param e the exception
+     * @return the description
+     */
     public static String describe(Throwable e) {
         String message = e.getMessage();
         if (message == null || message.trim().isEmpty()) {
@@ -163,6 +215,12 @@ public final class ArtifactSupport {
     /**
      * Element by id; anything else (missing id, or a non-UML object) becomes the error produced by
      * ProjectKind.notUmlElement, pointing the caller to cameo_query_elements.
+     *
+     * @param project the active project
+     * @param id the element id, may be null
+     * @param label what the id is for, used in the message
+     * @return the element
+     * @throws ToolException NOT_FOUND, or a SysML v2 element error
      */
     public static Element element(Project project, String id, String label) {
         Object o = id == null ? null : project.getElementByID(id);
@@ -173,7 +231,15 @@ public final class ArtifactSupport {
                 + "cameo_query_elements to find valid element IDs.");
     }
 
-    /** All elements for the ids, in order; fails on the first unknown id. */
+    /**
+     * All elements for the ids, in order; fails on the first unknown id.
+     *
+     * @param project the active project
+     * @param ids the element ids
+     * @param label what the ids are for, used in the message
+     * @return the elements in the same order
+     * @throws ToolException NOT_FOUND for the first unknown id
+     */
     public static List<Element> elements(Project project, List<String> ids, String label) {
         List<Element> out = new ArrayList<>(ids.size());
         for (String id : ids) {
@@ -182,7 +248,15 @@ public final class ArtifactSupport {
         return out;
     }
 
-    /** Diagram presentation element for a diagram ID, searching the diagram list as a fallback. */
+    /**
+     * Diagram presentation element for a diagram ID, searching the diagram list as a fallback.
+     *
+     * @param project the active project
+     * @param id the diagram id, may be null
+     * @param label what the id is for, used in the message
+     * @return the diagram
+     * @throws ToolException NOT_FOUND when no diagram has that id
+     */
     public static DiagramPresentationElement diagram(Project project, String id, String label) {
         Object o = id == null ? null : project.getElementByID(id);
         if (o instanceof Diagram) {
@@ -209,6 +283,9 @@ public final class ArtifactSupport {
     /**
      * Native diagram type name (e.g. "Generic Table"), or "" when unknown; never throws, because
      * getDiagramType() can fail for diagrams whose defining plugin is not loaded.
+     *
+     * @param dpe the diagram, may be null
+     * @return the type name
      */
     public static String diagramType(DiagramPresentationElement dpe) {
         try {
@@ -218,12 +295,24 @@ public final class ArtifactSupport {
         }
     }
 
-    /** True when the diagram's native type is "Relation Map Diagram". */
+    /**
+     * True when the diagram's native type is "Relation Map Diagram".
+     *
+     * @param dpe the diagram, may be null
+     * @return true for relation maps
+     */
     public static boolean isRelationMap(DiagramPresentationElement dpe) {
         return RELATION_MAP_TYPE.equals(diagramType(dpe));
     }
 
-    /** Relation Map diagram by ID or NOT_FOUND. */
+    /**
+     * Relation Map diagram by ID or NOT_FOUND.
+     *
+     * @param project the active project
+     * @param id the diagram id, may be null
+     * @return the relation map's Diagram element
+     * @throws ToolException NOT_FOUND when the id is not a relation map
+     */
     public static Diagram relationMap(Project project, String id) {
         Object o = id == null ? null : project.getElementByID(id);
         if (o instanceof Diagram) {
@@ -238,7 +327,13 @@ public final class ArtifactSupport {
                 + "to find valid IDs.");
     }
 
-    /** Summary JSON (id, name, type, ownerId, ownerName) shared by table and relation-map listings. */
+    /**
+     * Summary JSON (id, name, type, ownerId, ownerName) shared by table and relation-map listings.
+     *
+     * @param dpe the diagram, may be null
+     * @param fallbackType the type to report when the native type cannot be read
+     * @return the summary
+     */
     public static JsonObject diagramSummary(DiagramPresentationElement dpe, String fallbackType) {
         JsonObject json = new JsonObject();
         Diagram diagram = dpe != null ? dpe.getDiagram() : null;
@@ -256,7 +351,12 @@ public final class ArtifactSupport {
         return json;
     }
 
-    /** Compact JSON for each non-null element. */
+    /**
+     * Compact JSON for each non-null element.
+     *
+     * @param elements the elements, may be null
+     * @return the compact JSON objects
+     */
     public static JsonArray compactArray(Collection<? extends Element> elements) {
         JsonArray array = new JsonArray();
         if (elements != null) {
@@ -269,7 +369,12 @@ public final class ArtifactSupport {
         return array;
     }
 
-    /** String values as a JSON array; null entries are kept as JSON null. */
+    /**
+     * String values as a JSON array; null entries are kept as JSON null.
+     *
+     * @param values the values, may be null
+     * @return the string array
+     */
     public static JsonArray stringArray(Collection<?> values) {
         JsonArray array = new JsonArray();
         if (values != null) {
@@ -282,7 +387,15 @@ public final class ArtifactSupport {
 
     // ------------------------------------------------------------------ type tokens
 
-    /** Stereotype or metaclass for a type token such as "Block", "Requirement", "Activity", "value-property". */
+    /**
+     * Stereotype or metaclass for a type token such as "Block", "Requirement", "Activity", "value-property".
+     *
+     * @param project the active project
+     * @param typeName the type token
+     * @param what the parameter's role, used in error messages
+     * @return the stereotype or metaclass element
+     * @throws ToolException INVALID_PARAMS when the token is empty or unknown
+     */
     public static Element resolveTypeReference(Project project, String typeName, String what) {
         if (typeName == null || typeName.trim().isEmpty()) {
             throw ToolException.invalid(what + " type tokens must not be empty.");
@@ -300,7 +413,15 @@ public final class ArtifactSupport {
                 + "UseCase, Activity or Property, or a stereotype such as Block, Requirement or valueProperty.");
     }
 
-    /** resolveTypeReference for every token, in order; throws on the first unknown token. */
+    /**
+     * resolveTypeReference for every token, in order; throws on the first unknown token.
+     *
+     * @param project the active project
+     * @param tokens the type tokens
+     * @param what the parameter's role, used in error messages
+     * @return the stereotype or metaclass elements, in order
+     * @throws ToolException INVALID_PARAMS for the first empty or unknown token
+     */
     public static List<Object> resolveTypes(Project project, List<String> tokens, String what) {
         List<Object> out = new ArrayList<>(tokens.size());
         for (String t : tokens) {
@@ -309,7 +430,13 @@ public final class ArtifactSupport {
         return out;
     }
 
-    /** First stereotype in the project whose normalized name equals the normalized input, or null. */
+    /**
+     * First stereotype in the project whose normalized name equals the normalized input, or null.
+     *
+     * @param project the active project
+     * @param name the stereotype name, in any case or punctuation
+     * @return the stereotype, or null
+     */
     public static Stereotype resolveStereotype(Project project, String name) {
         String wanted = normalizeTypeToken(name);
         Collection<Stereotype> all = StereotypesHelper.getAllStereotypes(project);
@@ -327,6 +454,10 @@ public final class ArtifactSupport {
     /**
      * Metaclass element (from the UML profile) for a type name. Tries the name as given, then the
      * CamelCase form ("opaque action" to "OpaqueAction"); null when neither is a known class type.
+     *
+     * @param project the active project
+     * @param rawTypeName the type name
+     * @return the metaclass element, or null
      */
     public static Element resolveMetaClass(Project project, String rawTypeName) {
         Class<?> metaclass = ClassTypes.getClassType(rawTypeName.trim());
@@ -343,7 +474,12 @@ public final class ArtifactSupport {
         return StereotypesHelper.getMetaClassByName(project, shortName);
     }
 
-    /** "value-property" / "opaque action" to "ValueProperty" / "OpaqueAction". */
+    /**
+     * "value-property" / "opaque action" to "ValueProperty" / "OpaqueAction".
+     *
+     * @param input the text
+     * @return the CamelCase form
+     */
     public static String normalizeTypeName(String input) {
         StringBuilder b = new StringBuilder();
         for (String part : input.trim().split("[-_ ]+")) {
@@ -358,7 +494,12 @@ public final class ArtifactSupport {
         return b.toString();
     }
 
-    /** Lower-case alphanumerics only, for forgiving stereotype matching. */
+    /**
+     * Lower-case alphanumerics only, for forgiving stereotype matching.
+     *
+     * @param input the text, may be null
+     * @return the token; "" for null
+     */
     public static String normalizeTypeToken(String input) {
         return input == null ? "" : input.replaceAll("[^A-Za-z0-9]+", "").toLowerCase(Locale.ROOT);
     }

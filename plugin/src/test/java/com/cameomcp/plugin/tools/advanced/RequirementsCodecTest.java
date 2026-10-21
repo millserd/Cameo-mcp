@@ -22,6 +22,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link RequirementsCodec}: CSV parsing (quotes, multi-line fields, BOM, delimiters, short rows,
+ * unterminated quotes), JSON rows, normalization, validation, export and CSV quoting, and the input and
+ * output path checks.
+ */
 class RequirementsCodecTest {
 
     @Test

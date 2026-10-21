@@ -28,11 +28,14 @@ import java.util.Map;
  */
 final class ProductServices {
 
-    // Bounds for the extension scan: max elements walked, and max element findings returned.
+    /** Extension scan bound: the walk stops after this many elements and marks the result truncated. */
     private static final int SCAN_LIMIT = 250_000;
+    /**
+     * Extension scan bound: at most this many element findings are returned; further matches set truncated.
+     */
     private static final int ELEMENT_FINDING_LIMIT = 500;
 
-    // Default name/type terms for the safety/cyber scan when the caller supplies no targets.
+    /** Default name and type terms for the safety/cyber scan when the caller supplies no targets. */
     static final List<String> EXTENSION_TERMS = Arrays.asList("safety", "cyber", "security", "risk", "hazard",
             "failure", "fmea", "control", "threat", "classification");
 
@@ -47,14 +50,17 @@ final class ProductServices {
         PROFILE_OPERATIONS.put("set-tags", "tag-set");
     }
 
+    /** Static helpers only. */
     private ProductServices() {
     }
 
     // ------------------------------------------------------------------ DataHub
 
-    /*
-     * cameo_get_datahub_capabilities: DataHub counts as present if either known plugin class loads or a
-     * datahub/doors/enovia plugin folder exists. Source readback and sync are never claimed.
+    /**
+     * cameo_get_datahub_capabilities. DataHub counts as present if either known plugin class loads or a
+     * datahub, doors or enovia plugin folder exists. Source readback and sync are never claimed.
+     *
+     * @return the capability object; safe to call with no project open
      */
     static JsonObject dataHubCapabilities() {
         JsonObject response = Support.baseCapabilities("datahub", "probe-first");
@@ -70,7 +76,12 @@ final class ProductServices {
         return response;
     }
 
-    // cameo_list_datahub_sources: always an empty list; DataHub's source APIs are not wired in, so it points to the UI.
+    /**
+     * cameo_list_datahub_sources. Always returns an empty source list, because DataHub's source APIs are not
+     * wired in; the message points the agent to the DataHub Explorer UI.
+     *
+     * @return the capabilities plus an empty "sources" array
+     */
     static JsonObject dataHubSources() {
         JsonObject response = dataHubCapabilities();
         response.addProperty("sourceInventoryMode", "diagnostic");
@@ -80,7 +91,13 @@ final class ProductServices {
         return response;
     }
 
-    // cameo_preview_datahub_sync: echoes the request and resolves scope_id (if a project is open) so bad IDs surface early.
+    /**
+     * cameo_preview_datahub_sync. Echoes the request and, when a project is open, resolves scope_id so bad
+     * IDs surface early. Nothing is synchronized.
+     *
+     * @param p tool arguments; scope_id is optional
+     * @return a preview envelope; "scopeProblem" is set when scope_id does not resolve
+     */
     static JsonObject dataHubSyncPreview(JsonObject p) {
         JsonObject response = Support.previewAccepted("datahub", Support.request(p),
                 "DataHub sync preview recorded. No external synchronization was performed.");
@@ -100,7 +117,12 @@ final class ProductServices {
 
     // ------------------------------------------------------------------ profiles
 
-    // cameo_get_profile_capabilities: profiles use core Cameo API, so they are always available, but only as previews.
+    /**
+     * cameo_get_profile_capabilities. Profiles use the core Cameo API, so they are always available, but only
+     * as previews.
+     *
+     * @return the capability object
+     */
     static JsonObject profileCapabilities() {
         JsonObject response = Support.baseCapabilities("profiles", "core-profile-api");
         response.addProperty("available", true);
@@ -117,7 +139,14 @@ final class ProductServices {
         return response;
     }
 
-    // cameo_preview_profile_operation: validates the operation name and echoes the payload; writes go through the element tools.
+    /**
+     * cameo_preview_profile_operation. Validates the operation name and echoes the payload; actual writes go
+     * through the element tools.
+     *
+     * @param p tool arguments; "operation" is required and must be a key of {@link #PROFILE_OPERATIONS}
+     * @return a preview envelope naming the reference operation label
+     * @throws ToolException INVALID_PARAMS for a missing or unknown operation
+     */
     static JsonObject profilePreview(JsonObject p) {
         String operation = Gs.reqStr(p, "operation").trim().toLowerCase(Locale.ROOT);
         String label = PROFILE_OPERATIONS.get(operation);
@@ -135,7 +164,13 @@ final class ProductServices {
         return response;
     }
 
-    // cameo_export_profile_summary: profiles and stereotypes owned under the primary model, as element references.
+    /**
+     * cameo_export_profile_summary. Lists profiles and stereotypes owned under the primary model as element
+     * references. Runs as a model read.
+     *
+     * @return profiles, stereotypes and their counts
+     * @throws Exception NO_PROJECT when no project is open, or any read failure
+     */
     static JsonObject profileSummary() throws Exception {
         return Edt.read(project -> {
             JsonArray profiles = new JsonArray();
@@ -167,9 +202,11 @@ final class ProductServices {
 
     // ------------------------------------------------------------------ variants
 
-    /*
-     * cameo_get_variant_capabilities: variant analysis is bridge-owned (always available); a native product-line
-     * plugin folder is only reported, never driven.
+    /**
+     * cameo_get_variant_capabilities. Variant analysis is done by this plugin and is always available; a
+     * native product-line plugin folder is only reported, never driven.
+     *
+     * @return the capability object
      */
     static JsonObject variantCapabilities() {
         JsonObject response = Support.baseCapabilities("variants", "bridge-owned-plus-native-probe");
@@ -187,7 +224,14 @@ final class ProductServices {
         return response;
     }
 
-    // cameo_install_variant_pattern_preview / cameo_export_variant_configuration: echo only, nothing hidden or deleted.
+    /**
+     * cameo_install_variant_pattern_preview and cameo_export_variant_configuration. Echo only: nothing is
+     * hidden or deleted.
+     *
+     * @param p tool arguments; "payload" is optional
+     * @param operation operation label used in the message and result
+     * @return a preview envelope
+     */
     static JsonObject variantPreview(JsonObject p, String operation) {
         JsonObject payload = Gs.object(p, "payload");
         JsonObject response = Support.previewAccepted("variants", payload == null ? new JsonObject() : payload,
@@ -197,9 +241,13 @@ final class ProductServices {
         return response;
     }
 
-    /*
-     * cameo_analyze_variants_preview: checks that configuration_ids and scope_ids resolve and echoes the scope elements.
-     * No variability rules are evaluated, so excludedElements is always empty.
+    /**
+     * cameo_analyze_variants_preview. Checks that configuration_ids and scope_ids resolve and echoes the
+     * scope elements. No variability rules are evaluated, so excludedElements is always empty. IDs are only
+     * checked when a project is open.
+     *
+     * @param p tool arguments
+     * @return includedElements (resolved scope elements) and warnings for IDs that do not resolve
      */
     static JsonObject analyzeVariants(JsonObject p) {
         JsonObject response = new JsonObject();
@@ -233,7 +281,11 @@ final class ProductServices {
 
     // ------------------------------------------------------------------ extensions
 
-    // cameo_get_extension_capabilities: safety/cyber support is detected by plugin folder name only.
+    /**
+     * cameo_get_extension_capabilities. Safety and cyber support is detected by plugin folder name only.
+     *
+     * @return the capability object
+     */
     static JsonObject extensionCapabilities() {
         JsonObject response = Support.baseCapabilities("extensions", "profile-and-plugin-probe");
         JsonArray dirs = Support.pluginDirectories("safety", "reliability", "cyber", "security", "risk", "fmea", "fmeca", "hazard");
@@ -247,12 +299,25 @@ final class ProductServices {
         return response;
     }
 
-    // cameo_list_extension_profiles: whole-model scan with the default terms, profiles and stereotypes only.
+    /**
+     * cameo_list_extension_profiles. Whole-model scan with {@link #EXTENSION_TERMS}, reporting profiles and
+     * stereotypes only.
+     *
+     * @return the scan result
+     * @throws Exception NO_PROJECT when no project is open, or any read failure
+     */
     static JsonObject extensionProfiles() throws Exception {
         return Edt.read(project -> scan(project, null, EXTENSION_TERMS, false));
     }
 
-    // cameo_scan_extensions: term scan (default EXTENSION_TERMS) under scope_id or the primary model, with element findings.
+    /**
+     * cameo_scan_extensions. Term scan under scope_id (or the primary model) that also returns element
+     * findings. Blank targets are dropped; with none left, {@link #EXTENSION_TERMS} is used.
+     *
+     * @param p tool arguments; targets and scope_id are optional
+     * @return the scan result plus the terms used, the request echo and complianceClaim=false
+     * @throws Exception NO_PROJECT, NOT_FOUND or SYSML2_ELEMENT for a bad scope_id, or any read failure
+     */
     static JsonObject scanExtensions(JsonObject p) throws Exception {
         List<String> targets = Gs.strList(p, "targets");
         List<String> terms = new ArrayList<>();
@@ -278,9 +343,17 @@ final class ProductServices {
         });
     }
 
-    /*
-     * Depth-first walk of the ownership tree from scope (or the primary model) collecting term matches.
-     * Stops at SCAN_LIMIT elements; element findings are capped separately and both set truncated.
+    /**
+     * Depth-first walk of the ownership tree from scope (or the primary model) collecting term matches. Stops
+     * after {@link #SCAN_LIMIT} elements; element findings are capped at {@link #ELEMENT_FINDING_LIMIT}.
+     * Either cap sets truncated. Must run inside a model read.
+     *
+     * @param project the open project
+     * @param scope element to start from, or null for the primary model
+     * @param terms lower-case search terms
+     * @param includeElements also list every matching element (profiles and stereotypes included) under
+     *     "elements"
+     * @return the extension capabilities plus profiles, stereotypes, elements and counts
      */
     private static JsonObject scan(Project project, Element scope, List<String> terms, boolean includeElements) {
         JsonObject response = extensionCapabilities();
@@ -336,9 +409,14 @@ final class ProductServices {
         return response;
     }
 
-    /*
+    /**
      * Case-insensitive substring match of terms against the element's runtime class simple name and its name.
-     * The class name is the implementation class, so broad terms like "control" also hit e.g. control-flow elements.
+     * The class name is the implementation class, so broad terms like "control" also hit, for example,
+     * control-flow elements.
+     *
+     * @param element element to test
+     * @param terms lower-case search terms
+     * @return true if any term occurs
      */
     static boolean matches(Element element, List<String> terms) {
         StringBuilder text = new StringBuilder(element.getClass().getSimpleName()).append(' ');
@@ -357,7 +435,12 @@ final class ProductServices {
         return false;
     }
 
-    // cameo_install_extension_pattern_preview: echo only; no profile is installed.
+    /**
+     * cameo_install_extension_pattern_preview. Echo only: no profile is installed.
+     *
+     * @param p tool arguments; "payload" is optional
+     * @return a preview envelope
+     */
     static JsonObject extensionInstallPreview(JsonObject p) {
         JsonObject payload = Gs.object(p, "payload");
         JsonObject response = Support.previewAccepted("extensions", payload == null ? new JsonObject() : payload,
@@ -366,7 +449,13 @@ final class ProductServices {
         return response;
     }
 
-    /** The refusal contract itself is this tool's result. */
+    /**
+     * The refusal contract itself is this tool's result.
+     *
+     * @param p tool arguments; claim_type is required but otherwise unused
+     * @return an "unsupported" capability object with refused=true
+     * @throws ToolException INVALID_PARAMS when claim_type is missing
+     */
     static JsonObject refuseComplianceClaim(JsonObject p) {
         Gs.reqStr(p, "claim_type");
         JsonObject response = Support.unsupported("extensions",

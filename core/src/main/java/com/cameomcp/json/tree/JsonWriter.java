@@ -6,10 +6,18 @@ import java.util.Map;
 /** Writes a tree as JSON text, compact or indented. */
 final class JsonWriter {
 
+    /** Static methods only. */
     private JsonWriter() {
     }
 
-    /** Appends {@code e}; {@code indent} null means compact output. */
+    /**
+     * Appends {@code e}; {@code indent} null means compact output.
+     *
+     * @param e the element; null is written as JSON null
+     * @param out where the text goes
+     * @param indent the string for one level of indentation, or null for compact output
+     * @param depth current nesting level, used for indentation
+     */
     static void write(JsonElement e, StringBuilder out, String indent, int depth) {
         if (e == null || e.isJsonNull()) {
             out.append("null");
@@ -18,6 +26,8 @@ final class JsonWriter {
             if (v instanceof String) {
                 string((String) v, out);
             } else {
+                // Numbers print through toString(): a LazyNumber keeps its original text. A Double NaN or
+                // infinity would print as-is, which is not valid JSON; tool code does not create such values.
                 out.append(v);
             }
         } else if (e.isJsonArray()) {
@@ -60,6 +70,13 @@ final class JsonWriter {
         }
     }
 
+    /**
+     * Starts a new line and indents it, in pretty mode only.
+     *
+     * @param out where the text goes
+     * @param indent one level of indentation, or null for compact output (then nothing is written)
+     * @param depth number of levels to indent
+     */
     private static void newline(StringBuilder out, String indent, int depth) {
         if (indent != null) {
             out.append('\n');
@@ -69,6 +86,12 @@ final class JsonWriter {
         }
     }
 
+    /**
+     * Appends a quoted, escaped JSON string.
+     *
+     * @param s the raw string
+     * @param out where the text goes
+     */
     static void string(String s, StringBuilder out) {
         out.append('"');
         for (int i = 0; i < s.length(); i++) {

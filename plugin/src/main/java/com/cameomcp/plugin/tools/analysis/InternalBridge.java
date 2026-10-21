@@ -17,6 +17,7 @@ public final class InternalBridge implements Bridge {
 
     /** Shape pages are merged up to this many shapes. */
     static final int MAX_SHAPES = 20000;
+    /** Page size used when merging cameo_list_diagram_shapes pages. */
     private static final int SHAPE_PAGE = 1000;
 
     /*

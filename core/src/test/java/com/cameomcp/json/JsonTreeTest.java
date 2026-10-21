@@ -14,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for the {@code com.cameomcp.json.tree} JSON model: round trips that keep number text, value equality
+ * of numbers, nulls and deep copies, single-element array coercion and strict parsing.
+ */
 class JsonTreeTest {
 
     @Test

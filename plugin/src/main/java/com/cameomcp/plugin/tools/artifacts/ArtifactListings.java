@@ -16,12 +16,18 @@ import java.util.Collection;
  */
 public final class ArtifactListings {
 
+    /** Not instantiable; all members are static. */
     private ArtifactListings() {
     }
 
     /**
      * cameo_list_matrices: every diagram whose native type is a supported matrix kind, optionally
      * filtered by kind (validated before the model read) and by owning element id.
+     *
+     * @param p the tool arguments: optional {@code kind} and {@code owner_id}
+     * @return {@code count} and {@code matrices}, one {@link #matrixSummary} each
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS for an unknown kind
+     * @throws Exception when no project is open or the hand-off to the EDT fails
      */
     public static JsonObject listMatrices(JsonObject p) throws Exception {
         String rawKind = ArtifactSupport.optStr(p, "kind");
@@ -63,7 +69,13 @@ public final class ArtifactListings {
         });
     }
 
-    /** id, name, kind, matrixType, ownerId, ownerName. */
+    /**
+     * id, name, kind, matrixType, ownerId, ownerName.
+     *
+     * @param kind the matrix kind
+     * @param dpe the matrix diagram
+     * @return the summary
+     */
     public static JsonObject matrixSummary(MatrixKinds kind, DiagramPresentationElement dpe) {
         JsonObject summary = new JsonObject();
         Diagram diagram = dpe.getDiagram();
@@ -81,12 +93,22 @@ public final class ArtifactListings {
         return summary;
     }
 
-    /** cameo_list_generic_tables: all diagrams of type "Generic Table". */
+    /**
+     * cameo_list_generic_tables: all diagrams of type "Generic Table".
+     *
+     * @return {@code count} and {@code tables}
+     * @throws Exception when no project is open or the hand-off to the EDT fails
+     */
     public static JsonObject listGenericTables() throws Exception {
         return listByType(ArtifactSupport.GENERIC_TABLE_TYPE, "tables");
     }
 
-    /** cameo_list_relation_maps: all diagrams of type "Relation Map Diagram". */
+    /**
+     * cameo_list_relation_maps: all diagrams of type "Relation Map Diagram".
+     *
+     * @return {@code count} and {@code relationMaps}
+     * @throws Exception when no project is open or the hand-off to the EDT fails
+     */
     public static JsonObject listRelationMaps() throws Exception {
         return listByType(ArtifactSupport.RELATION_MAP_TYPE, "relationMaps");
     }

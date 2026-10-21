@@ -28,10 +28,17 @@ import java.util.List;
  */
 final class TaggedValues {
 
+    /** Not instantiable; all members are static. */
     private TaggedValues() {
     }
 
-    /** The stereotype attribute that defines the named tag, or null; base_* extension ends are not tags. */
+    /**
+     * The stereotype attribute that defines the named tag, or null; base_* extension ends are not tags.
+     *
+     * @param stereotype the stereotype to search; inherited attributes are not searched
+     * @param tagName the exact tag name
+     * @return the defining attribute, or null when the stereotype has no such tag
+     */
     static Property tagDefinition(Stereotype stereotype, String tagName) {
         List<Property> attributes = stereotype.getAttribute();
         if (attributes == null) {
@@ -48,7 +55,12 @@ final class TaggedValues {
         return null;
     }
 
-    /** Names of the settable tags (non-extension attributes) of a stereotype. */
+    /**
+     * Names of the settable tags (non-extension attributes) of a stereotype.
+     *
+     * @param stereotype the stereotype to list; inherited attributes are not included
+     * @return the tag names in declaration order, without empty names
+     */
     static List<String> tagNames(Stereotype stereotype) {
         List<String> out = new ArrayList<>();
         List<Property> attributes = stereotype.getAttribute();
@@ -63,7 +75,17 @@ final class TaggedValues {
         return out;
     }
 
-    /** Converts a JSON value to what the tag's type needs; unknown tags get generic coercion. */
+    /**
+     * Converts a JSON value to what the tag's type needs; unknown tags get generic coercion.
+     *
+     * @param project the open project, used to resolve element references
+     * @param stereotype the stereotype that owns the tag
+     * @param tagName the tag name
+     * @param value the JSON value; null or JSON null clears the tag
+     * @return the value to pass to {@code StereotypesHelper.setStereotypePropertyValue}
+     * @throws ToolException INVALID_PARAMS when an enumeration tag gets a value that names none of its
+     *     literals
+     */
     static Object coerceForTag(Project project, Stereotype stereotype, String tagName, JsonElement value) {
         Property def = tagDefinition(stereotype, tagName);
         if (def == null) {
@@ -72,7 +94,18 @@ final class TaggedValues {
         return coerceForType(project, def.getType(), value, stereotype, tagName);
     }
 
-    // Arrays coerce item by item; enumeration-typed tags need a real literal; anything else is generic.
+    /**
+     * Coerces a value for a tag of a known type: arrays item by item, enumeration types to a real literal,
+     * and anything else generically.
+     *
+     * @param project the open project
+     * @param expected the tag's declared type, may be null
+     * @param value the JSON value
+     * @param stereotype the stereotype, for error messages
+     * @param tagName the tag name, for error messages
+     * @return the coerced value, a list for arrays, or null for JSON null
+     * @throws ToolException INVALID_PARAMS for an unknown enumeration literal
+     */
     private static Object coerceForType(Project project, Type expected, JsonElement value, Stereotype stereotype,
                                         String tagName) {
         if (value == null || value.isJsonNull()) {
@@ -91,9 +124,17 @@ final class TaggedValues {
         return coerceGeneric(project, value);
     }
 
-    /*
-     * Finds the enumeration literal the value names: an {"id"} object, then an exact id, exact name,
-     * and finally a case-insensitive name. Fails listing the valid literals.
+    /**
+     * Finds the enumeration literal a value names. Tries an {"id"} object first, then an exact id, an exact
+     * name, and finally a name ignoring case.
+     *
+     * @param project the open project, used to resolve an id
+     * @param enumeration the tag's enumeration type
+     * @param value the JSON value naming the literal
+     * @param stereotype the stereotype, for the error message
+     * @param tagName the tag name, for the error message
+     * @return the matching literal owned by the enumeration
+     * @throws ToolException INVALID_PARAMS listing the valid literals when nothing matches
      */
     private static EnumerationLiteral literal(Project project, Enumeration enumeration, JsonElement value,
                                               Stereotype stereotype, String tagName) {
@@ -141,7 +182,13 @@ final class TaggedValues {
                 + "\" does not own literal " + value + ". Valid literals: " + names + ".");
     }
 
-    // The literal name or id inside a value: a plain string, or the name/literal/value field of an object.
+    /**
+     * Extracts the literal name or id from a value: a plain string, or the name, literal or value field of an
+     * object.
+     *
+     * @param value the JSON value
+     * @return the first non-empty candidate, or null
+     */
     private static String literalCandidate(JsonElement value) {
         if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
             String s = value.getAsString();
@@ -162,7 +209,14 @@ final class TaggedValues {
         return null;
     }
 
-    /** Primitive JSON -> Java value; {"id": x} -> referenced element when it exists. */
+    /**
+     * Primitive JSON -> Java value; {"id": x} -> referenced element when it exists.
+     *
+     * @param project the open project, used to resolve {"id"} references
+     * @param value the JSON value
+     * @return a Boolean, Number or String for primitives, a List for arrays, the referenced Element for an
+     * {"id"} object whose id exists, otherwise the object's JSON text; null for JSON null
+     */
     static Object coerceGeneric(Project project, JsonElement value) {
         if (value == null || value.isJsonNull()) {
             return null;
@@ -194,7 +248,12 @@ final class TaggedValues {
         return p.getAsString();
     }
 
-    /** Tag value -> JSON (elements as compact references). */
+    /**
+     * Tag value -> JSON (elements as compact references).
+     *
+     * @param value a tag value from Cameo: a primitive, Element, Collection or anything else
+     * @return the JSON form; any other object becomes its {@code String.valueOf} text, and null stays null
+     */
     static JsonElement serialize(Object value) {
         if (value == null) {
             return null;

@@ -34,12 +34,21 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class McpRuntime {
 
     /** One line of activity for the status window. */
-    // level is info, warn, error or call (a successful tool call).
     public static final class Event {
+        /** When it happened, epoch milliseconds. */
         public final long time;
+        /** "info", "warn", "error" or "call" (a successful tool call). */
         public final String level;
+        /** The line shown in the activity list. */
         public final String text;
 
+        /**
+         * Creates an event.
+         *
+         * @param time epoch milliseconds
+         * @param level the level
+         * @param text the line
+         */
         Event(long time, String level, String text) {
             this.time = time;
             this.level = level;
@@ -54,30 +63,51 @@ public final class McpRuntime {
 
     /** Notified on the calling thread whenever state or history changes. */
     public interface ChangeListener {
+        /**
+         * Called after the change; may run on an HTTP worker thread, so Swing listeners must hand off to the
+         * EDT.
+         */
         void changed();
     }
 
-    // Events kept for the status window's activity list; older ones are dropped.
+    /** Events kept for the status window's activity list; older ones are dropped. */
     private static final int HISTORY = 400;
+    /** The process-wide runtime, set once by {@link #init}. */
     private static volatile McpRuntime instance;
 
-    // Replaced as a whole by apply(), never mutated in place while serving.
+    /** Settings in effect. Replaced as a whole by apply(), never mutated in place while serving. */
     private volatile Settings settings;
+    /** The full catalog with every handler bound. */
     private final ToolRegistry registry;
+    /** The protocol engine; it outlives transport restarts (each stop ends every client session). */
     private final McpServer server;
-    // Null while stopped; a new transport is created on each start so settings changes take effect.
+    /**
+     * The HTTP transport; null while stopped. A new one is created on each start so settings changes take
+     * effect.
+     */
     private volatile McpHttpTransport transport;
-    // "running", "stopped" or "error"; shown in the status window and cameo_status.
+    /** "running", "stopped" or "error"; shown in the status window and cameo_status. */
     private volatile String state = "stopped";
+    /** Why the last start failed, or null. */
     private volatile String lastError;
+    /** Recent activity, oldest first, at most {@link #HISTORY} entries. Guarded by its own lock. */
     private final Deque<Event> history = new ArrayDeque<>();
+    /** Status-window listeners. */
     private final List<ChangeListener> listeners = new CopyOnWriteArrayList<>();
+    /** Tool calls handled since Cameo started. */
     private final AtomicLong toolCalls = new AtomicLong();
+    /** Tool calls that ended in an error. */
     private final AtomicLong toolErrors = new AtomicLong();
+    /** When the last tool call finished, epoch milliseconds (0 if none). */
     private volatile long lastToolCallMillis;
+    /** Name of the last tool called, or null. */
     private volatile String lastToolName;
 
-    // Builds the full catalog and binds every handler once; start/stop only open and close the port.
+    /**
+     * Builds the full catalog and binds every handler once; start/stop only open and close the port.
+     *
+     * @param settings the initial settings
+     */
     private McpRuntime(Settings settings) {
         this.settings = settings;
         this.registry = new ToolRegistry().addSpecs(Catalog.all());
@@ -88,7 +118,12 @@ public final class McpRuntime {
         Resources.register(server, this);
     }
 
-    /** Creates the process-wide runtime on first call; later calls return the same instance. */
+    /**
+     * Creates the process-wide runtime on first call; later calls return the same instance.
+     *
+     * @param settings the initial settings; ignored if the runtime already exists
+     * @return the runtime
+     */
     public static synchronized McpRuntime init(Settings settings) {
         if (instance == null) {
             instance = new McpRuntime(settings);
@@ -96,22 +131,38 @@ public final class McpRuntime {
         return instance;
     }
 
-    /** The runtime, or null before the plugin initialized. */
+    /**
+     * The runtime, or null before the plugin initialized.
+     *
+     * @return the runtime, or null
+     */
     public static McpRuntime get() {
         return instance;
     }
 
-    /** The settings currently in effect. */
+    /**
+     * The settings currently in effect.
+     *
+     * @return the settings
+     */
     public Settings settings() {
         return settings;
     }
 
-    /** Every tool spec and its bound handler. */
+    /**
+     * Every tool spec and its bound handler.
+     *
+     * @return the registry
+     */
     public ToolRegistry registry() {
         return registry;
     }
 
-    /** The protocol engine, shared by every transport start. */
+    /**
+     * The protocol engine, shared by every transport start.
+     *
+     * @return the server
+     */
     public McpServer server() {
         return server;
     }
@@ -121,6 +172,8 @@ public final class McpRuntime {
     /**
      * Opens the HTTP port with the current settings. Returns false (and records lastError) instead of
      * throwing, so menu actions and plugin start-up can report failure without crashing.
+     *
+     * @return true if the server is running afterwards
      */
     public synchronized boolean start() {
         if (transport != null && transport.isRunning()) {
@@ -173,13 +226,22 @@ public final class McpRuntime {
         fire();
     }
 
-    /** Stops and starts again, picking up the current settings. */
+    /**
+     * Stops and starts again, picking up the current settings.
+     *
+     * @return true if the server is running afterwards
+     */
     public synchronized boolean restart() {
         stop();
         return start();
     }
 
-    /** Replace settings (from the status window) and restart if running. */
+    /**
+     * Replace settings (from the status window) and restart if running.
+     *
+     * @param newSettings the settings to use from now on
+     * @return true if the server is running afterwards, or was stopped and stays stopped
+     */
     public synchronized boolean apply(Settings newSettings) {
         boolean wasRunning = isRunning();
         this.settings = newSettings;
@@ -192,33 +254,54 @@ public final class McpRuntime {
         return true;
     }
 
-    /** True while the HTTP port is open. */
+    /**
+     * True while the HTTP port is open.
+     *
+     * @return whether the transport is serving
+     */
     public boolean isRunning() {
         McpHttpTransport t = transport;
         return t != null && t.isRunning();
     }
 
-    /** "running", "stopped" or "error". */
+    /**
+     * "running", "stopped" or "error".
+     *
+     * @return the state
+     */
     public String state() {
         return state;
     }
 
-    /** Why the last start failed, or null. */
+    /**
+     * Why the last start failed, or null.
+     *
+     * @return the error text, or null
+     */
     public String lastError() {
         return lastError;
     }
 
-    /** The endpoint clients should use; computed from settings while the server is stopped. */
+    /**
+     * The endpoint clients should use; computed from settings while the server is stopped.
+     *
+     * @return the MCP endpoint URL
+     */
     public String endpointUrl() {
         McpHttpTransport t = transport;
         if (t != null) {
             return t.endpointUrl();
         }
+        // Only 0.0.0.0 is mapped here; the running transport also maps "::" and brackets IPv6 hosts.
         String h = settings.host.equals("0.0.0.0") ? "127.0.0.1" : settings.host;
         return "http://" + h + ":" + settings.port + "/mcp";
     }
 
-    /** The bound port while running (relevant when settings say 0), else the configured port. */
+    /**
+     * The bound port while running (relevant when settings say 0), else the configured port.
+     *
+     * @return the port number
+     */
     public int port() {
         McpHttpTransport t = transport;
         return t != null ? t.boundPort() : settings.port;
@@ -229,6 +312,8 @@ public final class McpRuntime {
     /**
      * The status report behind cameo_status, the cameo://status resource and GET /status: server
      * state, counters, connected sessions, Cameo product and version, and the Java runtime.
+     *
+     * @return a new, mutable status map
      */
     public Map<String, Object> status() {
         McpHttpTransport t = transport;
@@ -270,30 +355,53 @@ public final class McpRuntime {
         return s;
     }
 
-    // ISO-8601 local time with offset; null for "never".
+    /**
+     * Formats a time as ISO-8601 local time with offset.
+     *
+     * @param millis epoch milliseconds
+     * @return the formatted time, or null for 0 or less ("never")
+     */
     static String iso(long millis) {
         return millis <= 0 ? null : new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX").format(new Date(millis));
     }
 
     // ------------------------------------------------------------- history
 
-    /** Registers a status-window listener; it is called on whatever thread changed the state. */
+    /**
+     * Registers a status-window listener; it is called on whatever thread changed the state.
+     *
+     * @param l the listener
+     */
     public void addListener(ChangeListener l) {
         listeners.add(l);
     }
 
+    /**
+     * Removes a listener added with {@link #addListener}.
+     *
+     * @param l the listener
+     */
     public void removeListener(ChangeListener l) {
         listeners.remove(l);
     }
 
-    /** A copy of the activity history, oldest first. */
+    /**
+     * A copy of the activity history, oldest first.
+     *
+     * @return a new list
+     */
     public List<Event> history() {
         synchronized (history) {
             return new ArrayList<>(history);
         }
     }
 
-    /** Records one activity line and notifies listeners. */
+    /**
+     * Records one activity line and notifies listeners.
+     *
+     * @param level "info", "warn", "error" or "call"
+     * @param text the line
+     */
     public void event(String level, String text) {
         synchronized (history) {
             history.addLast(new Event(System.currentTimeMillis(), level, text));
@@ -304,6 +412,7 @@ public final class McpRuntime {
         fire();
     }
 
+    /** Notifies every listener; a listener that throws is ignored. */
     private void fire() {
         for (ChangeListener l : listeners) {
             try {
@@ -316,7 +425,10 @@ public final class McpRuntime {
 
     // ------------------------------------------------------------- hooks
 
-    // Runs before every tool call: refuses script tools when macros are off and project tools when none is open.
+    /**
+     * Runs before every tool call: refuses script tools when macros are off and project tools when none is
+     * open.
+     */
     private final class Guard implements CallGuard {
         @Override
         public void before(ToolSpec spec, Args args) {
@@ -331,7 +443,7 @@ public final class McpRuntime {
         }
     }
 
-    // Turns protocol activity into history lines and log output, honouring the GUI log level setting.
+    /** Turns protocol activity into history lines and log output, honouring the GUI log level setting. */
     private final class Activity implements McpListener {
         @Override
         public void sessionStarted(McpSession session) {

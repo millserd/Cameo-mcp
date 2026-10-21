@@ -16,22 +16,38 @@ import static com.cameomcp.plugin.tools.analysis.J.obj;
 /** Binds the analysis family: verification, semantic validation, remediation, proofing, methodology. */
 public final class AnalysisBindings {
 
+    /** Static methods only. */
     private AnalysisBindings() {
     }
 
     /** Tool handler body that may use the bridge. */
     interface Body {
+        /**
+         * Runs the tool.
+         *
+         * @param a the tool arguments
+         * @param bridge model access for the analysis code
+         * @return the tool result
+         * @throws Exception any failure; translated by {@link #on}
+         */
         Object run(Args a, Bridge bridge) throws Exception;
     }
 
-    /** Registers all analysis tools against the production in-process bridge. */
+    /**
+     * Registers all analysis tools against the production in-process bridge.
+     *
+     * @param r registry to bind into
+     */
     public static void bind(ToolRegistry r) {
         bind(r, new InternalBridge());
     }
 
-    /*
-     * Registers every analysis tool with an explicit bridge (tests pass an in-memory fake).
-     * Simple tools map their arguments inline; tools with many options delegate to the handlers below.
+    /**
+     * Registers every analysis tool with an explicit bridge (tests pass an in-memory fake). Simple tools map
+     * their arguments inline; tools with many options delegate to the handlers below.
+     *
+     * @param r registry to bind into
+     * @param bridge model access used by every handler
      */
     static void bind(ToolRegistry r, Bridge bridge) {
         on(r, bridge, "cameo_verify_matrix_consistency", AnalysisBindings::verifyMatrix);
@@ -103,10 +119,15 @@ public final class AnalysisBindings {
                 blankToNull(a.str("pdf_name")), exportFormat(a), b));
     }
 
-    /*
+    /**
      * Wraps a handler with uniform error translation. A failed recipe step is reported with the
      * receipts of the steps already applied so the caller can undo or re-run (artifacts are reused);
      * IllegalArgumentException from the analysis code becomes INVALID_PARAMS.
+     *
+     * @param r registry to bind into
+     * @param bridge model access passed to the body
+     * @param name tool name
+     * @param body handler body
      */
     private static void on(ToolRegistry r, Bridge bridge, String name, Body body) {
         r.bind(name, (a, c) -> {
@@ -131,7 +152,14 @@ public final class AnalysisBindings {
 
     // ------------------------------------------------------------------ handlers
 
-    // cameo_verify_matrix_consistency: checks the matrix against expectations and echoes the raw matrix back.
+    /**
+     * cameo_verify_matrix_consistency: checks the matrix against expectations and echoes the raw matrix back.
+     *
+     * @param a tool arguments
+     * @param bridge model access
+     * @return the verification result plus "matrix"
+     * @throws Exception from reading the matrix
+     */
     private static Object verifyMatrix(Args a, Bridge bridge) throws Exception {
         Map<String, Object> matrix = bridge.getMatrix(a.reqStr("matrix_id"));
         Map<String, Object> result = Verification.verifyMatrixConsistency(matrix,
@@ -142,7 +170,15 @@ public final class AnalysisBindings {
         return result;
     }
 
-    // cameo_verify_diagram_visual: combines the rendered image metadata and the shape list into one visual check.
+    /**
+     * cameo_verify_diagram_visual: combines the rendered image metadata and the shape list into one visual
+     * check.
+     *
+     * @param a tool arguments
+     * @param bridge model access
+     * @return the verification result plus diagramImage and diagramShapes
+     * @throws Exception from rendering or listing the diagram
+     */
     private static Object verifyDiagramVisual(Args a, Bridge bridge) throws Exception {
         String diagramId = a.reqStr("diagram_id");
         // Empty options: the image tool's defaults are used.
@@ -164,7 +200,14 @@ public final class AnalysisBindings {
         return result;
     }
 
-    // cameo_detect_cross_diagram_inconsistencies: runs all semantic validators and collects their findings.
+    /**
+     * cameo_detect_cross_diagram_inconsistencies: runs all semantic validators and collects their findings.
+     *
+     * @param a tool arguments
+     * @param bridge model access
+     * @return the detection report
+     * @throws Exception from reading the model
+     */
     private static Object detect(Args a, Bridge bridge) throws Exception {
         AutoRemediation.DetectOptions o = new AutoRemediation.DetectOptions();
         o.activityDiagramId = blankToNull(a.str("activity_diagram_id"));
@@ -183,7 +226,14 @@ public final class AnalysisBindings {
         return AutoRemediation.detect(o, bridge);
     }
 
-    // cameo_execute_methodology_recipe: creates the recipe's artifacts under root_package_id.
+    /**
+     * cameo_execute_methodology_recipe: creates the recipe's artifacts under root_package_id.
+     *
+     * @param a tool arguments; pack_id, recipe_id, recipe_parameters and root_package_id are required
+     * @param bridge model access
+     * @return the execution report
+     * @throws ToolException INVALID_PARAMS when a required argument is missing
+     */
     private static Object executeRecipe(Args a, Bridge bridge) {
         Map<String, Object> params = a.map("recipe_parameters");
         if (params == null) {
@@ -196,18 +246,35 @@ public final class AnalysisBindings {
 
     // ------------------------------------------------------------------ helpers
 
-    /** The parameter as a list of maps, or null when it was not passed (so callers can tell "absent" from "empty"). */
+    /**
+     * The parameter as a list of maps, or null when it was not passed (so callers can tell "absent" from
+     * "empty").
+     *
+     * @param a tool arguments
+     * @param name parameter name
+     * @return the maps, or null when absent
+     */
     private static List<Map<String, Object>> optionalMaps(Args a, String name) {
         return a.get(name) == null ? null : a.maps(name);
     }
 
-    /** export_format parameter, defaulting to png when blank. */
+    /**
+     * export_format parameter, defaulting to png when blank.
+     *
+     * @param a tool arguments
+     * @return the trimmed format, or "png"
+     */
     private static String exportFormat(Args a) {
         String format = a.str("export_format");
         return format == null || format.trim().isEmpty() ? "png" : format.trim();
     }
 
-    /** Treats blank optional string parameters as absent. */
+    /**
+     * Treats blank optional string parameters as absent.
+     *
+     * @param s a string, or null
+     * @return null when s is null or blank, otherwise s unchanged
+     */
     static String blankToNull(String s) {
         return s == null || s.trim().isEmpty() ? null : s;
     }

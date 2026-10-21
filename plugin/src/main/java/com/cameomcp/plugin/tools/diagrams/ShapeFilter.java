@@ -14,25 +14,42 @@ import java.util.Map;
 /** Filtering, paging and projection of a flat diagram shape list (pure logic). */
 public final class ShapeFilter {
 
+    /** Not instantiable; all members are static. */
     private ShapeFilter() {
     }
 
     /** Arguments of cameo_list_diagram_shapes; defaults match the tool's documented defaults. */
     public static final class Options {
+        /** Page size; default 200. */
         public int limit = 200;
+        /** Shapes to skip; default 0. */
         public int offset = 0;
+        /** Keep only this presentation class simple name, ignoring case; null or empty keeps all. */
         public String shapeType;
+        /** Keep only shapes whose element has this type, ignoring case; null or empty keeps all. */
         public String elementType;
+        /** Keep only direct children of this symbol; null or empty keeps all. */
         public String parentPresentationId;
+        /** Whether returned shapes keep their bounds; default true. */
         public boolean includeBounds = true;
+        /** Whether returned shapes keep their child count; default true. */
         public boolean includeChildCount = true;
+        /** Return per-type counts instead of shapes; default false. */
         public boolean summaryOnly = false;
     }
 
-    /*
-     * Applies the type/parent filters, then pages the result with offset/limit. Counts describe the
-     * filtered set, not the whole diagram. With summaryOnly, per-type counts are returned instead of
-     * shapes; otherwise bounds/childCount are dropped from copies when not requested.
+    /**
+     * Applies the type and parent filters, then pages the result with offset and limit. Counts describe the
+     * filtered set, not the whole diagram. With summaryOnly, per-type counts are returned instead of shapes;
+     * otherwise bounds and childCount are dropped from copies when not requested. Out-of-range paging gives
+     * an empty page.
+     *
+     * @param diagramId the diagram id, echoed in the result
+     * @param shapes the flat shape list from DiagramSupport
+     * @param o the options
+     * @return {@code diagramId}, the counts, {@code limit}, {@code offset}, {@code hasMore}, {@code
+     *     nextOffset} when
+     * there is more, {@code filters}, and either the type counts or the {@code shapes} page
      */
     public static JsonObject filter(String diagramId, JsonArray shapes, Options o) {
         List<JsonObject> filtered = new ArrayList<>();
@@ -99,7 +116,14 @@ public final class ShapeFilter {
         return response;
     }
 
-    // Type filters are case-insensitive exact matches; the parent id must match exactly.
+    /**
+     * Checks one shape against the filters. Type filters are exact matches ignoring case; the parent id must
+     * match exactly.
+     *
+     * @param shape the shape JSON
+     * @param o the options
+     * @return true when the shape passes every filter
+     */
     private static boolean matches(JsonObject shape, Options o) {
         if (notBlank(o.shapeType) && !str(shape, "shapeType").toLowerCase(Locale.ROOT)
                 .equals(o.shapeType.toLowerCase(Locale.ROOT))) {
@@ -112,7 +136,13 @@ public final class ShapeFilter {
         return !notBlank(o.parentPresentationId) || str(shape, "parentPresentationId").equals(o.parentPresentationId);
     }
 
-    /** Counts of a key's values, sorted by descending count then case-insensitive name. */
+    /**
+     * Counts of a key's values, sorted by descending count then case-insensitive name.
+     *
+     * @param items the objects to count over
+     * @param key the field whose values are counted; missing or empty values are skipped
+     * @return value to count, in the sorted order
+     */
     public static JsonObject countByKey(List<JsonObject> items, String key) {
         Map<String, Integer> counts = new LinkedHashMap<>();
         for (JsonObject item : items) {
@@ -132,15 +162,35 @@ public final class ShapeFilter {
         return out;
     }
 
+    /**
+     * Whether a string has content.
+     *
+     * @param s the string, may be null
+     * @return true when non-null and non-empty
+     */
     private static boolean notBlank(String s) {
         return s != null && !s.isEmpty();
     }
 
+    /**
+     * Whether a field has a non-empty value.
+     *
+     * @param o the object
+     * @param key the field name
+     * @return true when {@link #str} gives a non-empty string
+     */
     private static boolean nonEmpty(JsonObject o, String key) {
         return !str(o, key).isEmpty();
     }
 
-    // Missing/null keys read as ""; non-primitive values fall back to their JSON text.
+    /**
+     * Reads a field as a string. Missing and null keys read as ""; non-primitive values fall back to their
+     * JSON text.
+     *
+     * @param o the object
+     * @param key the field name
+     * @return the string, never null
+     */
     private static String str(JsonObject o, String key) {
         JsonElement e = o.get(key);
         if (e == null || e.isJsonNull()) {
@@ -149,6 +199,13 @@ public final class ShapeFilter {
         return e.isJsonPrimitive() ? e.getAsString() : e.toString();
     }
 
+    /**
+     * Adds a string field, or JSON null when the value is null.
+     *
+     * @param o the object to add to
+     * @param key the field name
+     * @param value the value, may be null
+     */
     private static void addNullable(JsonObject o, String key, String value) {
         if (value == null) {
             o.add(key, JsonNull.INSTANCE);

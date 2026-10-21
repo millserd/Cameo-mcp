@@ -11,16 +11,27 @@ import java.util.Map;
 /** Ready-to-paste MCP client configurations for the running server. */
 public final class ClientConfigs {
 
+    /** Static methods only. */
     private ClientConfigs() {
     }
 
-    // The configured bearer token, or null when the server runs without one.
+    /**
+     * The configured bearer token, or null when the server runs without one.
+     *
+     * @param rt the runtime
+     * @return the token, or null
+     */
     static String token(McpRuntime rt) {
         String t = rt.settings().token;
         return t == null || t.isEmpty() ? null : t;
     }
 
-    /** Generic mcpServers JSON for clients with HTTP support (Cursor, VS Code, ...). */
+    /**
+     * Generic mcpServers JSON for clients with HTTP support (Cursor, VS Code, ...).
+     *
+     * @param rt the runtime, for the endpoint and token
+     * @return pretty-printed JSON with one "cameo" server entry
+     */
     public static String httpJson(McpRuntime rt) {
         Map<String, Object> server = Json.obj("type", "http", "url", rt.endpointUrl());
         String t = token(rt);
@@ -30,7 +41,12 @@ public final class ClientConfigs {
         return Json.pretty(Json.obj("mcpServers", Json.obj("cameo", server)));
     }
 
-    /** mcpServers JSON that starts the stdio launcher with Cameo's own Java runtime. */
+    /**
+     * mcpServers JSON that starts the stdio launcher with Cameo's own Java runtime.
+     *
+     * @param rt the runtime, for the port, host and token
+     * @return pretty-printed JSON with one "cameo" server entry
+     */
     public static String stdioJson(McpRuntime rt) {
         Map<String, Object> server = Json.obj("command", javaExecutable(),
                 "args", Json.arr("-jar", launcherJar(), "--port", String.valueOf(rt.port())));
@@ -46,14 +62,22 @@ public final class ClientConfigs {
         return Json.pretty(Json.obj("mcpServers", Json.obj("cameo", server)));
     }
 
-    /** Cameo's own java executable, so the launcher needs no separate Java install. Falls back to "java". */
+    /**
+     * Cameo's own java executable, so the launcher needs no separate Java install. Falls back to "java".
+     *
+     * @return an absolute path, or "java"
+     */
     public static String javaExecutable() {
         File bin = new File(System.getProperty("java.home"), "bin");
         File exe = new File(bin, System.getProperty("os.name", "").toLowerCase().contains("win") ? "java.exe" : "java");
         return exe.isFile() ? exe.getAbsolutePath() : "java";
     }
 
-    /** Absolute path of the bundled stdio launcher jar, or a placeholder the user must fill in. */
+    /**
+     * Absolute path of the bundled stdio launcher jar, or a placeholder the user must fill in.
+     *
+     * @return the jar's absolute path, or "&lt;path-to&gt;/cameo-mcp-stdio.jar"
+     */
     public static String launcherJar() {
         File dir = CameoMcpPlugin.pluginDirectory();
         File jar = dir == null ? null : new File(dir, "cameo-mcp-stdio.jar");

@@ -24,6 +24,10 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests for {@link StdioLauncher}: the embedded catalog is served while Cameo is down, calls are forwarded
+ * and recover after a restart, and diagnose fails cleanly when nothing listens.
+ */
 class StdioLauncherTest {
 
     static Map<Object, Map<String, Object>> run(StdioLauncher l, ByteArrayOutputStream buf, String... lines) throws Exception {

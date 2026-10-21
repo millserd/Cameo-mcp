@@ -11,6 +11,11 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests for {@link McpServer} without HTTP: initialize and protocol negotiation, session creation and idle
+ * expiry, notifications, tools/list and tools/call, tool errors as results, the call guard, protocol errors,
+ * batches, resources, prompts and argument coercion.
+ */
 class McpServerTest {
 
     static McpServer server() {

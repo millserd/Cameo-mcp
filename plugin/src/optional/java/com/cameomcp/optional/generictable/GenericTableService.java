@@ -25,6 +25,7 @@ import java.util.concurrent.TimeoutException;
 /** Native Generic Tables through the Generic Table plugin API. */
 public final class GenericTableService implements TreeService {
 
+    /** Created reflectively by OptionalModules the first time a Generic Table tool runs. */
     public GenericTableService() {
     }
 

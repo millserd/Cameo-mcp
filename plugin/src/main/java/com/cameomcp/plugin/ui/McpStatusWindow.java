@@ -53,25 +53,43 @@ import java.util.Map;
  */
 public final class McpStatusWindow extends JDialog {
 
-    // One window per Cameo session; reopening the menu item brings the same window to the front.
+    /**
+     * One window per Cameo session; reopening the menu item brings the same window to the front. EDT only.
+     */
     private static McpStatusWindow instance;
 
+    /** The runtime this window shows and controls. */
     private final McpRuntime rt;
     // Status tab labels, refreshed every second by refresh().
+    /** Running / Stopped / Error, in bold and colored. */
     private final JLabel stateLabel = new JLabel();
+    /** The MCP endpoint URL, selectable for copying. */
     private final JTextField endpointField = readOnlyField();
+    /** Port and where its value came from. */
     private final JLabel portLabel = new JLabel();
+    /** Bind address and whether a token is required. */
     private final JLabel hostLabel = new JLabel();
+    /** Time since the server started. */
     private final JLabel uptimeLabel = new JLabel();
+    /** Tool call and error counters. */
     private final JLabel callsLabel = new JLabel();
+    /** Last tool called and when. */
     private final JLabel lastCallLabel = new JLabel();
+    /** Open project name and dirty flag. */
     private final JLabel projectLabel = new JLabel();
+    /** Cameo product, version and Java runtime. */
     private final JLabel cameoLabel = new JLabel();
+    /** Plugin version and macro switch state. */
     private final JLabel versionLabel = new JLabel();
+    /** Last start failure, in red. */
     private final JLabel errorLabel = new JLabel();
+    /** Starts the server; enabled while stopped. */
     private final JButton startButton = new JButton("Start");
+    /** Stops the server; enabled while running. */
     private final JButton stopButton = new JButton("Stop");
+    /** Restarts the server; enabled while running. */
     private final JButton restartButton = new JButton("Restart");
+    /** Connected MCP sessions, one row each; read-only. */
     private final DefaultTableModel clientsModel = new DefaultTableModel(
             new Object[]{"Client", "Version", "MCP protocol", "Requests", "Tool calls", "Errors", "Last seen"}, 0) {
         @Override
@@ -79,19 +97,31 @@ public final class McpStatusWindow extends JDialog {
             return false;
         }
     };
+    /** Activity history text (Activity tab), monospaced. */
     private final JTextArea activity = new JTextArea();
     // Settings tab controls; loaded from Settings when the window opens, saved by applySettings().
+    /** Port setting (1 to 65535). */
     private final JSpinner portSpinner = new JSpinner(new SpinnerNumberModel(Settings.DEFAULT_PORT, 1, 65535, 1));
+    /** Bind address setting; editable so any address can be typed. */
     private final JComboBox<String> hostBox = new JComboBox<>(new String[]{"127.0.0.1", "0.0.0.0"});
+    /** Whether a bearer token is required. */
     private final JCheckBox tokenBox = new JCheckBox("Require bearer token");
+    /** The bearer token text. */
     private final JTextField tokenField = new JTextField(32);
+    /** Auto-start setting. */
     private final JCheckBox autoStartBox = new JCheckBox("Start the MCP server when Cameo starts");
+    /** Macro switch setting. */
     private final JCheckBox macrosBox = new JCheckBox("Allow macro scripts (cameo_execute_macro, cameo_execute_probe)");
+    /** Notification window log level: off, errors or all. */
     private final JComboBox<String> logLevelBox = new JComboBox<>(new String[]{"off", "errors", "all"});
+    /** One-second refresh timer, running while the window is open. */
     private final Timer timer;
-    // Runtime changes can arrive on any thread; hop to the EDT before touching Swing.
+    /**
+     * Runtime change listener. Runtime changes can arrive on any thread; it hops to the EDT before touching
+     * Swing.
+     */
     private final McpRuntime.ChangeListener listener = () -> SwingUtilities.invokeLater(this::refresh);
-    // History size already rendered, so the activity text is only rebuilt when something changed.
+    /** History size already rendered, so the activity text is only rebuilt when something changed. */
     private int shownHistory = -1;
 
     /** Opens (or brings to front) the status window. Safe to call from any menu action on the EDT. */
@@ -111,7 +141,11 @@ public final class McpStatusWindow extends JDialog {
         instance.toFront();
     }
 
-    // Cameo's main window, used as the dialog owner so the window stays on top of Cameo.
+    /**
+     * Cameo's main window, used as the dialog owner so the window stays on top of Cameo.
+     *
+     * @return the main frame, or null when there is none (tests)
+     */
     static Frame mainFrame() {
         try {
             Object f = com.nomagic.magicdraw.core.Application.getInstance().getMainFrame();
@@ -124,7 +158,12 @@ public final class McpStatusWindow extends JDialog {
         return null;
     }
 
-    // Non-modal so the user can keep working in Cameo while watching activity.
+    /**
+     * Builds the window. Non-modal so the user can keep working in Cameo while watching activity.
+     *
+     * @param owner the dialog owner, may be null
+     * @param rt the runtime to show
+     */
     private McpStatusWindow(Frame owner, McpRuntime rt) {
         super(owner, "Cameo MCP Server", false);
         this.rt = rt;
@@ -158,7 +197,11 @@ public final class McpStatusWindow extends JDialog {
 
     // ------------------------------------------------------------------ tabs
 
-    // Server state, endpoint, counters, project, connected clients, and start/stop/test buttons.
+    /**
+     * Server state, endpoint, counters, project, connected clients, and start/stop/test buttons.
+     *
+     * @return the Status tab
+     */
     private JComponent statusTab() {
         JPanel grid = new JPanel(new GridBagLayout());
         grid.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
@@ -216,7 +259,11 @@ public final class McpStatusWindow extends JDialog {
         return panel;
     }
 
-    // Scrolling list of recent events (connections, tool calls, errors).
+    /**
+     * Scrolling list of recent events (connections, tool calls, errors).
+     *
+     * @return the Activity tab
+     */
     private JComponent activityTab() {
         activity.setEditable(false);
         activity.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -231,7 +278,11 @@ public final class McpStatusWindow extends JDialog {
         return panel;
     }
 
-    // Port, bind address, token, auto-start, macro switch and Notification-window log level.
+    /**
+     * Port, bind address, token, auto-start, macro switch and Notification-window log level.
+     *
+     * @return the Settings tab
+     */
     private JComponent settingsTab() {
         JPanel grid = new JPanel(new GridBagLayout());
         grid.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
@@ -268,7 +319,11 @@ public final class McpStatusWindow extends JDialog {
         return panel;
     }
 
-    // Ready-to-copy client configurations with the live port, token and paths filled in.
+    /**
+     * Ready-to-copy client configurations with the live port, token and paths filled in.
+     *
+     * @return the Connect a client tab
+     */
     private JComponent connectTab() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
@@ -278,7 +333,13 @@ public final class McpStatusWindow extends JDialog {
         return new JScrollPane(panel);
     }
 
-    // A titled box holding one configuration and a Copy button; the text is regenerated on copy.
+    /**
+     * A titled box holding one configuration and a Copy button; the text is regenerated on copy.
+     *
+     * @param title box title, also used in the "copied" activity line
+     * @param text produces the configuration text
+     * @return the box
+     */
     private JComponent snippet(String title, java.util.function.Supplier<String> text) {
         JTextArea area = new JTextArea(text.get());
         area.setEditable(false);
@@ -299,7 +360,7 @@ public final class McpStatusWindow extends JDialog {
 
     // ------------------------------------------------------------------ behavior
 
-    // Copies the runtime's settings into the form.
+    /** Copies the runtime's settings into the form. */
     private void loadSettings() {
         Settings s = rt.settings();
         portSpinner.setValue(s.port);
@@ -311,7 +372,7 @@ public final class McpStatusWindow extends JDialog {
         logLevelBox.setSelectedItem(s.guiLogLevel);
     }
 
-    /*
+    /**
      * Validates the form, saves it to the settings file and applies it (restarting the server if
      * it was running). Warns before exposing the server on the network without a token.
      */
@@ -355,7 +416,7 @@ public final class McpStatusWindow extends JDialog {
                 + ", macros " + (s.allowMacros ? "allowed" : "blocked") + ".");
     }
 
-    // Same self-test as the MCP menu item, reported in a dialog and the activity list.
+    /** Same self-test as the MCP menu item, reported in a dialog and the activity list. */
     private void runSelfTest() {
         rt.event("info", "Connection self-test started");
         new SwingWorker<List<ConnectionTest.Step>, Void>() {
@@ -387,12 +448,23 @@ public final class McpStatusWindow extends JDialog {
         }.execute();
     }
 
-    // A start/stop/restart step returning false on failure.
+    /** A start/stop/restart step returning false on failure. */
     private interface Action {
+        /**
+         * Performs the step off the EDT.
+         *
+         * @return true on success
+         * @throws Exception on unexpected failure (shown in a dialog)
+         */
         boolean run() throws Exception;
     }
 
-    // Runs a server action off the EDT with the buttons disabled, then reports any failure.
+    /**
+     * Runs a server action off the EDT with the buttons disabled, then reports any failure.
+     *
+     * @param label action name for the error dialog
+     * @param action the step
+     */
     private void background(String label, Action action) {
         startButton.setEnabled(false);
         stopButton.setEnabled(false);
@@ -419,7 +491,7 @@ public final class McpStatusWindow extends JDialog {
         }.execute();
     }
 
-    // Rebuilds every label from rt.status(); runs on the EDT.
+    /** Rebuilds every label from rt.status(); runs on the EDT. */
     @SuppressWarnings("unchecked")
     private void refresh() {
         Map<String, Object> s = rt.status();
@@ -474,7 +546,12 @@ public final class McpStatusWindow extends JDialog {
 
     // ------------------------------------------------------------------ helpers
 
-    // "1h 05m", "3m 07s" or "12s".
+    /**
+     * Formats a duration as "1h 05m", "3m 07s" or "12s".
+     *
+     * @param seconds the duration
+     * @return the text
+     */
     static String formatDuration(long seconds) {
         long h = seconds / 3600;
         long m = (seconds % 3600) / 60;
@@ -482,26 +559,48 @@ public final class McpStatusWindow extends JDialog {
         return h > 0 ? String.format("%dh %02dm", h, m) : m > 0 ? String.format("%dm %02ds", m, s) : s + "s";
     }
 
+    /**
+     * Copies text to the system clipboard and notes it in the activity list.
+     *
+     * @param text the text to copy
+     * @param what what was copied, for the activity line
+     */
     private void copy(String text, String what) {
         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
         rt.event("info", what + " copied to the clipboard");
     }
 
-    // A text field the user can select and copy from but not edit.
+    /**
+     * A text field the user can select and copy from but not edit.
+     *
+     * @return the field
+     */
     private static JTextField readOnlyField() {
         JTextField f = new JTextField();
         f.setEditable(false);
         return f;
     }
 
-    // Grey wrapped help text under a setting.
+    /**
+     * Grey wrapped help text under a setting.
+     *
+     * @param text the text (HTML is not escaped)
+     * @return the label
+     */
     private static JLabel note(String text) {
         JLabel l = new JLabel("<html><body style='width:420px'>" + text + "</body></html>");
         l.setForeground(Color.GRAY);
         return l;
     }
 
-    // Adds a "label: component" row to a two-column GridBag form.
+    /**
+     * Adds a "label: component" row to a two-column GridBag form.
+     *
+     * @param grid the form panel
+     * @param row the row index
+     * @param label the left-column text
+     * @param value the right-column component
+     */
     private static void addRow(JPanel grid, int row, String label, JComponent value) {
         GridBagConstraints c = new GridBagConstraints();
         c.gridy = row;

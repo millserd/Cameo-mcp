@@ -18,7 +18,9 @@ import java.util.Map;
 public final class ModelText {
 
     // Detail levels accepted by the view parameter of query tools.
+    /** Detail level with the commonly needed fields only; the default. */
     public static final String VIEW_COMPACT = "compact";
+    /** Detail level with every field the tool can report. */
     public static final String VIEW_FULL = "full";
     /** Prefix that marks a reference to an earlier entry of cameo_create_elements. */
     public static final String REF_PREFIX = "ref:";
@@ -90,17 +92,29 @@ public final class ModelText {
         kinds(RELATIONSHIP_KINDS, "itemflow", "itemflow");
     }
 
+    /** Not instantiable; all members are static. */
     private ModelText() {
     }
 
-    // Registers aliases for one canonical kind.
+    /**
+     * Registers aliases for one canonical kind.
+     *
+     * @param map the alias table to fill
+     * @param canonical the canonical kind
+     * @param aliases normalized alias keys (see {@link #key}) that map to it
+     */
     private static void kinds(Map<String, String> map, String canonical, String... aliases) {
         for (String a : aliases) {
             map.put(a, canonical);
         }
     }
 
-    /** Lower-case and drop '-', '_' and spaces: "Use-Case" and "use case" both become "usecase". */
+    /**
+     * Lower-case and drop '-', '_' and spaces: "Use-Case" and "use case" both become "usecase".
+     *
+     * @param value the text, may be null
+     * @return the normalized key; "" for null
+     */
     public static String key(String value) {
         if (value == null) {
             return "";
@@ -108,17 +122,32 @@ public final class ModelText {
         return value.trim().toLowerCase(Locale.ROOT).replaceAll("[-_ ]+", "");
     }
 
-    /** Canonical element kind for a cameo_create_element type, or null when unsupported. */
+    /**
+     * Canonical element kind for a cameo_create_element type, or null when unsupported.
+     *
+     * @param type the type the agent sent, in any case and spelling accepted by {@link #key}
+     * @return the canonical kind, such as "block", or null
+     */
     public static String elementKind(String type) {
         return ELEMENT_KINDS.get(key(type));
     }
 
-    /** Canonical relationship kind for a cameo_create_relationship type, or null when unsupported. */
+    /**
+     * Canonical relationship kind for a cameo_create_relationship type, or null when unsupported.
+     *
+     * @param type the type the agent sent
+     * @return the canonical kind, such as "satisfy", or null
+     */
     public static String relationshipKind(String type) {
         return RELATIONSHIP_KINDS.get(key(type));
     }
 
-    /** The INVALID_PARAMS error listing every element type cameo_create_element supports. */
+    /**
+     * The INVALID_PARAMS error listing every element type cameo_create_element supports.
+     *
+     * @param type the type the agent sent, quoted in the message
+     * @return the exception to throw
+     */
     public static ToolException unsupportedElementType(String type) {
         return ToolException.invalid("Unsupported element type '" + type + "'. Supported: Package, Profile, Stereotype, "
                 + "Block, Class, UseCase, Activity, Actor, StateMachine, State, Pseudostate, InitialState, Requirement, "
@@ -128,7 +157,12 @@ public final class ModelText {
                 + "InputPin, OutputPin, OpaqueAction.");
     }
 
-    /** The INVALID_PARAMS error listing every relationship type cameo_create_relationship supports. */
+    /**
+     * The INVALID_PARAMS error listing every relationship type cameo_create_relationship supports.
+     *
+     * @param type the type the agent sent, quoted in the message
+     * @return the exception to throw
+     */
     public static ToolException unsupportedRelationshipType(String type) {
         return ToolException.invalid("Unsupported relationship type '" + type + "'. Supported: Association, "
                 + "DirectedAssociation, Composition, Generalization, Dependency, Include, Extend, ControlFlow, "
@@ -136,7 +170,12 @@ public final class ModelText {
                 + "InformationFlow, ItemFlow.");
     }
 
-    /** SysML stereotype applied automatically for an element kind, or null. */
+    /**
+     * SysML stereotype applied automatically for an element kind, or null.
+     *
+     * @param kind a canonical element kind, may be null
+     * @return the SysML stereotype name, for example "valueType" for "valuetype", or null for plain UML kinds
+     */
     public static String defaultCreationStereotype(String kind) {
         if (kind == null) {
             return null;
@@ -159,7 +198,13 @@ public final class ModelText {
         }
     }
 
-    /** Default stereotype first, then the explicit one when it is different (case-insensitive). */
+    /**
+     * Default stereotype first, then the explicit one when it is different (case-insensitive).
+     *
+     * @param kind a canonical element kind
+     * @param explicitStereotype the stereotype the agent asked for, or null or blank
+     * @return the stereotype names to apply, in order; may be empty
+     */
     public static List<String> effectiveCreationStereotypes(String kind, String explicitStereotype) {
         List<String> out = new ArrayList<>();
         String dflt = defaultCreationStereotype(kind);
@@ -182,7 +227,14 @@ public final class ModelText {
         return out;
     }
 
-    /** Stereotype name used by a stereotyped-abstraction relationship kind, or null. */
+    /**
+     * Stereotype name used by a stereotyped-abstraction relationship kind, or null.
+     *
+     * @param relationshipKind a canonical relationship kind
+     * @return the SysML stereotype name, for example "DeriveReqt" for "derive", or null when the kind is not
+     *     a
+     * stereotyped abstraction
+     */
     public static String abstractionStereotype(String relationshipKind) {
         switch (relationshipKind) {
             case "allocate":
@@ -202,7 +254,12 @@ public final class ModelText {
         }
     }
 
-    /** Profile / package names to prefer when several stereotypes share a name, best first. */
+    /**
+     * Profile / package names to prefer when several stereotypes share a name, best first.
+     *
+     * @param stereotypeName the stereotype name, compared ignoring case; may be null
+     * @return the context names, best first
+     */
     public static List<String> preferredStereotypeContexts(String stereotypeName) {
         switch (stereotypeName == null ? "" : stereotypeName.toLowerCase(Locale.ROOT)) {
             case "refine":
@@ -220,7 +277,13 @@ public final class ModelText {
         }
     }
 
-    /** Lower-case alphanumerics only, '&' read as "and": "SysML Profile" == "SysMLProfile". */
+    /**
+     * Lower-case alphanumerics only, with {@code &} read as "and": "SysML Profile" and "SysMLProfile" give
+     * the same token.
+     *
+     * @param value the text, may be null
+     * @return the token; "" for null
+     */
     public static String normalizeContextToken(String value) {
         if (value == null) {
             return "";
@@ -231,6 +294,10 @@ public final class ModelText {
     /**
      * Rank of a candidate by its context names (profile, owner chain): index of the first preferred
      * context it matches, or {@link Integer#MAX_VALUE} when it matches none.
+     *
+     * @param candidateContexts the candidate's context names, see {@code ModelSupport.contexts}
+     * @param preferredContexts the preferred context names, best first
+     * @return the rank, lower is better
      */
     public static int contextRank(List<String> candidateContexts, List<String> preferredContexts) {
         for (int i = 0; i < preferredContexts.size(); i++) {
@@ -247,6 +314,11 @@ public final class ModelText {
     /**
      * Pick the best candidate index by context rank. Returns -1 when the choice is ambiguous
      * (no candidate matches a preferred context, or several share the best rank).
+     *
+     * @param candidateContexts one list of context names per candidate
+     * @param preferredContexts the preferred context names, best first
+     * @return the index of the single best candidate, 0 when there is only one candidate, or -1 when
+     *     ambiguous
      */
     public static int pickPreferred(List<List<String>> candidateContexts, List<String> preferredContexts) {
         if (candidateContexts.size() == 1) {
@@ -271,7 +343,12 @@ public final class ModelText {
         return best;
     }
 
-    /** "Use_case diagram" -> "UseCaseDiagram" (capitalize parts split on '-', '_' and spaces). */
+    /**
+     * "Use_case diagram" -> "UseCaseDiagram" (capitalize parts split on '-', '_' and spaces).
+     *
+     * @param input the text, may be null
+     * @return the joined, capitalized parts; "" for null or empty input
+     */
     public static String normalizeTypeName(String input) {
         if (input == null || input.isEmpty()) {
             return "";
@@ -288,7 +365,14 @@ public final class ModelText {
         return sb.toString();
     }
 
-    /** True when the filter names the same type as any of the candidate names (normalized, case-insensitive). */
+    /**
+     * True when the filter names the same type as any of the candidate names (normalized, case-insensitive).
+     *
+     * @param filter the type the agent asked for
+     * @param candidates type names of an element, such as its metaclass and stereotype names; nulls are
+     *     skipped
+     * @return true when one of them matches
+     */
     public static boolean typeMatches(String filter, String... candidates) {
         String f = normalizeTypeName(filter);
         for (String c : candidates) {
@@ -299,7 +383,13 @@ public final class ModelText {
         return false;
     }
 
-    /** compact (default) or full; anything else is an INVALID_PARAMS error. */
+    /**
+     * compact (default) or full; anything else is an INVALID_PARAMS error.
+     *
+     * @param raw the view parameter, may be null
+     * @return {@link #VIEW_COMPACT} or {@link #VIEW_FULL}
+     * @throws ToolException INVALID_PARAMS for any other value
+     */
     public static String view(String raw) {
         if (raw == null || raw.trim().isEmpty()) {
             return VIEW_COMPACT;
@@ -311,7 +401,12 @@ public final class ModelText {
         throw ToolException.invalid("view must be either 'compact' or 'full' (got '" + raw + "').");
     }
 
-    /** Opaque paging cursor for an offset; agents pass it back unchanged. */
+    /**
+     * Opaque paging cursor for an offset; agents pass it back unchanged.
+     *
+     * @param offset the offset of the next page
+     * @return a token of the form {@code offset:N}
+     */
     public static String cursorToken(int offset) {
         return "offset:" + offset;
     }
@@ -319,6 +414,13 @@ public final class ModelText {
     /**
      * Paging metadata in the reference layout: offset (clamped), hasMore, nextOffset/nextCursor,
      * previousOffset/previousCursor. Returns {start, end} through the given array.
+     *
+     * @param total the number of items in the whole result
+     * @param offset the requested start, clamped to 0..total
+     * @param limit the page size
+     * @param range a two-element array that receives the start (inclusive) and end (exclusive) indexes
+     * @return the paging fields, in order: limit, offset, hasMore, then the next and previous fields when
+     *     they apply
      */
     public static Map<String, Object> page(int total, int offset, int limit, int[] range) {
         int start = Math.max(0, Math.min(offset, total));
@@ -344,6 +446,11 @@ public final class ModelText {
     /**
      * Upper multiplicity bound from JSON: integer, numeric string, or "*" / -1 for unlimited (-1).
      * Returns null when absent.
+     *
+     * @param value a Number, a String, or null
+     * @return the bound, -1 for unlimited, or null when the value is null or blank; any negative number
+     *     becomes -1
+     * @throws ToolException INVALID_PARAMS for a fraction or text that is not an integer or "*"
      */
     public static Integer parseUpper(Object value) {
         if (value == null) {
@@ -371,7 +478,13 @@ public final class ModelText {
         }
     }
 
-    /** Lower multiplicity bound: a non-negative integer, or null when absent. */
+    /**
+     * Lower multiplicity bound: a non-negative integer, or null when absent.
+     *
+     * @param value a Number, a String, or null
+     * @return the bound, or null when the value is null or blank
+     * @throws ToolException INVALID_PARAMS for a fraction, non-integer text, or a negative value
+     */
     public static Integer parseLower(Object value) {
         if (value == null) {
             return null;
@@ -400,7 +513,15 @@ public final class ModelText {
         return v;
     }
 
-    /** Parameter direction keyword -> canonical in / out / inout / return. */
+    /**
+     * Parameter direction keyword -> canonical in / out / inout / return.
+     *
+     * @param value the direction text, compared ignoring case; also accepts input, output, in-out, in_out,
+     * bidirectional and result
+     *
+     * @return "in", "out", "inout" or "return"
+     * @throws ToolException INVALID_PARAMS for anything else
+     */
     public static String parameterDirection(String value) {
         String n = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         switch (n) {
@@ -425,7 +546,12 @@ public final class ModelText {
 
     // ------------------------------------------------------------------ bulk create references
 
-    /** The ref name in a "ref:name" value, or null when the value is not a reference. */
+    /**
+     * The ref name in a "ref:name" value, or null when the value is not a reference.
+     *
+     * @param value any value; only Strings starting with "ref:" (ignoring case) count
+     * @return the trimmed name after the prefix, or null
+     */
     public static String refName(Object value) {
         if (!(value instanceof String)) {
             return null;
@@ -437,7 +563,12 @@ public final class ModelText {
         return null;
     }
 
-    /** True for parameter names whose value is an element id (and may therefore be a ref). */
+    /**
+     * True for parameter names whose value is an element id (and may therefore be a ref).
+     *
+     * @param name a parameter name, may be null
+     * @return true for names ending in _id, _ids, Id or Ids
+     */
     public static boolean isIdField(String name) {
         String k = name == null ? "" : name;
         return k.endsWith("_id") || k.endsWith("_ids") || (k.endsWith("Id") && k.length() > 2)
@@ -447,6 +578,12 @@ public final class ModelText {
     /**
      * Replace every "ref:name" in the id fields of an entry with the id created for that ref.
      * Throws INVALID_PARAMS naming the entry when a ref is unknown (not yet created).
+     *
+     * @param entry one bulk entry as plain JSON values
+     * @param refs ref name to created element id, for the entries created so far
+     * @param where a label such as "Entry 3" used in error messages
+     * @return a copy of the entry with references replaced; lists in id fields are resolved item by item
+     * @throws ToolException INVALID_PARAMS when a ref is unknown
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> resolveRefs(Map<String, Object> entry, Map<String, String> refs, String where) {
@@ -469,7 +606,16 @@ public final class ModelText {
         return out;
     }
 
-    // One value: a "ref:name" becomes its created id; anything else passes through.
+    /**
+     * Resolves one value: a "ref:name" becomes its created id, and anything else passes through unchanged.
+     *
+     * @param v the value
+     * @param refs ref name to created element id
+     * @param where a label such as "Entry 3", for the error message
+     * @param field the parameter name, for the error message
+     * @return the id, or the value unchanged
+     * @throws ToolException INVALID_PARAMS when the ref is unknown
+     */
     private static Object resolveOne(Object v, Map<String, String> refs, String where, String field) {
         String ref = refName(v);
         if (ref == null) {
@@ -488,6 +634,13 @@ public final class ModelText {
      * Static checks of a bulk plan before anything is created: entries are objects, refs are unique
      * and non-empty, and every "ref:x" points to an entry earlier in the list.
      * Returns the list of ref names (null for entries without ref).
+     *
+     * @param entries the bulk entries as plain JSON values
+     * @param maxEntries the most entries one call may hold
+     * @return one ref name per entry, with any "ref:" prefix removed, or null where the entry has no ref
+     * @throws ToolException INVALID_PARAMS for an empty or oversized plan, an empty or duplicate ref, or a
+     *     forward
+     * reference
      */
     @SuppressWarnings("unchecked")
     public static List<String> validatePlan(List<Map<String, Object>> entries, int maxEntries) {
@@ -536,7 +689,13 @@ public final class ModelText {
         return names;
     }
 
-    /** Whether a bulk entry describes a relationship (explicit kind, or source/target ids present). */
+    /**
+     * Whether a bulk entry describes a relationship (explicit kind, or source/target ids present).
+     *
+     * @param entry one bulk entry
+     * @return true for a relationship entry
+     * @throws ToolException INVALID_PARAMS when kind is present but is neither element nor relationship
+     */
     public static boolean isRelationshipEntry(Map<String, Object> entry) {
         Object kind = entry.get("kind");
         if (kind != null) {
@@ -555,7 +714,15 @@ public final class ModelText {
 
     // ------------------------------------------------------------------ state machines
 
-    /** Validates trigger parameters and returns the normalized kind ("change" or "signal"). */
+    /**
+     * Validates trigger parameters and returns the normalized kind ("change" or "signal").
+     *
+     * @param triggerKind "change" or "signal", ignoring case
+     * @param expression the change expression; required for change triggers
+     * @param signalId the signal id; required for signal triggers
+     * @return "change" or "signal"
+     * @throws ToolException INVALID_PARAMS for another kind or a missing expression or signal id
+     */
     public static String triggerKind(String triggerKind, String expression, String signalId) {
         String k = triggerKind == null ? "" : triggerKind.trim().toLowerCase(Locale.ROOT);
         if (!k.equals("change") && !k.equals("signal")) {
@@ -570,12 +737,23 @@ public final class ModelText {
         return k;
     }
 
-    /** What to do with one state behavior slot. */
-    public enum SlotAction { KEEP, CLEAR, SET }
+    /** What to do with one state behavior slot (entry, do or exit). */
+    public enum SlotAction {
+        /** Leave the slot as it is. */
+        KEEP,
+        /** Remove the slot's behavior. */
+        CLEAR,
+        /** Replace the slot's behavior with the new body. */
+        SET
+    }
 
     /**
      * Port of the reference slot rules: omitted (null) keeps the slot unless clearUnspecified;
      * blank text clears it; other text sets it.
+     *
+     * @param body the behavior body the agent sent, or null when omitted
+     * @param clearUnspecified true to clear slots the agent did not mention
+     * @return the action to take
      */
     public static SlotAction slotAction(String body, boolean clearUnspecified) {
         if (body == null) {
@@ -584,7 +762,13 @@ public final class ModelText {
         return body.trim().isEmpty() ? SlotAction.CLEAR : SlotAction.SET;
     }
 
-    /** The behavior language (e.g. "English", "Groovy"); must be non-blank. */
+    /**
+     * The behavior language (e.g. "English", "Groovy"); must be non-blank.
+     *
+     * @param language the language name
+     * @return the language unchanged
+     * @throws ToolException INVALID_PARAMS when it is null or blank
+     */
     public static String requireLanguage(String language) {
         if (language == null || language.trim().isEmpty()) {
             throw ToolException.invalid("language must be a non-empty string.");

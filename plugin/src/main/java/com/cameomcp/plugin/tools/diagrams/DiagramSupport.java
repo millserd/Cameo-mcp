@@ -21,15 +21,23 @@ import java.util.Map;
 /** Shared Cameo helpers for the diagram tools. */
 final class DiagramSupport {
 
+    /** Not instantiable; all members are static. */
     private DiagramSupport() {
     }
 
     // ------------------------------------------------------------------ lookup
 
-    /*
+    /**
      * Resolves a diagram id to its DiagramPresentationElement: direct id lookup first, then a scan of all
      * diagrams. When the id names a non-diagram element the error says what it is, to help a caller that
      * passed an element id by mistake.
+     *
+     * <p>Threading: call on the EDT.
+     *
+     * @param project the active project
+     * @param diagramId the diagram id
+     * @return the diagram, possibly not yet loaded
+     * @throws ToolException INVALID_PARAMS when the id is blank, NOT_FOUND when no diagram has it
      */
     static DiagramPresentationElement findDiagram(Project project, String diagramId) {
         if (diagramId == null || diagramId.trim().isEmpty()) {
@@ -59,15 +67,30 @@ final class DiagramSupport {
                 + "' not found. Use cameo_list_diagrams to find valid diagram IDs.");
     }
 
-    // Same as findDiagram, but makes sure the diagram's symbols are loaded; diagrams can be loaded lazily
-    // and would otherwise show no presentation elements.
+    /**
+     * Same as {@link #findDiagram}, but makes sure the diagram's symbols are loaded. Diagrams can be loaded
+     * lazily and would otherwise show no presentation elements.
+     *
+     * @param project the active project
+     * @param diagramId the diagram id
+     * @return the loaded diagram
+     * @throws ToolException as {@link #findDiagram}
+     */
     static DiagramPresentationElement loadedDiagram(Project project, String diagramId) {
         DiagramPresentationElement dpe = findDiagram(project, diagramId);
         dpe.ensureLoaded();
         return dpe;
     }
 
-    // Model element by id; a missing id or a non-UML object becomes a tool error naming the label.
+    /**
+     * Looks up a model element by id. A missing id or a non-UML object becomes a tool error naming the label.
+     *
+     * @param project the active project
+     * @param id the element id, may be null
+     * @param label what the id is for, such as "Element", used in the message
+     * @return the element
+     * @throws ToolException NOT_FOUND, or a SysML v2 element error
+     */
     static Element findElement(Project project, String id, String label) {
         Object o = id == null ? null : project.getElementByID(id);
         if (o instanceof Element) {
@@ -77,7 +100,13 @@ final class DiagramSupport {
                 + "cameo_query_elements to find valid IDs.");
     }
 
-    /** Find a presentation element by ID anywhere in the symbol tree. */
+    /**
+     * Find a presentation element by ID anywhere in the symbol tree.
+     *
+     * @param elements the symbols to search, recursively; may be null
+     * @param peId the presentation id, may be null
+     * @return the symbol, or null
+     */
     static PresentationElement findPresentation(List<PresentationElement> elements, String peId) {
         if (elements == null || peId == null) {
             return null;
@@ -97,7 +126,15 @@ final class DiagramSupport {
         return null;
     }
 
-    // Like findPresentation but throws NOT_FOUND, reminding callers that presentation ids differ from element ids.
+    /**
+     * Like {@link #findPresentation}, but fails with a message reminding callers that presentation ids differ
+     * from element ids.
+     *
+     * @param dpe the diagram
+     * @param peId the presentation id
+     * @return the symbol
+     * @throws ToolException INVALID_PARAMS when the id is blank, NOT_FOUND when no symbol has it
+     */
     static PresentationElement requirePresentation(DiagramPresentationElement dpe, String peId) {
         if (peId == null || peId.trim().isEmpty()) {
             throw ToolException.invalid("Missing required parameter 'presentation_id'.");
@@ -110,7 +147,14 @@ final class DiagramSupport {
         return pe;
     }
 
-    /** Depth-first flatten; records child -> parent presentation IDs when {@code parentById} is given. */
+    /**
+     * Depth-first flatten; records child -> parent presentation IDs when {@code parentById} is given.
+     *
+     * @param elements the symbols to walk, may be null
+     * @param sink receives every symbol in depth-first order
+     * @param parentById receives child id to parent id, or null to skip
+     * @param parentId the parent of {@code elements}, or null at the top level
+     */
     static void collect(List<PresentationElement> elements, List<PresentationElement> sink,
                         Map<String, String> parentById, String parentId) {
         if (elements == null) {
@@ -125,7 +169,12 @@ final class DiagramSupport {
         }
     }
 
-    // Every presentation element under the given roots, depth-first, without parent tracking.
+    /**
+     * Every presentation element under the given roots, depth-first, without parent tracking.
+     *
+     * @param roots the top-level symbols, may be null
+     * @return the flat list
+     */
     static List<PresentationElement> flatten(List<PresentationElement> roots) {
         List<PresentationElement> out = new ArrayList<>();
         collect(roots, out, null, null);
@@ -137,6 +186,10 @@ final class DiagramSupport {
     /**
      * {@code PresentationElement.getPropertyManager()} is public in 2024x but missing from the 2026x OpenAPI
      * javadoc, so it is looked up reflectively (public first, then declared on a superclass).
+     *
+     * @param pe the symbol
+     * @return its live property manager
+     * @throws ToolException UNSUPPORTED when this Cameo does not expose it
      */
     static com.nomagic.magicdraw.properties.PropertyManager propertyManager(PresentationElement pe) {
         Object pm = invokeNoArg(pe, "getPropertyManager");
@@ -147,19 +200,35 @@ final class DiagramSupport {
                 + pe.getClass().getSimpleName() + " (PresentationElement.getPropertyManager is unavailable).");
     }
 
-    /** Editable copy of a symbol's property manager (Cameo rejects re-applying the live one). */
+    /**
+     * Editable copy of a symbol's property manager (Cameo rejects re-applying the live one).
+     *
+     * @param pe the symbol
+     * @return a clone of its property manager, to change and apply
+     * @throws ToolException UNSUPPORTED when this Cameo does not expose it
+     */
     static com.nomagic.magicdraw.properties.PropertyManager propertyManagerCopy(PresentationElement pe) {
         return propertyManager(pe).clone();
     }
 
-    /** Auto-layout; the API differs between 2024x and 2026x, see {@link com.cameomcp.plugin.cameo.DiagramCompat}. */
+    /**
+     * Auto-layout; the API differs between 2024x and 2026x, see {@link
+     * com.cameomcp.plugin.cameo.DiagramCompat}.
+     *
+     * @param dpe the diagram
+     * @return true when a layout ran
+     */
     static boolean layout(DiagramPresentationElement dpe) {
         return com.cameomcp.plugin.cameo.DiagramCompat.layout(dpe);
     }
 
-    /*
-     * Reflectively calls a no-arg method; null when the method is missing or inaccessible. A
-     * RuntimeException thrown by the method itself is rethrown unwrapped so callers see the real error.
+    /**
+     * Calls a no-arg method by reflection. A RuntimeException thrown by the method itself is rethrown
+     * unwrapped so callers see the real error.
+     *
+     * @param target the object to call on
+     * @param name the method name
+     * @return the result, or null when the method is missing or inaccessible
      */
     static Object invokeNoArg(Object target, String name) {
         java.lang.reflect.Method m = findMethod(target.getClass(), name);
@@ -179,9 +248,16 @@ final class DiagramSupport {
         }
     }
 
-    // Public method (including inherited) first; otherwise a declared one on the class or a superclass,
-    // made accessible. LinkageError is caught because a method signature may reference classes missing
-    // in this Cameo version.
+    /**
+     * Finds a method: a public one (including inherited) first, otherwise one declared on the class or a
+     * superclass, made accessible. LinkageError is caught because a method signature may refer to classes
+     * missing in this Cameo version.
+     *
+     * @param type the class to search
+     * @param name the method name
+     * @param params the parameter types
+     * @return the method, or null when none is found
+     */
     static java.lang.reflect.Method findMethod(Class<?> type, String name, Class<?>... params) {
         try {
             return type.getMethod(name, params);
@@ -202,7 +278,12 @@ final class DiagramSupport {
 
     // ------------------------------------------------------------------ serialization
 
-    // Native diagram type name (e.g. "SysML Block Definition Diagram"), or "" when it cannot be read.
+    /**
+     * Native diagram type name, for example "SysML Block Definition Diagram".
+     *
+     * @param dpe the diagram, may be null
+     * @return the type, or "" when it cannot be read
+     */
     static String diagramType(DiagramPresentationElement dpe) {
         try {
             if (dpe == null || dpe.getDiagramType() == null || dpe.getDiagramType().getType() == null) {
@@ -214,12 +295,24 @@ final class DiagramSupport {
         }
     }
 
+    /**
+     * Diagram name, never null.
+     *
+     * @param dpe the diagram
+     * @return the name, or ""
+     */
     static String name(DiagramPresentationElement dpe) {
         String n = dpe.getName();
         return n != null ? n : "";
     }
 
-    // The id/name/type/owner summary used by cameo_list_diagrams and as the base of other diagram responses.
+    /**
+     * The id, name, type and owner summary used by cameo_list_diagrams and as the base of other diagram
+     * responses.
+     *
+     * @param dpe the diagram
+     * @return the summary
+     */
     static JsonObject diagramJson(DiagramPresentationElement dpe) {
         JsonObject json = new JsonObject();
         Diagram diagram = dpe.getDiagram();
@@ -236,6 +329,12 @@ final class DiagramSupport {
         return json;
     }
 
+    /**
+     * Rectangle as JSON.
+     *
+     * @param r the rectangle
+     * @return {@code x}, {@code y}, {@code width} and {@code height}
+     */
     static JsonObject bounds(Rectangle r) {
         JsonObject b = new JsonObject();
         b.addProperty("x", r.x);
@@ -245,7 +344,13 @@ final class DiagramSupport {
         return b;
     }
 
-    /** presentationId, shapeType, parentPresentationId, element*, bounds, childCount. */
+    /**
+     * presentationId, shapeType, parentPresentationId, element*, bounds, childCount.
+     *
+     * @param pe the symbol
+     * @param parentId the parent symbol's id, or null for a top-level symbol
+     * @return the description; parts that cannot be read are left out
+     */
     static JsonObject describe(PresentationElement pe, String parentId) {
         JsonObject json = new JsonObject();
         json.addProperty("presentationId", pe.getID());
@@ -281,14 +386,26 @@ final class DiagramSupport {
         return json;
     }
 
-    /** All presentation elements of the diagram, flattened with parent IDs (the reference's collectShapes). */
+    /**
+     * All presentation elements of the diagram, flattened with parent IDs (the reference's collectShapes).
+     *
+     * @param dpe the diagram, already loaded
+     * @return one {@link #describe} object per symbol, depth-first
+     */
     static JsonArray collectShapes(DiagramPresentationElement dpe) {
         JsonArray out = new JsonArray();
         collectShapes(dpe.getPresentationElements(), out, null);
         return out;
     }
 
-    // Unreadable symbols (and their subtrees) are skipped rather than failing the listing.
+    /**
+     * Walks the symbol tree into a JSON array. Unreadable symbols, and their subtrees, are skipped rather
+     * than failing the listing.
+     *
+     * @param elements the symbols at this level, may be null
+     * @param out receives the descriptions
+     * @param parentId the parent of {@code elements}, or null at the top level
+     */
     private static void collectShapes(List<PresentationElement> elements, JsonArray out, String parentId) {
         if (elements == null) {
             return;
@@ -308,7 +425,14 @@ final class DiagramSupport {
 
     // ------------------------------------------------------------------ JSON values
 
-    // Adds a property value as a JSON boolean/number when possible, else as its string form; null is omitted.
+    /**
+     * Adds a property value as a JSON boolean or number when possible, else as its string form. Null is
+     * omitted.
+     *
+     * @param target the object to add to
+     * @param key the field name
+     * @param value the value, may be null
+     */
     static void addValue(JsonObject target, String key, Object value) {
         if (value == null) {
             return;
@@ -322,11 +446,23 @@ final class DiagramSupport {
         }
     }
 
+    /**
+     * A non-null message for an exception.
+     *
+     * @param e the exception
+     * @return its message, or its class simple name when it has none
+     */
     static String safeMessage(Throwable e) {
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 
-    /** Read a string field of a request item, accepting camelCase or snake_case keys. */
+    /**
+     * Read a string field of a request item, accepting camelCase or snake_case keys.
+     *
+     * @param item the request item
+     * @param camelKey the camelCase key; the snake_case form is tried too
+     * @return the trimmed-to-null string, or null when absent or blank
+     */
     static String itemStr(JsonObject item, String camelKey) {
         JsonElement e = itemGet(item, camelKey);
         if (e == null || e.isJsonNull()) {
@@ -336,7 +472,13 @@ final class DiagramSupport {
         return s.trim().isEmpty() ? null : s;
     }
 
-    // Raw element of a request item by camelCase key, falling back to the snake_case form.
+    /**
+     * Raw value of a request item by camelCase key, falling back to the snake_case form.
+     *
+     * @param item the request item, may be null
+     * @param camelKey the camelCase key
+     * @return the value, or null when absent or JSON null
+     */
     static JsonElement itemGet(JsonObject item, String camelKey) {
         if (item == null) {
             return null;
@@ -348,7 +490,14 @@ final class DiagramSupport {
         return e == null || e.isJsonNull() ? null : e;
     }
 
-    // Integer field of a request item; decimals are rounded, non-numbers are an INVALID_PARAMS error.
+    /**
+     * Integer field of a request item. Decimals are rounded.
+     *
+     * @param item the request item
+     * @param camelKey the camelCase key
+     * @return the value, or null when absent
+     * @throws ToolException INVALID_PARAMS when the value is not a number
+     */
     static Integer itemInt(JsonObject item, String camelKey) {
         JsonElement e = itemGet(item, camelKey);
         if (e == null) {
@@ -361,7 +510,12 @@ final class DiagramSupport {
         }
     }
 
-    // "parentPresentationId" -> "parent_presentation_id"
+    /**
+     * Converts camelCase to snake_case, for example "parentPresentationId" to "parent_presentation_id".
+     *
+     * @param camel the camelCase name
+     * @return the snake_case name
+     */
     static String snake(String camel) {
         StringBuilder sb = new StringBuilder();
         for (char c : camel.toCharArray()) {
@@ -374,7 +528,12 @@ final class DiagramSupport {
         return sb.toString();
     }
 
-    // {x, y} object -> Point (rounded); null when the value is not an object with both coordinates.
+    /**
+     * Reads an {x, y} object as a Point, rounding each coordinate.
+     *
+     * @param el the value, may be null
+     * @return the point, or null when the value is not an object with both coordinates
+     */
     static Point point(JsonElement el) {
         if (el == null || el.isJsonNull() || !el.isJsonObject()) {
             return null;
@@ -386,7 +545,12 @@ final class DiagramSupport {
         return new Point((int) Math.round(o.get("x").getAsDouble()), (int) Math.round(o.get("y").getAsDouble()));
     }
 
-    // Array of {x, y} objects -> points; malformed entries are skipped.
+    /**
+     * Reads an array of {x, y} objects as points. Malformed entries are skipped.
+     *
+     * @param el the value, may be null
+     * @return the points; empty when the value is not an array
+     */
     static List<Point> points(JsonElement el) {
         List<Point> out = new ArrayList<>();
         if (el == null || el.isJsonNull() || !el.isJsonArray()) {
@@ -401,7 +565,14 @@ final class DiagramSupport {
         return out;
     }
 
-    /** Array of objects from a param; throws INVALID_PARAMS when missing or malformed. */
+    /**
+     * Array of objects from a param; throws INVALID_PARAMS when missing or malformed.
+     *
+     * @param e the parameter value; a JSON string holding an array is parsed first
+     * @param key the parameter name, for error messages
+     * @return the objects
+     * @throws ToolException INVALID_PARAMS when missing, not an array, or holding a non-object
+     */
     static List<JsonObject> objectArray(JsonElement e, String key) {
         if (e == null || e.isJsonNull()) {
             throw ToolException.invalid("Missing required parameter '" + key + "' (an array of objects).");
@@ -427,7 +598,14 @@ final class DiagramSupport {
         return out;
     }
 
-    /** Object param (JSON string accepted); throws INVALID_PARAMS when missing. */
+    /**
+     * Object param (JSON string accepted); throws INVALID_PARAMS when missing.
+     *
+     * @param e the parameter value; a JSON string holding an object is parsed first
+     * @param key the parameter name, for error messages
+     * @return the object
+     * @throws ToolException INVALID_PARAMS when missing or not an object
+     */
     static JsonObject objectParam(JsonElement e, String key) {
         if (e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
             try {

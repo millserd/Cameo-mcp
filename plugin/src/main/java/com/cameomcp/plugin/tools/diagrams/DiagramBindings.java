@@ -10,12 +10,16 @@ import java.util.List;
 /** Binds the diagrams family (catalog: {@code com.cameomcp.catalog.DiagramTools}). */
 public final class DiagramBindings {
 
+    /** Not instantiable; all members are static. */
     private DiagramBindings() {
     }
 
-    /*
-     * Registers every diagram MCP tool handler. Handlers only unpack arguments; the work happens in
-     * DiagramService, DiagramImageService, PresentationRepairService and PropertyDumpService.
+    /**
+     * Registers every diagram tool handler. Handlers only unpack arguments; the work happens in
+     * DiagramService,
+     * DiagramImageService, PresentationRepairService and PropertyDumpService.
+     *
+     * @param r the registry to add to; every name must already be declared in the catalog
      */
     public static void bind(ToolRegistry r) {
         r.bind("cameo_list_diagram_types", (a, c) -> out(DiagramTypes.listJson()));
@@ -111,17 +115,34 @@ public final class DiagramBindings {
                 a.bool("summary_only", false))));
     }
 
-    // Trimmed because callers often paste ids with surrounding whitespace.
+    /**
+     * Reads diagram_id, trimmed because callers often paste ids with surrounding whitespace.
+     *
+     * @param a the tool arguments
+     * @return the trimmed id
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS when diagram_id is missing
+     */
     private static String diagramId(Args a) {
         return a.reqStr("diagram_id").trim();
     }
 
-    /** Null when absent (so "not given" differs from an empty list), else the string list. */
+    /**
+     * Null when absent (so "not given" differs from an empty list), else the string list.
+     *
+     * @param a the tool arguments
+     * @param name the parameter name
+     * @return the strings, or null when the parameter is absent
+     */
     static List<String> optList(Args a, String name) {
         return a.has(name) ? a.strList(name) : null;
     }
 
-    // Converts the tree result into plain Java maps/lists for the MCP layer; null becomes an empty object.
+    /**
+     * Converts the tree result into plain Java maps and lists for the MCP layer.
+     *
+     * @param json the result, may be null
+     * @return the plain value; an empty map for null
+     */
     private static Object out(JsonObject json) {
         return json == null ? new java.util.LinkedHashMap<String, Object>() : Gs.fromTree(json);
     }

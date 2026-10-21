@@ -26,16 +26,30 @@ import java.util.Map;
 /** Diagnostic dumps of diagram and presentation property managers (cameo_dump_*_properties). */
 final class PropertyDumpService {
 
-    // Cap on items serialized per collection or map value, to keep dumps of large values bounded.
+    /** Cap on items serialized per collection or map value, to keep dumps of large values bounded. */
     private static final int MAX_ITEMS = 250;
 
+    /** Not instantiable; all members are static. */
     private PropertyDumpService() {
     }
 
-    /*
-     * cameo_dump_diagram_properties: the diagram's own presentation properties, counts of symbols by
-     * class, and a page (offset/limit) of symbols, optionally each with its full property manager.
-     * Read-only, so it runs on the EDT without a session; 120 s limit for big diagrams.
+    /**
+     * Implements cameo_dump_diagram_properties: the diagram's own presentation properties, counts of symbols
+     * by class, and a page of symbols, optionally each with its full property manager. Read-only, so it runs
+     * on the EDT without a session, with a 120 second limit for big diagrams.
+     *
+     * @param diagramId the diagram id
+     * @param includeRaw true to add raw class and string forms and no-arg getter results
+     * @param includePresentationProperties true to include each symbol's property manager
+     * @param summaryOnly true to omit collection items
+     * @param limit the page size
+     * @param offset symbols to skip
+     * @return the {@code diagram} summary, its properties, counts, paging fields, the {@code presentations}
+     *     page and
+     * {@code warnings}
+     *
+     * @throws com.cameomcp.mcp.ToolException NOT_FOUND for a missing diagram, or a project error
+     * @throws Exception any failure while handing the work to the EDT
      */
     static JsonObject dumpDiagram(String diagramId, boolean includeRaw, boolean includePresentationProperties,
                                   boolean summaryOnly, int limit, int offset) throws Exception {
@@ -88,7 +102,18 @@ final class PropertyDumpService {
         }, 120);
     }
 
-    // cameo_dump_presentation_properties: one symbol with its full property manager and direct children.
+    /**
+     * Implements cameo_dump_presentation_properties: one symbol with its full property manager and direct
+     * children.
+     *
+     * @param diagramId the diagram id
+     * @param presentationId the symbol's presentation id
+     * @param includeRaw true to add raw value details
+     * @param summaryOnly true to omit collection items
+     * @return the {@code diagram} summary and the {@code presentation} from {@link #withProperties}
+     * @throws com.cameomcp.mcp.ToolException NOT_FOUND for a missing diagram or symbol, or a project error
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject dumpPresentation(String diagramId, String presentationId, boolean includeRaw,
                                        boolean summaryOnly) throws Exception {
         return Edt.onEdt("Dump Presentation Properties", project -> {
@@ -106,6 +131,12 @@ final class PropertyDumpService {
 
     // ------------------------------------------------------------------ presentation serializer
 
+    /**
+     * Summarizes a diagram for the dump results.
+     *
+     * @param dpe the diagram
+     * @return {@code id}, {@code name}, {@code type} and the owner, as far as they can be read
+     */
     static JsonObject diagramSummary(DiagramPresentationElement dpe) {
         JsonObject json = new JsonObject();
         Diagram diagram = dpe.getDiagram();
@@ -120,8 +151,14 @@ final class PropertyDumpService {
         return json;
     }
 
-    // Identity of one symbol (full and simple class name, element, bounds, child count); read failures
-    // become *Warning fields instead of errors.
+    /**
+     * Identity of one symbol: full and simple class name, element, bounds and child count. Read failures
+     * become *Warning fields instead of errors.
+     *
+     * @param pe the symbol
+     * @param parentId the parent symbol's id, or null for a top-level symbol
+     * @return the summary
+     */
     static JsonObject summary(PresentationElement pe, String parentId) {
         JsonObject json = new JsonObject();
         json.addProperty("presentationId", pe.getID());
@@ -155,7 +192,15 @@ final class PropertyDumpService {
         return json;
     }
 
-    // summary() plus the serialized property manager and one-level summaries of the direct children.
+    /**
+     * {@link #summary} plus the serialized property manager and one-level summaries of the direct children.
+     *
+     * @param pe the symbol
+     * @param parentId the parent symbol's id, or null
+     * @param includeRaw true to add raw value details
+     * @param summaryOnly true to omit collection items
+     * @return the summary with {@code propertyManager}, {@code children} and any {@code warnings}
+     */
     static JsonObject withProperties(PresentationElement pe, String parentId, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = summary(pe, parentId);
         try {
@@ -176,7 +221,12 @@ final class PropertyDumpService {
         return json;
     }
 
-    // Symbol counts keyed by presentation class simple name, in first-seen order.
+    /**
+     * Symbol counts keyed by presentation class simple name, in first-seen order.
+     *
+     * @param elements the symbols; null entries count as "null"
+     * @return class name to count
+     */
     static JsonObject countByType(Collection<PresentationElement> elements) {
         Map<String, Integer> map = new LinkedHashMap<>();
         for (PresentationElement pe : elements) {
@@ -189,7 +239,14 @@ final class PropertyDumpService {
 
     // ------------------------------------------------------------------ property serializer
 
-    // Every property of a manager; a failure while listing becomes a warning on the result.
+    /**
+     * Serializes every property of a manager. A failure while listing becomes a warning on the result.
+     *
+     * @param manager the property manager, may be null
+     * @param includeRaw true to add raw value details
+     * @param summaryOnly true to omit collection items
+     * @return {@code propertyCount}, {@code properties} and {@code warnings} when there are any
+     */
     static JsonObject serializeManager(PropertyManager manager, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = new JsonObject();
         JsonArray properties = new JsonArray();
@@ -217,8 +274,16 @@ final class PropertyDumpService {
         return json;
     }
 
-    // One property: name, id, class type, value (with its Java type and string form) and, with includeRaw,
-    // the raw class/string of the value. Each read is guarded so one bad getter does not hide the rest.
+    /**
+     * Serializes one property: name, id, class type, value (with its Java type and string form) and, with
+     * includeRaw, the raw class and string of the value. Each read is guarded so one bad getter does not hide
+     * the rest.
+     *
+     * @param property the property, may be null
+     * @param includeRaw true to add raw value details
+     * @param summaryOnly true to omit collection items
+     * @return the property JSON
+     */
     static JsonObject serializeProperty(Property property, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = new JsonObject();
         JsonArray warnings = new JsonArray();
@@ -254,10 +319,15 @@ final class PropertyDumpService {
         return json;
     }
 
-    /*
+    /**
      * Best-effort JSON for an arbitrary property value: primitives as-is, Elements as compact JSON,
      * collections/maps as a count plus up to MAX_ITEMS entries (items omitted with summaryOnly). Anything
      * else becomes class name + toString, and with includeRaw also the results of its no-arg getters.
+     *
+     * @param value the value, may be null
+     * @param includeRaw true to add no-arg getter results for unknown objects
+     * @param summaryOnly true to give only counts for collections and maps
+     * @return the JSON form; JSON null for null
      */
     static JsonElement serializeValue(Object value, boolean includeRaw, boolean summaryOnly) {
         if (value == null) {
@@ -338,11 +408,24 @@ final class PropertyDumpService {
         return fallback;
     }
 
-    // A Supplier that is allowed to throw from Cameo getters, used by safeAdd.
+    /** A string getter that may throw from Cameo code, used by {@link #safeAdd}. */
     private interface StringSupplier {
+        /**
+         * Reads the value.
+         *
+         * @return the value, or null to add nothing
+         */
         String get();
     }
 
+    /**
+     * Adds a field from a getter that may throw. A failure becomes a warning instead.
+     *
+     * @param json the object to add to
+     * @param key the field name
+     * @param s the getter
+     * @param warnings receives a line when the getter throws
+     */
     private static void safeAdd(JsonObject json, String key, StringSupplier s, JsonArray warnings) {
         try {
             String v = s.get();

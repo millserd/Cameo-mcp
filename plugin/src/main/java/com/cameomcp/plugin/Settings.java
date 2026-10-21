@@ -14,21 +14,32 @@ import java.util.Properties;
  * <p>
  * Precedence for the port: JVM system property {@code cameo.mcp.port} (set in Cameo's
  * .vmoptions), then environment variable {@code CAMEO_MCP_PORT}, then the settings file,
- * then 18740. The same pattern applies to host and token.
+ * then 18740. The token follows the same order ({@code cameo.mcp.token}, {@code CAMEO_MCP_TOKEN});
+ * the host can be overridden only by the JVM property {@code cameo.mcp.host}, not by an
+ * environment variable.
  */
 public final class Settings {
 
+    /** The default MCP port, used when nothing else sets one. */
     public static final int DEFAULT_PORT = 18740;
+    /** The default bind address: loopback only. */
     public static final String DEFAULT_HOST = "127.0.0.1";
 
-    // Public fields because the status window edits them directly before save().
+    /**
+     * TCP port to listen on (0 = any free port). Public because the status window edits it directly before
+     * save().
+     */
     public int port = DEFAULT_PORT;
+    /** Bind address. Anything other than loopback exposes the model to the network; use a token then. */
     public String host = DEFAULT_HOST;
     /** Bearer token clients must send; empty means no authentication (loopback only). */
     public String token = "";
-    // Start the server when Cameo starts; off means the user starts it from the MCP menu.
+    /** Start the server when Cameo starts; off means the user starts it from the MCP menu. */
     public boolean autoStart = true;
-    // When false, cameo_execute_macro and cameo_execute_probe are refused (see Catalog.isScriptTool).
+    /**
+     * When false (the default), cameo_execute_macro and cameo_execute_probe are refused (see
+     * Catalog.isScriptTool).
+     */
     public boolean allowMacros = false;
     /** off | errors | all : which tool calls are echoed to the Notification window. */
     public String guiLogLevel = "errors";
@@ -36,13 +47,21 @@ public final class Settings {
     /** Where the value of the port came from, shown in the status window. */
     public String portSource = "default";
 
-    /** The settings folder: {@code -Dcameo.mcp.home} if set, else {@code ~/.cameo-mcp}. */
+    /**
+     * The settings folder: {@code -Dcameo.mcp.home} if set, else {@code ~/.cameo-mcp}.
+     *
+     * @return the settings folder (may not exist yet)
+     */
     public static File directory() {
         String override = System.getProperty("cameo.mcp.home");
         return override != null ? new File(override) : new File(System.getProperty("user.home"), ".cameo-mcp");
     }
 
-    /** The settings file inside {@link #directory()}. */
+    /**
+     * The settings file inside {@link #directory()}.
+     *
+     * @return the settings file (may not exist yet)
+     */
     public static File file() {
         return new File(directory(), "settings.properties");
     }
@@ -50,6 +69,8 @@ public final class Settings {
     /**
      * Reads the settings file, then applies overrides: environment variables, then JVM options,
      * which win. Never throws; an unreadable file is logged and defaults are used.
+     *
+     * @return the effective settings
      */
     public static Settings load() {
         Settings s = new Settings();
@@ -93,7 +114,11 @@ public final class Settings {
         return s;
     }
 
-    /** Writes the current values to the settings file, creating the folder if needed. */
+    /**
+     * Writes the current values to the settings file, creating the folder if needed.
+     *
+     * @throws IOException if the folder cannot be created or the file cannot be read or written
+     */
     public void save() throws IOException {
         File dir = directory();
         if (!dir.isDirectory() && !dir.mkdirs()) {
@@ -120,7 +145,17 @@ public final class Settings {
         }
     }
 
-    // Stores value under key, unless it equals the active override; then the file keeps its previous value (or none).
+    /**
+     * Stores value under key, unless it equals the active override (an environment variable or JVM
+     * option); then the file keeps its previous value, or none. This keeps a token that only comes from
+     * the environment off disk.
+     *
+     * @param p the properties being written
+     * @param old the file's previous contents
+     * @param key property name
+     * @param value the current value
+     * @param override the active override, or null
+     */
     private static void keep(Properties p, Properties old, String key, String value, String override) {
         if (override != null && !override.trim().isEmpty() && override.trim().equals(value)) {
             if (old.getProperty(key) != null) {
@@ -131,7 +166,14 @@ public final class Settings {
         }
     }
 
-    /** Parses a port number; out-of-range or non-numeric text gives {@code dflt}. Port 0 means "any free port". */
+    /**
+     * Parses a port number; out-of-range or non-numeric text gives {@code dflt}. Port 0 means "any free
+     * port".
+     *
+     * @param text the text to parse, may be null
+     * @param dflt value for null, non-numeric or out-of-range text
+     * @return a port in 0..65535
+     */
     public static int parsePort(String text, int dflt) {
         if (text == null) {
             return dflt;
@@ -144,7 +186,11 @@ public final class Settings {
         }
     }
 
-    /** A new random 48-character hex token from a secure random source. */
+    /**
+     * A new random 48-character hex token from a secure random source.
+     *
+     * @return the token
+     */
     public static String newToken() {
         byte[] b = new byte[24];
         new SecureRandom().nextBytes(b);
@@ -155,7 +201,11 @@ public final class Settings {
         return sb.toString();
     }
 
-    /** True when the server only listens on this machine. */
+    /**
+     * True when the server only listens on this machine.
+     *
+     * @return true for 127.0.0.1, localhost or ::1
+     */
     public boolean isLoopback() {
         return host.equals("127.0.0.1") || host.equals("localhost") || host.equals("::1");
     }

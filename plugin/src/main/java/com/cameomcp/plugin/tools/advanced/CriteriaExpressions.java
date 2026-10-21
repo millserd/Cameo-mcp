@@ -18,6 +18,7 @@ import java.util.Locale;
  */
 final class CriteriaExpressions {
 
+    /** Canonical direction names, in listing order. */
     static final List<String> DIRECTIONS = Collections.unmodifiableList(
             Arrays.asList("both", "sourceToTarget", "targetToSource"));
 
@@ -32,12 +33,16 @@ final class CriteriaExpressions {
             "refine.targetToSource", "refine.both", "deriveReqt.targetToSource", "deriveReqt.both",
             "satisfy.both", "allocate.both", "allocatedTo"));
 
+    /** Not instantiable; all members are static. */
     private CriteriaExpressions() {
     }
 
-    /*
-     * The built-in template table, filtered to templates whose comma-separated targetKinds include target
-     * (case-insensitive). The table is rebuilt on every call; it is small and keeps the class stateless.
+    /**
+     * The built-in template table, filtered to templates whose comma-separated targetKinds include target,
+     * ignoring case. The table is rebuilt on every call; it is small and keeps the class stateless.
+     *
+     * @param target relationMap, matrix or table, or null for every template
+     * @return the matching template rows
      */
     static JsonArray templates(String target) {
         JsonArray all = new JsonArray();
@@ -66,7 +71,18 @@ final class CriteriaExpressions {
         return filtered;
     }
 
-    // Template row. The nested expression's verified flag is recomputed from UI_VERIFIED, matching what build()/parse() report.
+    /**
+     * One template row. The nested expression's verified flag is recomputed from UI_VERIFIED, matching what
+     * build() and parse() report.
+     *
+     * @param id the template id
+     * @param description the human-readable description
+     * @param targets comma-separated target kinds
+     * @param kind the relationship kind
+     * @param direction the canonical direction
+     * @param verified the row's verifiedWithUiDiff flag
+     * @return the row
+     */
     private static JsonObject template(String id, String description, String targets, String kind, String direction,
                                        boolean verified) {
         JsonObject json = new JsonObject();
@@ -85,11 +101,23 @@ final class CriteriaExpressions {
         return json;
     }
 
+    /**
+     * Whether a template id was confirmed against a criteria made in the Cameo UI.
+     *
+     * @param id the template id, may be null
+     * @return true for the UI-verified ids
+     */
     static boolean isUiVerified(String id) {
         return id != null && UI_VERIFIED.contains(id);
     }
 
-    // "satisfy.both" -> "satisfy"; used when build() gets an id that is not in the table.
+    /**
+     * The relationship part of a template id, for example "satisfy" from "satisfy.both". Used when build()
+     * gets an id that is not in the table.
+     *
+     * @param id the id, may be null
+     * @return the part before the first dot, the whole id when it has no dot, or "" for null or empty
+     */
     static String relationshipKindFromId(String id) {
         if (id == null || id.isEmpty()) {
             return "";
@@ -98,7 +126,12 @@ final class CriteriaExpressions {
         return dot > 0 ? id.substring(0, dot) : id;
     }
 
-    /** Canonical relationship kind (case/spacing-insensitive match against known kinds), or the trimmed input. */
+    /**
+     * Canonical relationship kind (case/spacing-insensitive match against known kinds), or the trimmed input.
+     *
+     * @param kind the relationship kind, may be null; «guillemets» are removed
+     * @return the canonical spelling, the trimmed input when unknown, or null for null
+     */
     static String canonicalKind(String kind) {
         if (kind == null) {
             return null;
@@ -124,12 +157,22 @@ final class CriteriaExpressions {
         return k;
     }
 
-    // True when the kind (after canonicalization) is one of KNOWN_KINDS.
+    /**
+     * Whether the kind, after canonicalization, is one of {@link #KNOWN_KINDS}.
+     *
+     * @param kind the relationship kind, may be null
+     * @return true for a known kind
+     */
     static boolean isKnownKind(String kind) {
         return kind != null && KNOWN_KINDS.contains(canonicalKind(kind));
     }
 
-    /** Canonical direction, or null when not recognized. */
+    /**
+     * Canonical direction, or null when not recognized.
+     *
+     * @param direction the direction, may be null; blank means both
+     * @return both, sourceToTarget or targetToSource, or null
+     */
     static String canonicalDirection(String direction) {
         // Blank means "both" (the default); only an unrecognized non-blank value yields null.
         if (direction == null || direction.trim().isEmpty()) {
@@ -157,12 +200,24 @@ final class CriteriaExpressions {
         }
     }
 
-    // Lowercases and drops underscores, hyphens and spaces so "source_to_target" and "Source To Target" compare equal.
+    /**
+     * Lower-cases and drops underscores, hyphens and spaces, so "source_to_target" and "Source To Target"
+     * compare equal.
+     *
+     * @param s the text
+     * @return the squashed text
+     */
     private static String squash(String s) {
         return s.trim().toLowerCase(Locale.ROOT).replace("_", "").replace("-", "").replace(" ", "");
     }
 
-    /** Template matching kind + direction, or null. */
+    /**
+     * Template matching kind + direction, or null.
+     *
+     * @param kind the relationship kind, may be null
+     * @param direction the direction
+     * @return the template row, or null
+     */
     static JsonObject matchTemplate(String kind, String direction) {
         if (kind == null) {
             return null;
@@ -177,7 +232,12 @@ final class CriteriaExpressions {
         return null;
     }
 
-    // Case-insensitive template id lookup, or null.
+    /**
+     * Looks up a template by id, ignoring case.
+     *
+     * @param id the template id, may be null
+     * @return the template row, or null
+     */
     static JsonObject templateById(String id) {
         if (id == null) {
             return null;
@@ -193,6 +253,13 @@ final class CriteriaExpressions {
     /**
      * Build an expression. {@code id} (template id) wins when given; otherwise kind + direction,
      * matched against the template table so verified templates are flagged.
+     *
+     * @param id the template id, or null
+     * @param relationshipKind the relationship kind, used when id is null or unknown
+     * @param direction the direction, used with the kind
+     * @param target the target kind, echoed in the result
+     * @return the expression object, flagged verifiedWithUiDiff when it matches a UI-verified template
+     * @throws ToolException INVALID_PARAMS for an unknown id with no kind, a missing kind, or a bad direction
      */
     static JsonObject build(String id, String relationshipKind, String direction, String target) {
         // An unknown id is only fatal when no kind was given to fall back on.
@@ -250,6 +317,10 @@ final class CriteriaExpressions {
     /**
      * Parse an expression given as an object ({relationshipKind, direction} or {id}/{templateId}),
      * a JSON string, a template id ("satisfy.both") or text ("Satisfy:sourceToTarget", "Refine both").
+     *
+     * @param expression the expression in any of the accepted forms
+     * @return the normalized expression with {@code issues}; problems are reported there rather than thrown
+     * @throws ToolException INVALID_PARAMS when the expression is missing
      */
     static JsonObject parse(JsonElement expression) {
         JsonObject out = new JsonObject();
@@ -364,7 +435,13 @@ final class CriteriaExpressions {
         return out;
     }
 
-    // First non-blank primitive value among the given keys (lets callers send either camelCase or snake_case).
+    /**
+     * First non-blank primitive value among the given keys, so callers can send camelCase or snake_case.
+     *
+     * @param o the object
+     * @param keys the keys to try, in order
+     * @return the trimmed value, or null
+     */
     private static String firstString(JsonObject o, String... keys) {
         for (String k : keys) {
             if (o.has(k) && o.get(k).isJsonPrimitive()) {

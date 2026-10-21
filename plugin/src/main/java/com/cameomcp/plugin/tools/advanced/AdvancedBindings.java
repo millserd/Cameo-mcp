@@ -12,6 +12,7 @@ import java.util.Map;
 /** Binds the advanced family: validation, reports, requirements, criteria and probe-first optional products. */
 public final class AdvancedBindings {
 
+    /** Not instantiable; all members are static. */
     private AdvancedBindings() {
     }
 
@@ -20,10 +21,13 @@ public final class AdvancedBindings {
         Bind.tree(r, name, p -> tool.call(snakeAliases(p)));
     }
 
-    /*
+    /**
      * Adds a snake_case copy of every camelCase key, mutating and returning p (null becomes {}).
      * Unlike Bind's own aliasing this splits on lower/digit-to-upper boundaries only, so "elementID"
      * becomes "element_id", and it also fills a snake key the client sent as explicit JSON null.
+     *
+     * @param p the tool arguments, may be null
+     * @return p with the added keys, or a new empty object for null
      */
     static JsonObject snakeAliases(JsonObject p) {
         if (p == null) {
@@ -41,7 +45,11 @@ public final class AdvancedBindings {
         return p;
     }
 
-    /** Registers every advanced-family tool name against its service method. All go through {@link #tree}. */
+    /**
+     * Registers every advanced-family tool name against its service method. All go through {@link #tree}.
+     *
+     * @param r the registry to add to; every name must already be declared in the catalog
+     */
     public static void bind(ToolRegistry r) {
         // validation
         tree(r, "cameo_get_validation_capabilities", p -> ValidationService.capabilities());

@@ -13,6 +13,10 @@ import static com.cameomcp.plugin.tools.analysis.J.obj;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link SemanticValidation} entry points over a {@link FakeBridge}: activity flow, port boundary,
+ * requirement quality, cross-diagram traceability and relationship de-duplication.
+ */
 class SemanticValidationTest {
 
     /** The reference test bridge: an activity, an IBD, two requirements and two interface blocks. */

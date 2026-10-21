@@ -24,14 +24,20 @@ import java.util.Map;
 /** Typed diagram listing/inspection and gated write previews (reference TypedDiagramHandler). */
 final class TypedDiagramService {
 
-    // Write operations that can be previewed; none of them is executed natively yet.
+    /** Write operations that can be previewed; none of them is executed natively yet. */
     static final List<String> OPERATIONS = Arrays.asList(
             "sequence-message", "state-transition", "parametric-binding", "legend-apply");
 
+    /** Not instantiable; all members are static. */
     private TypedDiagramService() {
     }
 
-    // cameo_get_typed_diagram_capabilities: reads use the core diagram API; the class probe is diagnostic only.
+    /**
+     * Implements cameo_get_typed_diagram_capabilities. Reads use the core diagram API; the class probe is
+     * only diagnostic.
+     *
+     * @return the capability answer
+     */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("typedDiagrams", "native-read-plus-preview");
         response.addProperty("available", true);
@@ -45,7 +51,12 @@ final class TypedDiagramService {
         return response;
     }
 
-    // Cameo's diagram type string (e.g. "SysML Block Definition Diagram"); empty when the type cannot be read.
+    /**
+     * Cameo's diagram type string, for example "SysML Block Definition Diagram".
+     *
+     * @param dpe the diagram
+     * @return the type, or "" when it cannot be read
+     */
     private static String typeOf(DiagramPresentationElement dpe) {
         try {
             return dpe.getDiagramType() != null ? dpe.getDiagramType().getType() : "";
@@ -54,9 +65,14 @@ final class TypedDiagramService {
         }
     }
 
-    /*
-     * cameo_list_typed_diagrams: every diagram with its type, optionally filtered by a case-insensitive substring of
-     * the type. countsByType is computed over all diagrams, before the filter, so callers see what else exists.
+    /**
+     * Implements cameo_list_typed_diagrams: every diagram with its type, optionally filtered by a substring
+     * of the type ignoring case. countsByType is computed over all diagrams before the filter, so callers see
+     * what else exists.
+     *
+     * @param p the tool arguments: optional {@code diagram_type}
+     * @return {@code count}, {@code diagrams} and {@code countsByType}
+     * @throws Exception when no project is open or the hand-off to the EDT fails
      */
     static JsonObject list(JsonObject p) throws Exception {
         String typeFilter = Gs.str(p, "diagram_type");
@@ -89,9 +105,15 @@ final class TypedDiagramService {
         });
     }
 
-    /*
-     * cameo_inspect_typed_diagram: flattened shape/path list of one diagram (up to limit, 1..5000) with owner links,
-     * model element, bounds and per-class counts. Counts and presentationCount always cover the whole diagram.
+    /**
+     * Implements cameo_inspect_typed_diagram: the flattened shape and path list of one diagram (up to limit,
+     * 1 to 5000) with owner links, model element, bounds and per-class counts. Counts and presentationCount
+     * always cover the whole diagram.
+     *
+     * @param p the tool arguments: {@code diagram_id} and {@code limit} (default 500)
+     * @return the diagram summary, counts and the {@code presentations} list
+     * @throws com.cameomcp.mcp.ToolException NOT_FOUND for a missing diagram
+     * @throws Exception when no project is open or the hand-off to the EDT fails
      */
     static JsonObject inspect(JsonObject p) throws Exception {
         String diagramId = Gs.reqStr(p, "diagram_id").trim();
@@ -140,7 +162,14 @@ final class TypedDiagramService {
         });
     }
 
-    // Pre-order flatten of nested symbols, recording each child's enclosing symbol ID.
+    /**
+     * Pre-order flatten of nested symbols, recording each child's enclosing symbol id.
+     *
+     * @param elements the symbols at this level, may be null
+     * @param sink receives the symbols
+     * @param parentById receives child id to parent id
+     * @param parentId the parent of {@code elements}, or null at the top level
+     */
     private static void collect(List<PresentationElement> elements, List<PresentationElement> sink,
                                 Map<String, String> parentById, String parentId) {
         if (elements == null) {
@@ -155,7 +184,14 @@ final class TypedDiagramService {
         }
     }
 
-    // One symbol: identity, class, linked model element and bounds. Element and bounds are read defensively per symbol.
+    /**
+     * One symbol: identity, class, linked model element and bounds. Element and bounds are read defensively
+     * per symbol.
+     *
+     * @param pe the symbol
+     * @param parentPresentationId the parent symbol's id, or null
+     * @return the summary
+     */
     private static JsonObject summary(PresentationElement pe, String parentPresentationId) {
         JsonObject json = new JsonObject();
         json.addProperty("presentationId", pe.getID());
@@ -194,7 +230,14 @@ final class TypedDiagramService {
         return json;
     }
 
-    // cameo_preview_typed_diagram_operation: validates operation and payload, then echoes; no diagram is changed.
+    /**
+     * Implements cameo_preview_typed_diagram_operation: checks the operation and payload, then echoes them.
+     * No diagram is changed.
+     *
+     * @param p the tool arguments: {@code operation} (one of {@link #OPERATIONS}) and {@code payload}
+     * @return a preview-accepted answer
+     * @throws ToolException INVALID_PARAMS for an unknown operation or a missing payload
+     */
     static JsonObject preview(JsonObject p) {
         String operation = Gs.reqStr(p, "operation").trim().toLowerCase(Locale.ROOT);
         if (!OPERATIONS.contains(operation)) {

@@ -20,6 +20,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * End-to-end tests for {@link MethodologyService} against a fake bridge: pack listing, guidance, recipe
+ * execution with evidence, required parameters, non-mutating validation and review packets, and the semantic
+ * checks of each built-in recipe.
+ */
 class MethodologyServiceTest {
 
     @SuppressWarnings("unchecked")

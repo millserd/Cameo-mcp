@@ -14,6 +14,11 @@ import static com.cameomcp.plugin.tools.analysis.J.obj;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link Proofing}: requirement, comment, state, transition and diagram text proofing, combined
+ * reports, patch plans, determinism, target collection from a package, and applying plans through a fake
+ * bridge.
+ */
 class ProofingTest {
 
     @SuppressWarnings("unchecked")

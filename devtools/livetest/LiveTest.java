@@ -12,16 +12,38 @@ import java.util.regex.*;
  * scenario.json writes results.json + results.txt; scenario-NAME.json writes results-NAME.json/.txt.
  * A step passes when isError matches expectError and every "expect" (path -> value) and
  * "expectContains" (path -> substring) check holds. "allowError": true accepts either outcome.
+ * <p>
+ * Each step is an object with "name", "tool" and optional "args". Inside "args", {@code ${var}}
+ * is replaced by a variable: "testdir" (the scenario folder) or one saved by an earlier passing
+ * step through "save" (variable -> path). A step that needs a variable nobody saved is skipped.
+ * <p>
+ * Paths are dot-separated keys and array indexes, such as {@code elements.0.id}, read from the
+ * tool's structuredContent (or its text content parsed as JSON). See {@link #path} for the
+ * fallback when a path does not resolve.
+ * <p>
+ * Runs as a single-file source program on JDK 11+, with cameo-mcp-stdio.jar on the class path for
+ * the JSON tree classes. It talks to the fixed default endpoint and sends no auth token.
  */
 public class LiveTest {
+    /** Shared HTTP client; 5 s connect timeout so a closed Cameo fails fast. */
     static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    /** The MCP endpoint (the plugin's default host and port). */
     static String url = "http://127.0.0.1:18740/mcp";
+    /** Mcp-Session-Id returned by the server, echoed on every later request. */
     static String session;
+    /** Next JSON-RPC request id. */
     static int nextId = 1;
 
+    /**
+     * Runs the scenario and writes the results files next to it.
+     *
+     * @param a {@code [dir] [scenario-file]}; defaults are "." and "scenario.json"
+     * @throws Exception if the scenario cannot be read, the handshake fails, or results cannot be written
+     */
     public static void main(String[] a) throws Exception {
         Path dir = Paths.get(a.length > 0 ? a[0] : ".");
         Map<String, String> vars = new LinkedHashMap<>();
+        // Backslashes are doubled because the value is pasted into JSON text (Windows paths).
         vars.put("testdir", dir.toAbsolutePath().toString().replace("\\", "\\\\"));
         String scenario = a.length > 1 ? a[1] : "scenario.json";
         String suffix = scenario.equals("scenario.json") ? ""
@@ -31,6 +53,7 @@ public class LiveTest {
         StringBuilder txt = new StringBuilder();
         int pass = 0, fail = 0, skip = 0;
 
+        // MCP handshake: initialize, the initialized notification, then tools/list for the tool count.
         JsonObject init = rpc("initialize", obj("protocolVersion", "2025-06-18", "capabilities", new JsonObject(),
                 "clientInfo", obj("name", "cameo-mcp-livetest", "version", "1")), true);
         txt.append("initialize: ").append(trim(init.toString(), 300)).append("\n");
@@ -47,6 +70,7 @@ public class LiveTest {
             JsonObject r = new JsonObject();
             r.addProperty("name", name);
             r.addProperty("tool", tool);
+            // Substitute ${var} in the raw argument text; remember the first unknown variable.
             Matcher m = Pattern.compile("\\$\\{(\\w+)\\}").matcher(argsText);
             StringBuffer sb = new StringBuffer();
             String missing = null;
@@ -75,6 +99,7 @@ public class LiveTest {
             r.addProperty("ms", ms);
             JsonObject res = resp.has("result") ? resp.getAsJsonObject("result") : null;
             boolean isError = res == null || (res.has("isError") && res.get("isError").getAsBoolean());
+            // A missing result (JSON-RPC error or transport failure) counts as a tool error.
             JsonElement sc = res != null && res.has("structuredContent") ? res.get("structuredContent") : null;
             String text = "";
             int images = 0;
@@ -85,6 +110,7 @@ public class LiveTest {
                     if ("image".equals(co.get("type").getAsString())) images++;
                 }
             }
+            // Older or text-only results: try the text content as JSON so path checks still work.
             if (sc == null && !text.isEmpty()) {
                 try { sc = JsonParser.parseString(text); } catch (Exception ignored) { }
             }
@@ -119,6 +145,7 @@ public class LiveTest {
             if (images > 0) r.addProperty("images", images);
             r.addProperty("result", trim(res != null ? text : resp.toString(), 4000));
             if (ok) pass++; else fail++;
+            // Only passing steps save variables, so later steps that need them are skipped, not run blind.
             if (ok && step.has("save") && sc != null) {
                 for (Map.Entry<String, JsonElement> s : step.getAsJsonObject("save").entrySet()) {
                     String v = path(sc, s.getValue().getAsString());
@@ -144,6 +171,16 @@ public class LiveTest {
         System.out.println(head);
     }
 
+    /**
+     * Reads a dot path from a JSON tree. If the path does not end at a primitive, falls back to the
+     * first primitive anywhere in the tree whose key equals the path's last segment (depth-first).
+     * The fallback is lenient: it can match a same-named key elsewhere in the result.
+     *
+     * @param root the tree to read
+     * @param p the dot path; numeric segments index arrays
+     * @return the value as a string, or null when nothing matches
+     * @throws NumberFormatException if a segment that meets an array is not a number
+     */
     static String path(JsonElement root, String p) {
         JsonElement cur = root;
         for (String part : p.split("\\.")) {
@@ -164,6 +201,13 @@ public class LiveTest {
         return cur != null && cur.isJsonPrimitive() ? cur.getAsString() : null;
     }
 
+    /**
+     * Depth-first search for the first primitive value stored under {@code key}.
+     *
+     * @param e the tree to search, or null
+     * @param key the key to look for
+     * @return the value, or null when no primitive has that key
+     */
     static JsonElement deep(JsonElement e, String key) {
         if (e == null) return null;
         if (e.isJsonObject()) {
@@ -182,6 +226,16 @@ public class LiveTest {
         return null;
     }
 
+    /**
+     * Sends one JSON-RPC message over HTTP POST (300 s timeout, enough for slow tools).
+     * Captures the Mcp-Session-Id header from the response.
+     *
+     * @param method the JSON-RPC method
+     * @param params the params object, or null to omit it
+     * @param request true for a request (gets an id and a parsed reply), false for a notification
+     * @return the parsed response, or an empty object for a notification or an empty body
+     * @throws Exception on a network error or a body that is not a JSON object (such as an SSE stream)
+     */
     static JsonObject rpc(String method, JsonObject params, boolean request) throws Exception {
         JsonObject msg = obj("jsonrpc", "2.0", "method", method);
         if (params != null) msg.add("params", params);
@@ -199,6 +253,13 @@ public class LiveTest {
         return JsonParser.parseString(resp.body()).getAsJsonObject();
     }
 
+    /**
+     * Builds a JSON object from alternating keys and values. JSON values are added as-is; anything
+     * else is stored as its string form (so numbers become strings).
+     *
+     * @param kv key, value, key, value...
+     * @return the new object
+     */
     static JsonObject obj(Object... kv) {
         JsonObject o = new JsonObject();
         for (int i = 0; i < kv.length; i += 2) {
@@ -209,6 +270,13 @@ public class LiveTest {
         return o;
     }
 
+    /**
+     * Shortens text for the report: replaces long base64 image data, then cuts to {@code n} chars.
+     *
+     * @param s the text
+     * @param n the maximum length before "..." is added
+     * @return the shortened text
+     */
     static String trim(String s, int n) {
         s = s.replaceAll("\"data\"\\s*:\\s*\"[A-Za-z0-9+/=]{200,}\"", "\"data\":\"<base64 image>\"");
         return s.length() <= n ? s : s.substring(0, n) + "...";

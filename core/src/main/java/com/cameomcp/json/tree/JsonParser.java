@@ -9,19 +9,34 @@ import java.io.Reader;
  */
 public final class JsonParser {
 
+    /** The whole input text. */
     private final String s;
+    /** Index of the next character to read. */
     private int pos;
 
+    /**
+     * Creates a parser positioned at the start of the text.
+     *
+     * @param s the text to parse; see {@link #parseString(String)}
+     */
     private JsonParser(String s) {
         this.s = s;
     }
 
-    /** Parses one JSON value; text after it (other than whitespace) is an error. */
+    /**
+     * Parses one JSON value; text after it (other than whitespace) is an error.
+     *
+     * @param json the JSON text; a leading byte-order mark is skipped
+     * @return the parsed value, or {@link JsonNull} when the text is blank
+     * @throws JsonParseException if the text is null, malformed, nested deeper than 512 levels, or has
+     *     trailing content
+     */
     public static JsonElement parseString(String json) {
         if (json == null) {
             throw new JsonParseException("No JSON text");
         }
         JsonParser p = new JsonParser(json);
+        // Skip a UTF-8 byte-order mark (U+FEFF) that some editors put at the start of a file.
         if (p.pos < json.length() && json.charAt(p.pos) == '﻿') {
             p.pos++;
         }
@@ -37,7 +52,13 @@ public final class JsonParser {
         return v;
     }
 
-    /** Reads the whole reader and parses it like {@link #parseString}. */
+    /**
+     * Reads the whole reader and parses it like {@link #parseString}.
+     *
+     * @param reader the source; read to the end but not closed
+     * @return the parsed value, or {@link JsonNull} when the text is blank
+     * @throws JsonParseException if reading fails or the text is not valid JSON
+     */
     public static JsonElement parseReader(Reader reader) {
         StringBuilder sb = new StringBuilder();
         char[] buf = new char[8192];
@@ -51,10 +72,17 @@ public final class JsonParser {
         return parseString(sb.toString());
     }
 
+    /**
+     * Returns a parse exception that also names the character offset.
+     *
+     * @param msg what went wrong
+     * @return a parse exception that also names the character offset
+     */
     private JsonParseException error(String msg) {
         return new JsonParseException(msg + " at character " + pos);
     }
 
+    /** Skips JSON whitespace (space, tab, line feed, carriage return). */
     private void skipWs() {
         while (pos < s.length()) {
             char c = s.charAt(pos);
@@ -66,6 +94,12 @@ public final class JsonParser {
         }
     }
 
+    /**
+     * Parses any value at the current position, dispatching on its first character.
+     *
+     * @param depth current nesting depth, capped at 512 so hostile input cannot overflow the stack
+     * @return the parsed value
+     */
     private JsonElement value(int depth) {
         if (depth > 512) {
             throw error("JSON nested too deeply");
@@ -90,6 +124,11 @@ public final class JsonParser {
         }
     }
 
+    /**
+     * Consumes one of the keywords true, false or null.
+     *
+     * @param word the expected keyword
+     */
     private void literal(String word) {
         if (!s.startsWith(word, pos)) {
             throw error("Expected " + word);
@@ -97,6 +136,12 @@ public final class JsonParser {
         pos += word.length();
     }
 
+    /**
+     * Parses an object; the current character is the opening brace. A repeated name keeps the last value.
+     *
+     * @param depth nesting depth of the object itself
+     * @return the parsed object
+     */
     private JsonObject object(int depth) {
         JsonObject o = new JsonObject();
         pos++;
@@ -124,6 +169,12 @@ public final class JsonParser {
         }
     }
 
+    /**
+     * Parses an array; the current character is the opening bracket.
+     *
+     * @param depth nesting depth of the array itself
+     * @return the parsed array
+     */
     private JsonArray array(int depth) {
         JsonArray a = new JsonArray();
         pos++;
@@ -144,6 +195,11 @@ public final class JsonParser {
         }
     }
 
+    /**
+     * Consumes one expected character.
+     *
+     * @param c the character that must come next
+     */
     private void expect(char c) {
         if (pos >= s.length() || s.charAt(pos) != c) {
             throw error("Expected '" + c + "'");
@@ -151,6 +207,12 @@ public final class JsonParser {
         pos++;
     }
 
+    /**
+     * Parses a string literal; the current character is the opening quote. Decodes all JSON escapes; a
+     * surrogate pair written as two escape sequences is decoded one half at a time, which rebuilds the pair.
+     *
+     * @return the decoded string
+     */
     private String string() {
         pos++;
         StringBuilder sb = new StringBuilder();
@@ -199,6 +261,12 @@ public final class JsonParser {
         }
     }
 
+    /**
+     * Parses a number using the JSON grammar (optional minus, no leading zeros, optional fraction and
+     * exponent) and keeps its text in a {@link LazyNumber}.
+     *
+     * @return the number as a primitive
+     */
     private JsonPrimitive number() {
         int start = pos;
         if (s.charAt(pos) == '-') {
@@ -234,6 +302,7 @@ public final class JsonParser {
         return new JsonPrimitive(new LazyNumber(s.substring(start, pos)));
     }
 
+    /** Advances over a run of ASCII digits. */
     private void digits() {
         while (pos < s.length() && s.charAt(pos) >= '0' && s.charAt(pos) <= '9') {
             pos++;

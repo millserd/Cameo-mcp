@@ -20,10 +20,16 @@ import java.util.Map;
 /** Summaries of diagram presentation elements (symbols, paths) for inspection tools. */
 public final class PresentationJson {
 
+    /** Not instantiable; all members are static. */
     private PresentationJson() {
     }
 
-    /** {id, name, type, owner} of a diagram; an empty object for null. */
+    /**
+     * {id, name, type, owner} of a diagram; an empty object for null.
+     *
+     * @param dpe the diagram, may be null
+     * @return the summary
+     */
     public static JsonObject diagramSummary(DiagramPresentationElement dpe) {
         JsonObject json = new JsonObject();
         if (dpe == null) {
@@ -44,6 +50,10 @@ public final class PresentationJson {
     /**
      * One symbol/path: id, class name, model element (if any), bounds and child count. The element and
      * bounds reads are guarded separately because some presentation kinds throw for them.
+     *
+     * @param pe the symbol, may be null
+     * @param parentPresentationId the parent symbol's id, or null
+     * @return the summary; empty for null
      */
     public static JsonObject presentationSummary(PresentationElement pe, String parentPresentationId) {
         JsonObject json = new JsonObject();
@@ -86,7 +96,15 @@ public final class PresentationJson {
         return json;
     }
 
-    /** presentationSummary plus its serialized property manager and one level of child summaries. */
+    /**
+     * presentationSummary plus its serialized property manager and one level of child summaries.
+     *
+     * @param pe the symbol
+     * @param parentPresentationId the parent symbol's id, or null
+     * @param includeRaw true to add raw value details
+     * @param summaryOnly true to give only counts for collections and maps
+     * @return the summary with {@code propertyManager}, {@code children} and any {@code warnings}
+     */
     public static JsonObject presentationWithProperties(PresentationElement pe, String parentPresentationId,
                                                         boolean includeRaw, boolean summaryOnly) {
         JsonObject json = presentationSummary(pe, parentPresentationId);
@@ -112,6 +130,10 @@ public final class PresentationJson {
     /**
      * The presentation element's PropertyManager. Called reflectively: getPropertyManager() is not
      * documented in the 2026x OpenAPI (stubs/API-DIFFERENCES.md section 1).
+     *
+     * @param pe the presentation element
+     * @return its property manager, or null when the method returns something else
+     * @throws Exception when the method is missing or throws
      */
     public static PropertyManager propertyManager(Object pe) throws Exception {
         Object pm = Reflect.invoke(pe, "getPropertyManager");
@@ -121,12 +143,22 @@ public final class PresentationJson {
         return null;
     }
 
-    /** Re-layout a diagram; the API differs between 2024x and 2026x (see DiagramCompat). */
+    /**
+     * Re-layout a diagram; the API differs between 2024x and 2026x (see DiagramCompat).
+     *
+     * @param dpe the diagram
+     */
     public static void layout(DiagramPresentationElement dpe) {
         com.cameomcp.plugin.cameo.DiagramCompat.layout(dpe);
     }
 
-    /** Depth-first list of all presentation elements; fills child-id to parent-id when a map is given. */
+    /**
+     * Depth-first list of all presentation elements; fills child-id to parent-id when a map is given.
+     *
+     * @param dpe the diagram, may be null
+     * @param parentById receives child id to parent id, or null to skip
+     * @return every symbol, depth-first
+     */
     public static List<PresentationElement> flatten(DiagramPresentationElement dpe, Map<String, String> parentById) {
         List<PresentationElement> out = new ArrayList<>();
         if (dpe != null) {
@@ -135,7 +167,13 @@ public final class PresentationJson {
         return out;
     }
 
-    /** presentationSummary for each element, with the parent id looked up in parentById. */
+    /**
+     * presentationSummary for each element, with the parent id looked up in parentById.
+     *
+     * @param elements the symbols, may be null
+     * @param parentById child id to parent id, or null
+     * @return one summary per symbol
+     */
     public static JsonArray summarize(Collection<PresentationElement> elements, Map<String, String> parentById) {
         JsonArray array = new JsonArray();
         if (elements != null) {
@@ -146,7 +184,12 @@ public final class PresentationJson {
         return array;
     }
 
-    /** Count of presentation elements per implementation class simple name, in first-seen order. */
+    /**
+     * Count of presentation elements per implementation class simple name, in first-seen order.
+     *
+     * @param elements the symbols, may be null; null entries count as "null"
+     * @return class name to count
+     */
     public static JsonObject countByType(Collection<PresentationElement> elements) {
         JsonObject counts = new JsonObject();
         if (elements != null) {
@@ -162,7 +205,14 @@ public final class PresentationJson {
         return counts;
     }
 
-    // Top-level symbols (parentId null) get no entry in parentById.
+    /**
+     * Depth-first walk into a list. Top-level symbols (parentId null) get no entry in parentById.
+     *
+     * @param elements the symbols at this level, may be null
+     * @param sink receives the symbols
+     * @param parentById receives child id to parent id, or null
+     * @param parentId the parent of {@code elements}, or null at the top level
+     */
     private static void collect(List<PresentationElement> elements, List<PresentationElement> sink,
                                 Map<String, String> parentById, String parentId) {
         if (elements == null) {

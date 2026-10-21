@@ -14,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link Installer}: install, replace and uninstall in a fake Cameo folder, and refusal of folders
+ * that are not a Cameo install.
+ */
 class InstallerTest {
 
     @Test

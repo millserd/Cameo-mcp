@@ -22,20 +22,35 @@ import java.util.Locale;
  */
 public final class ImageTransform {
 
+    /** Not instantiable; all members are static. */
     private ImageTransform() {
     }
 
     /** Result of {@link #encode}. */
     public static final class Encoded {
+        /** The encoded image bytes. */
         public final byte[] bytes;
         /** "png" or "jpg" (the reference's naming). */
         public final String format;
+        /** MIME type of the bytes, for example "image/png". */
         public final String mimeType;
+        /** Width of the encoded image in pixels. */
         public final int width;
+        /** Height of the encoded image in pixels. */
         public final int height;
         /** Non-null when the requested format could not be honored. */
         public final String note;
 
+        /**
+         * Creates a result.
+         *
+         * @param bytes the encoded bytes
+         * @param format "png" or "jpg"
+         * @param mimeType the MIME type
+         * @param width the width in pixels
+         * @param height the height in pixels
+         * @param note why the requested format was not honored, or null
+         */
         Encoded(byte[] bytes, String format, String mimeType, int width, int height, String note) {
             this.bytes = bytes;
             this.format = format;
@@ -46,7 +61,13 @@ public final class ImageTransform {
         }
     }
 
-    /** Normalize a requested format to png, jpeg or webp; throws INVALID_PARAMS otherwise. */
+    /**
+     * Normalize a requested format to png, jpeg or webp; throws INVALID_PARAMS otherwise.
+     *
+     * @param format the requested format, may be null or blank for png; jpg is accepted as jpeg
+     * @return "png", "jpeg" or "webp"
+     * @throws ToolException INVALID_PARAMS for anything else
+     */
     public static String normalizeFormat(String format) {
         String f = format == null || format.trim().isEmpty() ? "png" : format.trim().toLowerCase(Locale.ROOT);
         if (f.equals("jpg")) {
@@ -61,6 +82,12 @@ public final class ImageTransform {
     /**
      * Target size that fits {@code width x height} into the bounds, keeping the aspect ratio and never
      * enlarging (Pillow {@code thumbnail} semantics). Null or non-positive bounds mean unbounded.
+     *
+     * @param width the source width
+     * @param height the source height
+     * @param maxWidth the width bound, or null
+     * @param maxHeight the height bound, or null
+     * @return {width, height} of the target, at least 1 by 1
      */
     public static int[] fitWithin(int width, int height, Integer maxWidth, Integer maxHeight) {
         int tw = maxWidth != null && maxWidth > 0 ? maxWidth : width;
@@ -74,7 +101,14 @@ public final class ImageTransform {
         return new int[]{Math.min(nw, tw), Math.min(nh, th)};
     }
 
-    /** High-quality downscale (progressive halving, then a final bicubic pass). */
+    /**
+     * High-quality downscale (progressive halving, then a final bicubic pass).
+     *
+     * @param src the source image
+     * @param targetWidth the new width
+     * @param targetHeight the new height
+     * @return the resized image, or src itself when the size already matches
+     */
     public static BufferedImage resize(BufferedImage src, int targetWidth, int targetHeight) {
         if (src.getWidth() == targetWidth && src.getHeight() == targetHeight) {
             return src;
@@ -96,7 +130,16 @@ public final class ImageTransform {
         return current;
     }
 
-    // Redraws src at w x h into a new image of the given type with quality rendering hints.
+    /**
+     * Redraws src at w by h into a new image of the given type, with quality rendering hints.
+     *
+     * @param src the source image
+     * @param w the new width
+     * @param h the new height
+     * @param type the BufferedImage type of the result
+     * @param interpolation the interpolation hint value
+     * @return the new image
+     */
     private static BufferedImage draw(BufferedImage src, int w, int h, int type, Object interpolation) {
         BufferedImage out = new BufferedImage(w, h, type);
         Graphics2D g = out.createGraphics();
@@ -112,7 +155,12 @@ public final class ImageTransform {
         return out;
     }
 
-    /** Copy onto an opaque white RGB canvas (JPEG has no alpha channel). */
+    /**
+     * Copy onto an opaque white RGB canvas (JPEG has no alpha channel).
+     *
+     * @param src the source image
+     * @return src itself when it is already opaque RGB, else a flattened copy
+     */
     public static BufferedImage flattenOnWhite(BufferedImage src) {
         if (src.getType() == BufferedImage.TYPE_INT_RGB || src.getType() == BufferedImage.TYPE_3BYTE_BGR) {
             return src;
@@ -129,7 +177,13 @@ public final class ImageTransform {
         return out;
     }
 
-    // Lossless PNG bytes of the image.
+    /**
+     * Encodes the image as lossless PNG.
+     *
+     * @param image the image
+     * @return the PNG bytes
+     * @throws IOException when no PNG writer is available or writing fails
+     */
     public static byte[] png(BufferedImage image) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (!ImageIO.write(image, "png", out)) {
@@ -138,7 +192,15 @@ public final class ImageTransform {
         return out.toByteArray();
     }
 
-    // JPEG bytes at quality 1-100 (mapped to ImageIO's 0.01-1.0 compression quality); alpha is flattened first.
+    /**
+     * Encodes the image as JPEG at quality 1 to 100, mapped to ImageIO's 0.01 to 1.0 compression quality.
+     * Alpha is flattened onto white first.
+     *
+     * @param image the image
+     * @param quality the quality, 1 to 100
+     * @return the JPEG bytes
+     * @throws IOException when no JPEG writer is available or writing fails
+     */
     public static byte[] jpeg(BufferedImage image, int quality) throws IOException {
         BufferedImage rgb = flattenOnWhite(image);
         Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
@@ -162,6 +224,14 @@ public final class ImageTransform {
     /**
      * Resize (when bounds are given) and encode. {@code format} is a value from {@link #normalizeFormat};
      * webp is not available in ImageIO, so it is encoded as PNG and a note says so.
+     *
+     * @param image the source image
+     * @param format a value from {@link #normalizeFormat}
+     * @param maxWidth the width bound, or null
+     * @param maxHeight the height bound, or null
+     * @param quality the JPEG quality, 1 to 100
+     * @return the encoded image
+     * @throws IOException when encoding fails
      */
     public static Encoded encode(BufferedImage image, String format, Integer maxWidth, Integer maxHeight, int quality)
             throws IOException {

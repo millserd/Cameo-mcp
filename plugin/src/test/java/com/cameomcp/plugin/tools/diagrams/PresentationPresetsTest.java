@@ -11,6 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link PresentationPresets}: inverted suppress properties, trigger selection, key fallback,
+ * diagram-type repair defaults and preset maps.
+ */
 class PresentationPresetsTest {
 
     @Test

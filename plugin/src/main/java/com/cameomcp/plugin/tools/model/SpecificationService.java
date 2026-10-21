@@ -49,14 +49,23 @@ final class SpecificationService {
             "aggregation", "direction", "isBehavior", "isConjugated", "isService", "represents", "parameter", "type"
     };
 
+    /** Not instantiable; all members are static. */
     private SpecificationService() {
     }
 
     // ------------------------------------------------------------------ read
 
-    /*
-     * cameo_get_specification: standard UML properties, documentation, every applied stereotype with
-     * its tagged values, and named owned constraints - roughly what Cameo's Specification window shows.
+    /**
+     * Implements cameo_get_specification: standard UML properties, documentation, every applied stereotype
+     * with its tagged values, and named owned constraints. This is roughly what Cameo's Specification window
+     * shows.
+     *
+     * @param a the tool arguments: {@code element_id}
+     * @return {@code elementId}, {@code name}, {@code type}, {@code properties}, and {@code documentation},
+     * {@code appliedStereotypes} and {@code constraints} when present
+     *
+     * @throws ToolException NOT_FOUND for a missing element, NO_PROJECT when no project is open
+     * @throws Exception any failure while handing the work to the EDT
      */
     static JsonObject get(Args a) throws Exception {
         String id = a.reqStr("element_id");
@@ -85,7 +94,13 @@ final class SpecificationService {
         });
     }
 
-    // Reads each standard feature through JMI reflection; features the metaclass lacks throw and are skipped.
+    /**
+     * Reads each standard feature through JMI reflection ({@code refGetValue}). Features the metaclass lacks
+     * throw and are skipped, so one list works for every metaclass.
+     *
+     * @param element the element
+     * @return feature name to JSON value, for the non-null features
+     */
     private static JsonObject standardProperties(Element element) {
         JsonObject props = new JsonObject();
         for (String feature : STANDARD_FEATURES) {
@@ -126,7 +141,13 @@ final class SpecificationService {
         return props;
     }
 
-    // Feature value to JSON: elements become {id, name}, collections become arrays, enums their name.
+    /**
+     * Adds a feature value as JSON: elements become {id, name}, collections become arrays, enums their name.
+     *
+     * @param target the object to add to
+     * @param name the feature name
+     * @param value the non-null value
+     */
     private static void addValue(JsonObject target, String name, Object value) {
         if (value instanceof Boolean) {
             target.addProperty(name, (Boolean) value);
@@ -153,7 +174,12 @@ final class SpecificationService {
         }
     }
 
-    // Applied stereotypes with their profile and non-empty tag values.
+    /**
+     * Lists the applied stereotypes with their profile and non-empty tag values.
+     *
+     * @param element the element
+     * @return one object per stereotype; empty when there are none or Cameo throws
+     */
     @SuppressWarnings("rawtypes")
     private static JsonArray appliedStereotypes(Element element) {
         JsonArray result = new JsonArray();
@@ -208,7 +234,12 @@ final class SpecificationService {
         return result;
     }
 
-    // Named constraints owned by the element, as name -> body text.
+    /**
+     * Named constraints owned by the element, as name to body text. Unnamed constraints are skipped.
+     *
+     * @param element the element
+     * @return the constraints; empty when there are none or Cameo throws
+     */
     private static JsonObject ownedConstraints(Element element) {
         JsonObject out = new JsonObject();
         try {
@@ -231,7 +262,12 @@ final class SpecificationService {
         return out;
     }
 
-    /** A constraint's text: the literal string, the first opaque body, or the spec's "value". Null if none. */
+    /**
+     * A constraint's text: the literal string, the first opaque body, or the spec's "value". Null if none.
+     *
+     * @param c the constraint
+     * @return the text, or null when there is no specification or it cannot be read
+     */
     static String constraintBody(Constraint c) {
         try {
             ValueSpecification spec = c.getSpecification();
@@ -258,10 +294,24 @@ final class SpecificationService {
 
     // ------------------------------------------------------------------ write
 
-    /*
-     * cameo_set_specification: each property name is first matched against the tags of the applied
-     * stereotypes, then against the standard UML features. Unknown names are reported back rather
-     * than failing, so one typo doesn't undo the other changes; invalid values do fail the call.
+    /**
+     * Implements cameo_set_specification. Each property name is first matched against the tags of the applied
+     * stereotypes, then against the standard UML features. Unknown names are reported back rather than
+     * failing, so one typo does not undo the other changes; invalid values do fail the call. Constraints are
+     * set or created by name.
+     *
+     * @param a the tool arguments: {@code element_id}, and {@code properties} and/or {@code constraints}
+     *     (name to
+     * value)
+     *
+     * @return {@code updated}, {@code setCount}, {@code setProperties}, and {@code setConstraints},
+     * {@code unrecognized} with a {@code hint}, and {@code failed} when they apply, plus the full {@code
+     * element}
+     *
+     * @throws ToolException INVALID_PARAMS when both maps are empty or a value is invalid, NOT_FOUND or
+     * PRECONDITION_FAILED for a missing or read-only element
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
      */
     static JsonObject set(Args a) throws Exception {
         String id = a.reqStr("element_id");
@@ -344,7 +394,14 @@ final class SpecificationService {
         });
     }
 
-    // Value as text; JSON null is rejected.
+    /**
+     * Reads a value as text; JSON null is rejected.
+     *
+     * @param value the value
+     * @param name the property name, for the error message
+     * @return the string value, or the JSON text of an object or array
+     * @throws ToolException INVALID_PARAMS for null or JSON null
+     */
     private static String text(JsonElement value, String name) {
         if (value == null || value.isJsonNull()) {
             throw ToolException.invalid(name + " needs a value.");
@@ -352,7 +409,14 @@ final class SpecificationService {
         return value.isJsonPrimitive() ? value.getAsString() : value.toString();
     }
 
-    // Strict boolean: true/false or their strings only.
+    /**
+     * Reads a strict boolean: true or false, as JSON booleans or strings ignoring case.
+     *
+     * @param value the value
+     * @param name the property name, for the error message
+     * @return the boolean
+     * @throws ToolException INVALID_PARAMS for anything else
+     */
     private static boolean bool(JsonElement value, String name) {
         if (value != null && value.isJsonPrimitive()) {
             JsonPrimitive p = value.getAsJsonPrimitive();
@@ -367,9 +431,17 @@ final class SpecificationService {
         throw ToolException.invalid(name + " must be true or false.");
     }
 
-    /*
-     * Sets one standard UML feature with the metaclass check and conversion it needs. Returns false
-     * when the feature doesn't apply to this element, so the caller can report it as unrecognized.
+    /**
+     * Sets one standard UML feature with the metaclass check and conversion it needs.
+     *
+     * @param element the element to change
+     * @param name the feature name, one of {@code STANDARD_FEATURES}
+     * @param value the new value
+     * @param project the open project, for new literals and type lookups
+     * @return false when the feature does not apply to this element, so the caller can report it as
+     *     unrecognized
+     * @throws ToolException INVALID_PARAMS for a value of the wrong form
+     * @throws Exception any other Cameo failure, which the caller reports in {@code failed}
      */
     private static boolean setStandard(Element element, String name, JsonElement value, Project project)
             throws Exception {
@@ -518,7 +590,16 @@ final class SpecificationService {
         return value;
     }
 
-    // type takes an id, {"id": ...} or null (clears the type).
+    /**
+     * Sets the type of a typed element. The value is an id, an {"id": ...} object, or null to clear the type.
+     *
+     * @param element the element
+     * @param value the type reference, or null or JSON null
+     * @param project the open project
+     * @return false when the element is not a TypedElement
+     * @throws ToolException INVALID_PARAMS for a bad value or a non-Type element, NOT_FOUND for a missing
+     *     type
+     */
     private static boolean setType(Element element, JsonElement value, Project project) {
         if (!(element instanceof TypedElement)) {
             return false;
@@ -541,7 +622,13 @@ final class SpecificationService {
         return true;
     }
 
-    // Canonical direction keyword to Cameo's enum.
+    /**
+     * Converts a direction keyword to Cameo's enum.
+     *
+     * @param text the keyword, see {@link ModelText#parameterDirection}
+     * @return the enum value
+     * @throws ToolException INVALID_PARAMS for an unknown keyword
+     */
     private static ParameterDirectionKind parameterDirection(String text) {
         switch (ModelText.parameterDirection(text)) {
             case "in":
@@ -555,7 +642,15 @@ final class SpecificationService {
         }
     }
 
-    // Updates the body of the owned constraint with that name, or creates one.
+    /**
+     * Updates the body of the owned constraint with that name, ignoring case, or creates one.
+     *
+     * @param project the open project
+     * @param owner the constrained element
+     * @param name the constraint name
+     * @param text the new body
+     * @throws Exception any Cameo failure while adding a new constraint
+     */
     private static void setOrCreateConstraint(Project project, Element owner, String name, String text)
             throws Exception {
         for (Element child : owner.getOwnedElement()) {
@@ -570,7 +665,15 @@ final class SpecificationService {
         ModelElementsManager.getInstance().addElement(c, owner);
     }
 
-    // Rewrites the constraint text in whatever spec form it already has; new constraints get an OpaqueExpression.
+    /**
+     * Rewrites the constraint text in whatever specification form it already has. A new or other
+     * specification
+     * becomes an OpaqueExpression.
+     *
+     * @param project the open project, for a new specification
+     * @param c the constraint
+     * @param text the new body
+     */
     private static void setConstraintText(Project project, Constraint c, String text) {
         ValueSpecification existing = c.getSpecification();
         if (existing instanceof OpaqueExpression) {

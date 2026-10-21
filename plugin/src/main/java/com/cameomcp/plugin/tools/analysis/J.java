@@ -21,15 +21,25 @@ import java.util.regex.Pattern;
  */
 public final class J {
 
-    // Unicode-aware so non-breaking and other Unicode spaces collapse like Python's str.split().
+    /**
+     * Whitespace run. Unicode-aware so non-breaking and other Unicode spaces collapse like Python's
+     * str.split().
+     */
     private static final Pattern WS = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
 
+    /** Static helpers only. */
     private J() {
     }
 
     // ------------------------------------------------------------------ builders
 
-    /** Ordered map from key/value pairs. */
+    /**
+     * Ordered map from key/value pairs.
+     *
+     * @param kv alternating keys (strings) and values
+     * @return a new insertion-ordered map
+     * @throws IllegalArgumentException for an odd number of arguments
+     */
     public static Map<String, Object> obj(Object... kv) {
         if (kv.length % 2 != 0) {
             throw new IllegalArgumentException("obj() needs key/value pairs");
@@ -41,49 +51,95 @@ public final class J {
         return m;
     }
 
-    /** Mutable list of the given values (Python list literal). */
+    /**
+     * Mutable list of the given values (Python list literal).
+     *
+     * @param values the elements
+     * @return a new list
+     */
     public static List<Object> arr(Object... values) {
         List<Object> l = new ArrayList<>(values.length);
         Collections.addAll(l, values);
         return l;
     }
 
-    /** One verification check entry in the {@code {name, ok, details}} shape used by check reports. */
+    /**
+     * One verification check entry in the {@code {name, ok, details}} shape used by check reports.
+     *
+     * @param name check name
+     * @param ok whether the check passed
+     * @param details supporting data, or null
+     * @return a new check map
+     */
     public static Map<String, Object> check(String name, boolean ok, Object details) {
         return obj("name", name, "ok", ok, "details", details);
     }
 
     // ------------------------------------------------------------------ access
 
+    /**
+     * True for any map value (a JSON object).
+     *
+     * @param o any value
+     * @return whether o is a Map
+     */
     public static boolean isMap(Object o) {
         return o instanceof Map;
     }
 
-    /** The value cast to a JSON object map, or null when it is not a map. */
+    /**
+     * The value cast to a JSON object map, or null when it is not a map.
+     *
+     * @param o any value
+     * @return o as a map (not copied), or null
+     */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> map(Object o) {
         return o instanceof Map ? (Map<String, Object>) o : null;
     }
 
-    /** The value as a map, or a new empty map. */
+    /**
+     * The value as a map, or a new empty map.
+     *
+     * @param o any value
+     * @return o itself when it is a map, otherwise a new empty map
+     */
     public static Map<String, Object> mapOrEmpty(Object o) {
         Map<String, Object> m = map(o);
         return m == null ? new LinkedHashMap<>() : m;
     }
 
-    /** Shallow copy of a map (Python {@code dict(x)}); null becomes an empty map. */
+    /**
+     * Shallow copy of a map (Python {@code dict(x)}); null becomes an empty map.
+     *
+     * @param o any value
+     * @return a new map with the same entries
+     */
     public static Map<String, Object> copy(Object o) {
         Map<String, Object> m = map(o);
         return m == null ? new LinkedHashMap<>() : new LinkedHashMap<>(m);
     }
 
-    /** Null-safe {@code m.get(key)}: null when {@code m} is not a map. */
+    /**
+     * Null-safe {@code m.get(key)}: null when {@code m} is not a map.
+     *
+     * @param m a map, or any other value
+     * @param key the key
+     * @return the value, or null
+     */
     public static Object get(Object m, String key) {
         Map<String, Object> map = map(m);
         return map == null ? null : map.get(key);
     }
 
-    /** Elements of a list-like value ({@code value or ()}); anything else is empty. */
+    /**
+     * Elements of a list-like value ({@code value or ()}); anything else is empty.
+     *
+     * <p>A List is returned as is, not copied. Other collections and arrays are copied.
+     *
+     * @param o any value
+     * @return the elements; empty for null and non-collection values
+     */
     @SuppressWarnings("unchecked")
     public static List<Object> list(Object o) {
         if (o instanceof List) {
@@ -101,7 +157,12 @@ public final class J {
         return new ArrayList<>();
     }
 
-    /** Map entries of a list-like value, skipping non-map entries. */
+    /**
+     * Map entries of a list-like value, skipping non-map entries.
+     *
+     * @param o any value
+     * @return a new list of the map items
+     */
     public static List<Map<String, Object>> maps(Object o) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Object item : list(o)) {
@@ -118,6 +179,9 @@ public final class J {
     /**
      * Python truthiness: null, false, zero, empty strings and empty collections/maps are false;
      * any other object is true.
+     *
+     * @param o any value
+     * @return the truthiness of o
      */
     public static boolean truthy(Object o) {
         if (o == null) {
@@ -141,7 +205,12 @@ public final class J {
         return true;
     }
 
-    /** Python {@code a or b or c}: the first truthy value, else the last value. */
+    /**
+     * Python {@code a or b or c}: the first truthy value, else the last value.
+     *
+     * @param values candidates, in order
+     * @return the first truthy value, the last value when none is truthy, or null when there are none
+     */
     public static Object or(Object... values) {
         Object last = null;
         for (Object v : values) {
@@ -153,7 +222,13 @@ public final class J {
         return last;
     }
 
-    /** First truthy value of the given keys, else null. */
+    /**
+     * First truthy value of the given keys, else null.
+     *
+     * @param m a map, or null
+     * @param keys keys to try, in order
+     * @return the first truthy value, or null when m is null or none is truthy
+     */
     public static Object firstOf(Map<String, Object> m, String... keys) {
         if (m == null) {
             return null;
@@ -169,7 +244,14 @@ public final class J {
 
     // ------------------------------------------------------------------ text
 
-    /** Python {@code str(value)}. */
+    /**
+     * Python {@code str(value)}.
+     *
+     * <p>Null gives "None", booleans "True" or "False", maps and collections their {@link #repr}.
+     *
+     * @param o any value
+     * @return the string form
+     */
     public static String str(Object o) {
         if (o == null) {
             return "None";
@@ -186,12 +268,22 @@ public final class J {
         return String.valueOf(o);
     }
 
-    /** Python {@code str(value or "")}. */
+    /**
+     * Python {@code str(value or "")}.
+     *
+     * @param o any value
+     * @return {@link #str} of a truthy value, else ""
+     */
     public static String text(Object o) {
         return truthy(o) ? str(o) : "";
     }
 
-    /** Python {@code " ".join(str(value or "").split())}. */
+    /**
+     * Python {@code " ".join(str(value or "").split())}.
+     *
+     * @param o any value
+     * @return the text with whitespace runs collapsed to single spaces and trimmed
+     */
     public static String normalizedText(Object o) {
         String s = text(o).trim();
         if (s.isEmpty()) {
@@ -200,21 +292,43 @@ public final class J {
         return WS.matcher(s).replaceAll(" ").trim();
     }
 
-    /** Whitespace-normalized, lower-cased text, used as a case-insensitive comparison key. */
+    /**
+     * Whitespace-normalized, lower-cased text, used as a case-insensitive comparison key.
+     *
+     * @param o any value
+     * @return the comparison key
+     */
     public static String normalizedKey(Object o) {
         return lower(normalizedText(o));
     }
 
-    /** Locale-independent lower-casing (avoids e.g. the Turkish dotless i); null-safe. */
+    /**
+     * Locale-independent lower-casing (avoids e.g. the Turkish dotless i); null-safe.
+     *
+     * @param s a string, or null
+     * @return s in lower case, or null
+     */
     public static String lower(String s) {
         return s == null ? null : s.toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * True for null, empty or whitespace-only strings.
+     *
+     * @param s a string, or null
+     * @return whether s is blank
+     */
     public static boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
     }
 
-    /** Python {@code str.strip(chars)}. */
+    /**
+     * Python {@code str.strip(chars)}.
+     *
+     * @param s a non-null string
+     * @param chars the characters to remove from both ends
+     * @return the stripped string
+     */
     public static String strip(String s, String chars) {
         int start = 0;
         int end = s.length();
@@ -227,7 +341,12 @@ public final class J {
         return s.substring(start, end);
     }
 
-    /** Python repr for JSON-shaped values (used in human-readable messages). */
+    /**
+     * Python repr for JSON-shaped values (used in human-readable messages).
+     *
+     * @param o any value
+     * @return the Python-style representation
+     */
     public static String repr(Object o) {
         if (o == null) {
             return "None";
@@ -272,7 +391,15 @@ public final class J {
 
     // ------------------------------------------------------------------ numbers
 
-    /** Python {@code int(value)} or null when it would raise. */
+    /**
+     * Python {@code int(value)} or null when it would raise.
+     *
+     * <p>Booleans give 0 or 1; finite numbers are truncated toward zero; strings must be whole integers
+     * (digit-group underscores allowed) within int range.
+     *
+     * @param o any value
+     * @return the integer, or null when the conversion would fail
+     */
     public static Integer safeInt(Object o) {
         if (o == null) {
             return null;
@@ -303,7 +430,13 @@ public final class J {
         return null;
     }
 
-    /** Lenient numeric conversion: numbers, booleans and numeric strings; anything else yields {@code dflt}. */
+    /**
+     * Lenient numeric conversion: numbers, booleans and numeric strings; anything else yields {@code dflt}.
+     *
+     * @param o any value
+     * @param dflt value returned when o cannot be converted
+     * @return the number
+     */
     public static double toDouble(Object o, double dflt) {
         if (o instanceof Number) {
             return ((Number) o).doubleValue();
@@ -321,7 +454,13 @@ public final class J {
         return dflt;
     }
 
-    /** Python {@code round(value, digits)} (half-to-even on the exact binary value). */
+    /**
+     * Python {@code round(value, digits)} (half-to-even on the exact binary value).
+     *
+     * @param value the number
+     * @param digits decimal places to keep
+     * @return the rounded value; NaN and infinities unchanged
+     */
     public static double round(double value, int digits) {
         if (Double.isNaN(value) || Double.isInfinite(value)) {
             return value;
@@ -330,7 +469,13 @@ public final class J {
         return new BigDecimal(value).setScale(digits, RoundingMode.HALF_EVEN).doubleValue();
     }
 
-    /** Python {@code ==} for JSON values: numbers compare by value, containers deeply. */
+    /**
+     * Python {@code ==} for JSON values: numbers compare by value, containers deeply.
+     *
+     * @param a first value
+     * @param b second value
+     * @return whether the values are equal in the Python sense
+     */
     public static boolean pyEquals(Object a, Object b) {
         if (a == b) {
             return true;
@@ -375,14 +520,24 @@ public final class J {
 
     // ------------------------------------------------------------------ collections
 
-    /** Natural-order sorted copy; duplicates and empty strings are kept. */
+    /**
+     * Natural-order sorted copy; duplicates and empty strings are kept.
+     *
+     * @param values strings, without nulls
+     * @return a new sorted list
+     */
     public static List<String> sorted(Collection<String> values) {
         List<String> out = new ArrayList<>(values);
         Collections.sort(out);
         return out;
     }
 
-    /** Sorted, de-duplicated, non-empty strings. */
+    /**
+     * Sorted, de-duplicated, non-empty strings.
+     *
+     * @param values strings, possibly null
+     * @return a new sorted list without nulls, empty strings or duplicates
+     */
     public static List<String> sortedNonEmpty(Collection<String> values) {
         Set<String> set = new TreeSet<>();
         for (String v : values) {
@@ -393,7 +548,12 @@ public final class J {
         return new ArrayList<>(set);
     }
 
-    /** Python {@code sorted(item for item in values if item)}: keeps duplicates. */
+    /**
+     * Python {@code sorted(item for item in values if item)}: keeps duplicates.
+     *
+     * @param values strings, possibly null
+     * @return a new sorted list without nulls or empty strings
+     */
     public static List<String> sortedNonEmptyList(Collection<String> values) {
         List<String> out = new ArrayList<>();
         for (String v : values) {
@@ -405,7 +565,12 @@ public final class J {
         return out;
     }
 
-    /** String list from a list-like parameter value ({@code [str(item) for item in value or ()]}). */
+    /**
+     * String list from a list-like parameter value ({@code [str(item) for item in value or ()]}).
+     *
+     * @param o a list-like value or a single string
+     * @return a new list of {@link #str} forms; a bare string becomes a one-item list
+     */
     public static List<String> strings(Object o) {
         List<String> out = new ArrayList<>();
         // Unlike Python, a bare string is treated as a single item rather than iterated character by character.

@@ -35,21 +35,42 @@ import java.util.List;
  */
 final class StateMachineService {
 
+    /** Not instantiable; all members are static. */
     private StateMachineService() {
     }
 
     // ------------------------------------------------------------------ triggers
 
-    // cameo_get_transition_triggers: the transition's triggers with their events.
+    /**
+     * Implements cameo_get_transition_triggers: the transition's triggers with their events.
+     *
+     * @param a the tool arguments: {@code transition_id}
+     * @return the payload from {@link #triggersPayload}
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS when the id is not a transition, NOT_FOUND when it does not
+     *     resolve
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject getTriggers(Args a) throws Exception {
         String id = a.reqStr("transition_id");
         return Edt.read(project -> triggersPayload(
                 ModelSupport.typed(project, id, "transition_id", Transition.class, "a Transition")));
     }
 
-    /*
-     * cameo_set_transition_trigger: adds a change trigger (expression) or signal trigger (signal_id).
-     * With replace=true (default) the existing triggers are removed first.
+    /**
+     * Implements cameo_set_transition_trigger: adds a change trigger (expression) or signal trigger
+     * (signal_id). With replace=true (the default) the existing triggers are removed first. The new event is
+     * owned by the nearest package above the state machine, see {@link #eventOwner}.
+     *
+     * @param a the tool arguments: {@code transition_id}, {@code trigger_kind}, {@code expression} or
+     * {@code signal_id}, {@code name} and {@code replace}
+     *
+     * @return the transition's triggers after the change, see {@link #triggersPayload}
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS for a bad kind, missing expression or signal, or wrong
+     *     element
+     *     kinds;
+     * NOT_FOUND or PRECONDITION_FAILED for missing or read-only elements
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
      */
     static JsonObject setTrigger(Args a) throws Exception {
         String id = a.reqStr("transition_id");
@@ -122,7 +143,12 @@ final class StateMachineService {
         return sm != null ? sm : project.getPrimaryModel();
     }
 
-    /** The transition id and its triggers. */
+    /**
+     * The transition id and its triggers.
+     *
+     * @param transition the transition
+     * @return {@code transitionId}, {@code triggerCount} and {@code triggers}
+     */
     static JsonObject triggersPayload(Transition transition) {
         JsonArray triggers = new JsonArray();
         Collection<Trigger> list = transition.getTrigger();
@@ -138,7 +164,12 @@ final class StateMachineService {
         return out;
     }
 
-    // One trigger: its event type, and the signal or change expression behind it.
+    /**
+     * One trigger as JSON: its event type, and the signal or change expression behind it.
+     *
+     * @param t the trigger
+     * @return the trigger JSON; event fields are null when the trigger has no event
+     */
     private static JsonObject trigger(Trigger t) {
         JsonObject o = new JsonObject();
         o.addProperty("id", t.getID());
@@ -163,7 +194,12 @@ final class StateMachineService {
         return o;
     }
 
-    /** The text of a value specification: literal string, first opaque body, or its "value" feature. */
+    /**
+     * The text of a value specification: literal string, first opaque body, or its "value" feature.
+     *
+     * @param v the value specification, may be null
+     * @return the text, or null when there is none
+     */
     static String valueText(ValueSpecification v) {
         if (v == null) {
             return null;
@@ -185,15 +221,34 @@ final class StateMachineService {
 
     // ------------------------------------------------------------------ state behaviors
 
-    // cameo_get_state_behaviors: the state's entry, do and exit behaviors.
+    /**
+     * Implements cameo_get_state_behaviors: the state's entry, do and exit behaviors.
+     *
+     * @param a the tool arguments: {@code state_id}
+     * @return the payload from {@link #behaviorsPayload}
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS when the id is not a state, NOT_FOUND when it does not
+     *     resolve
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject getBehaviors(Args a) throws Exception {
         String id = a.reqStr("state_id");
         return Edt.read(project -> behaviorsPayload(ModelSupport.typed(project, id, "state_id", State.class, "a State")));
     }
 
-    /*
-     * cameo_set_state_behaviors: sets entry/do/exit as OpaqueBehaviors with body text and language.
-     * Omitted slots are kept (or cleared with clear_unspecified); blank text clears a slot.
+    /**
+     * Implements cameo_set_state_behaviors: sets entry, do and exit as OpaqueBehaviors with body text and
+     * language. Omitted slots are kept (or cleared with clear_unspecified); blank text clears a slot.
+     *
+     * @param a the tool arguments: {@code state_id}, {@code entry}, {@code do_activity}, {@code
+     *     exit_behavior},
+     * {@code language} (default Opaque) and {@code clear_unspecified}
+     *
+     * @return the state's behaviors after the change, see {@link #behaviorsPayload}
+     * @throws com.cameomcp.mcp.ToolException INVALID_PARAMS for a blank language or a non-state id, NOT_FOUND or
+     *     PRECONDITION_FAILED
+     * for a missing or read-only state
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
      */
     static JsonObject setBehaviors(Args a) throws Exception {
         String id = a.reqStr("state_id");
@@ -212,7 +267,13 @@ final class StateMachineService {
         });
     }
 
-    // The behavior currently in a slot (entry, doActivity, exit).
+    /**
+     * The behavior currently in a slot.
+     *
+     * @param s the state
+     * @param slot "entry", "doActivity" or anything else for exit
+     * @return the behavior, or null when the slot is empty
+     */
     private static Behavior current(State s, String slot) {
         switch (slot) {
             case "entry":
@@ -224,7 +285,13 @@ final class StateMachineService {
         }
     }
 
-    // Puts a behavior (or null) into a slot.
+    /**
+     * Puts a behavior, or null, into a slot.
+     *
+     * @param s the state
+     * @param slot "entry", "doActivity" or anything else for exit
+     * @param b the behavior, or null to clear the slot
+     */
     private static void assign(State s, String slot, Behavior b) {
         switch (slot) {
             case "entry":
@@ -239,7 +306,19 @@ final class StateMachineService {
         }
     }
 
-    // Applies one slot's rule; an existing OpaqueBehavior is rewritten in place so references to it stay valid.
+    /**
+     * Applies one slot's rule from {@link ModelText#slotAction}. An existing OpaqueBehavior is rewritten in
+     * place so references to it stay valid; otherwise a new one named "State slot" is created under the
+     * state.
+     *
+     * @param project the open project
+     * @param state the state
+     * @param slot "entry", "doActivity" or "exit"
+     * @param body the new body, or null when omitted
+     * @param language the body language
+     * @param clearUnspecified true to clear the slot when body is null
+     * @throws Exception any Cameo failure while adding a new behavior
+     */
     private static void apply(Project project, State state, String slot, String body, String language,
                               boolean clearUnspecified) throws Exception {
         switch (ModelText.slotAction(body, clearUnspecified)) {
@@ -268,7 +347,14 @@ final class StateMachineService {
         assign(state, slot, behavior);
     }
 
-    /** The state id plus each slot's behavior (null when empty). */
+    /**
+     * The state id plus each slot's behavior (null when empty).
+     *
+     * @param state the state
+     * @return {@code stateId}, {@code stateName}, and {@code entry}, {@code doActivity} and {@code exit}
+     *     (JSON null when
+     * empty)
+     */
     static JsonObject behaviorsPayload(State state) {
         JsonObject out = new JsonObject();
         out.addProperty("stateId", state.getID());
@@ -279,7 +365,12 @@ final class StateMachineService {
         return out;
     }
 
-    // One behavior as {id, name, body, language, humanType}.
+    /**
+     * One behavior as {id, name, body, language, humanType}.
+     *
+     * @param b the behavior, or null
+     * @return the JSON, or JSON null when b is null
+     */
     private static com.cameomcp.json.tree.JsonElement behavior(Behavior b) {
         if (b == null) {
             return JsonNull.INSTANCE;

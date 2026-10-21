@@ -12,10 +12,15 @@ import java.util.Map;
  */
 public final class CameoInfo {
 
+    /** Static methods only. */
     private CameoInfo() {
     }
 
-    /** True when a project is open. Never throws, so status checks work even outside Cameo. */
+    /**
+     * True when a project is open. Never throws, so status checks work even outside Cameo.
+     *
+     * @return whether Cameo has an active project
+     */
     public static boolean hasProject() {
         try {
             return Application.getInstance().getProject() != null;
@@ -27,6 +32,8 @@ public final class CameoInfo {
     /**
      * Product name, version, install folder and open project (name, file, dirty, remote).
      * Keys whose value is unknown are left out rather than set to null, except {@code project}.
+     *
+     * @return a new map with installRoot, product, version (when known) and project (null when none is open)
      */
     public static Map<String, Object> describe() {
         Map<String, Object> m = Json.obj();
@@ -64,14 +71,25 @@ public final class CameoInfo {
         return m;
     }
 
-    // Adds the entry only when there is a value.
+    /**
+     * Adds the entry only when there is a value.
+     *
+     * @param m the map to fill
+     * @param key entry name
+     * @param value the value; null or empty values are skipped
+     */
     private static void put(Map<String, Object> m, String key, String value) {
         if (value != null && !value.isEmpty()) {
             m.put(key, value);
         }
     }
 
-    // The first non-blank system property among the names, or null.
+    /**
+     * Finds the first non-blank system property among the names.
+     *
+     * @param names property names, in order of preference
+     * @return the trimmed value, or null
+     */
     private static String firstProperty(String... names) {
         for (String n : names) {
             String v = System.getProperty(n);

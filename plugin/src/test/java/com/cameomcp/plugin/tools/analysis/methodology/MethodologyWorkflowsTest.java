@@ -24,6 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link MethodologyWorkflows}: artifact comparison and patch plans, package validation,
+ * expected-artifact derivation, dry-run export and deck plans, and the live variants that write images, PDF
+ * and PPTX through a fake bridge.
+ */
 class MethodologyWorkflowsTest {
 
     @SuppressWarnings("unchecked")

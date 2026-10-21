@@ -19,6 +19,7 @@ import java.util.Map;
  */
 public final class Json {
 
+    /** Static methods only. */
     private Json() {
     }
 
@@ -28,6 +29,8 @@ public final class Json {
      * Parses one JSON value. Leading and trailing whitespace (and a byte-order mark) is allowed;
      * anything else after the value is an error.
      *
+     * @param text the JSON text
+     * @return a Map, List, String, Long, Double, BigDecimal, Boolean, or null for JSON null
      * @throws JsonException with the character offset of the problem
      */
     public static Object parse(String text) {
@@ -44,7 +47,13 @@ public final class Json {
         return value;
     }
 
-    /** Parses text that must be a JSON object, such as a request body or a settings file. */
+    /**
+     * Parses text that must be a JSON object, such as a request body or a settings file.
+     *
+     * @param text the JSON text
+     * @return the parsed object as an insertion-ordered map
+     * @throws JsonException if the text is not valid JSON or its top-level value is not an object
+     */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parseObject(String text) {
         Object v = parse(text);
@@ -54,23 +63,42 @@ public final class Json {
         return (Map<String, Object>) v;
     }
 
-    // Recursive-descent parser over the input string; "i" is the read position.
+    /** Recursive-descent parser over the input string. Not thread-safe; one instance per parse. */
     private static final class Parser {
+        /** The input text. */
         private final String s;
+        /** Read position: index of the next character to examine. */
         private int i;
 
+        /**
+         * Creates a parser at offset 0.
+         *
+         * @param s the text to parse
+         */
         Parser(String s) {
             this.s = s;
         }
 
+        /**
+         * Returns true once every character has been consumed.
+         *
+         * @return true once every character has been consumed
+         */
         boolean atEnd() {
             return i >= s.length();
         }
 
+        /**
+         * Builds a parse error for the current position.
+         *
+         * @param msg what went wrong
+         * @return an exception whose message also gives the current offset
+         */
         JsonException error(String msg) {
             return new JsonException(msg + " at offset " + i);
         }
 
+        /** Skips JSON whitespace and any byte-order mark. */
         void skipWs() {
             while (i < s.length()) {
                 char c = s.charAt(i);
@@ -83,6 +111,13 @@ public final class Json {
             }
         }
 
+        /**
+         * Reads the value starting at the current position. Unlike the tree package's {@code JsonParser},
+         * there is no nesting-depth cap; inputs here are local requests and settings files.
+         *
+         * @return the parsed value (null for JSON null)
+         * @throws JsonException on malformed input
+         */
         Object readValue() {
             if (atEnd()) {
                 throw error("Unexpected end of input");
@@ -112,7 +147,11 @@ public final class Json {
             }
         }
 
-        // Consumes a literal keyword (true, false, null) or fails.
+        /**
+         * Consumes a literal keyword (true, false, null) or fails.
+         *
+         * @param word the keyword expected at the current position
+         */
         void expect(String word) {
             if (!s.startsWith(word, i)) {
                 throw error("Expected '" + word + "'");
@@ -120,6 +159,11 @@ public final class Json {
             i += word.length();
         }
 
+        /**
+         * Reads an object; the current character is the opening brace. A repeated key keeps the last value.
+         *
+         * @return the members in document order
+         */
         Map<String, Object> readObject() {
             Map<String, Object> map = new LinkedHashMap<>();
             i++;
@@ -155,6 +199,11 @@ public final class Json {
             }
         }
 
+        /**
+         * Reads an array; the current character is the opening bracket.
+         *
+         * @return the elements in document order
+         */
         List<Object> readArray() {
             List<Object> list = new ArrayList<>();
             i++;
@@ -180,7 +229,12 @@ public final class Json {
             }
         }
 
-        // Copies unescaped runs in one go and only builds a StringBuilder when an escape appears.
+        /**
+         * Reads a string literal; the current character is the opening quote. Copies unescaped runs in
+         * one go and only builds a StringBuilder when an escape appears.
+         *
+         * @return the decoded string
+         */
         String readString() {
             i++; // opening quote
             StringBuilder sb = null;
@@ -236,10 +290,16 @@ public final class Json {
             }
         }
 
-        /*
+        /**
          * Scans the number's characters, then converts. Integers that fit in a long stay Long (ids,
          * counts, coordinates compare cleanly); larger integers and out-of-range decimals keep full
          * precision as BigDecimal; other decimals become Double.
+         *
+         * <p>The scan is lenient (it does not reject leading zeros, and sign characters are accepted anywhere
+         * in the run); the conversion step then rejects anything Java cannot parse as a number.
+         *
+         * @return a Long, BigDecimal or Double
+         * @throws JsonException if the scanned characters are not a number
          */
         Object readNumber() {
             int start = i;
@@ -280,20 +340,37 @@ public final class Json {
 
     // ------------------------------------------------------------------ write
 
-    /** Compact JSON, used on the wire. */
+    /**
+     * Compact JSON, used on the wire.
+     *
+     * @param value a JSON-shaped value (see the class comment), or a {@link JsonSerializable}
+     * @return compact JSON text with no whitespace
+     */
     public static String write(Object value) {
         StringBuilder sb = new StringBuilder();
         write(sb, value, -1, 0);
         return sb.toString();
     }
 
-    /** Two-space indented JSON, used for files and for text shown to people. */
+    /**
+     * Two-space indented JSON, used for files and for text shown to people.
+     *
+     * @param value a JSON-shaped value (see the class comment), or a {@link JsonSerializable}
+     * @return JSON text indented by two spaces per level
+     */
     public static String pretty(Object value) {
         StringBuilder sb = new StringBuilder();
         write(sb, value, 2, 0);
         return sb.toString();
     }
 
+    /**
+     * Starts a new line and indents it, in pretty mode only.
+     *
+     * @param sb output buffer
+     * @param indent spaces per level, or a negative number for compact output (then nothing is written)
+     * @param depth nesting level
+     */
     private static void newline(StringBuilder sb, int indent, int depth) {
         if (indent < 0) {
             return;
@@ -304,7 +381,15 @@ public final class Json {
         }
     }
 
-    // Writes any JSON-shaped Java value; indent < 0 means compact.
+    /**
+     * Writes any JSON-shaped Java value. Also accepts Character and Enum (written as strings), Float,
+     * Object arrays, int and double arrays; any other type is written as its toString() in quotes.
+     *
+     * @param sb output buffer
+     * @param v the value
+     * @param indent spaces per level; a negative value means compact output
+     * @param depth current nesting level
+     */
     private static void write(StringBuilder sb, Object v, int indent, int depth) {
         if (v == null) {
             sb.append("null");
@@ -379,13 +464,24 @@ public final class Json {
         }
     }
 
-    /** Returns {@code s} as a quoted, escaped JSON string literal. */
+    /**
+     * Returns {@code s} as a quoted, escaped JSON string literal.
+     *
+     * @param s the raw string; must not be null
+     * @return the string in double quotes with JSON escapes applied
+     */
     public static String quote(String s) {
         StringBuilder sb = new StringBuilder(s.length() + 2);
         quote(sb, s);
         return sb.toString();
     }
 
+    /**
+     * Appends {@code s} as a quoted, escaped JSON string literal.
+     *
+     * @param sb output buffer
+     * @param s the raw string
+     */
     private static void quote(StringBuilder sb, String s) {
         sb.append('"');
         for (int k = 0; k < s.length(); k++) {
@@ -412,7 +508,13 @@ public final class Json {
 
     // ------------------------------------------------------------------ builders
 
-    /** Start an ordered JSON object: {@code Json.obj("a", 1, "b", "x")}. */
+    /**
+     * Start an ordered JSON object: {@code Json.obj("a", 1, "b", "x")}.
+     *
+     * @param keyValues alternating keys and values; keys are converted with String.valueOf
+     * @return a new insertion-ordered, mutable map
+     * @throws IllegalArgumentException if an odd number of arguments is given
+     */
     public static Map<String, Object> obj(Object... keyValues) {
         if (keyValues.length % 2 != 0) {
             throw new IllegalArgumentException("obj() needs key/value pairs");
@@ -424,14 +526,25 @@ public final class Json {
         return m;
     }
 
-    /** Builds a mutable JSON array from the given values. */
+    /**
+     * Builds a mutable JSON array from the given values.
+     *
+     * @param values the elements, in order
+     * @return a new mutable list
+     */
     public static List<Object> arr(Object... values) {
         List<Object> l = new ArrayList<>(values.length);
         java.util.Collections.addAll(l, values);
         return l;
     }
 
-    /** Deep copy of a JSON-shaped value (maps and lists are copied, leaves shared). */
+    /**
+     * Deep copy of a JSON-shaped value (maps and lists are copied, leaves shared).
+     *
+     * @param <T> the value's static type
+     * @param value the value to copy; maps and collections are copied recursively (collections become lists)
+     * @return the copy, or the same object for leaves
+     */
     @SuppressWarnings("unchecked")
     public static <T> T copy(T value) {
         if (value instanceof Map) {

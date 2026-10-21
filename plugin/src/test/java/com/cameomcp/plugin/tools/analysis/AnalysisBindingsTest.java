@@ -27,6 +27,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link AnalysisBindings}: every analysis spec is bound and well formed, and each tool wrapper
+ * passes its arguments through and shapes its result as expected.
+ */
 class AnalysisBindingsTest {
 
     private static final List<String> TOOLS = List.of(

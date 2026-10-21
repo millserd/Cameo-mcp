@@ -18,6 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for the snapshot store and diff: IDs and timestamps, defensive copies, idempotent delete, eviction,
+ * diff options, NOT_FOUND cases, target type canonicalization and validation before Cameo is touched.
+ */
 class SnapshotsTest {
 
     @BeforeEach

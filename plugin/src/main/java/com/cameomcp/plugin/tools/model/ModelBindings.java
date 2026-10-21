@@ -8,21 +8,39 @@ import com.cameomcp.json.tree.JsonObject;
 /** Binds the model family (see {@code com.cameomcp.catalog.ModelTools}). */
 public final class ModelBindings {
 
+    /** Not instantiable; all members are static. */
     private ModelBindings() {
     }
 
-    // A model tool written against JSON trees: takes the core Args, returns a JSON tree object.
+    /** A model tool written against JSON trees: takes the core Args and returns a JSON tree object. */
     @FunctionalInterface
     private interface Impl {
+        /**
+         * Runs the tool.
+         *
+         * @param a the tool arguments
+         * @return the tool result as a JSON object
+         * @throws Exception any failure, which the registry turns into a tool error
+         */
         JsonObject run(com.cameomcp.mcp.Args a) throws Exception;
     }
 
-    // Adapts an Impl to a core handler by converting the tree result back to plain JSON values.
+    /**
+     * Registers an {@link Impl} under a tool name, converting its tree result back to plain JSON values.
+     *
+     * @param r the registry to add to
+     * @param name the tool name from the catalog
+     * @param impl the implementation
+     */
     private static void bind(ToolRegistry r, String name, Impl impl) {
         r.bind(name, (a, c) -> Gs.fromTree(impl.run(a)));
     }
 
-    /** Binds every model-family tool to its service method. */
+    /**
+     * Binds every model-family tool to its service method.
+     *
+     * @param r the registry to add to; every name must already be declared in the catalog
+     */
     public static void bind(ToolRegistry r) {
         bind(r, "cameo_get_project", a -> ProjectUiService.getProject());
         bind(r, "cameo_save_project", a -> ProjectUiService.saveProject());

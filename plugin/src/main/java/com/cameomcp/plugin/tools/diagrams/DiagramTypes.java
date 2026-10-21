@@ -20,12 +20,23 @@ public final class DiagramTypes {
 
     /** One validated diagram type. */
     public static final class Spec {
+        /** Canonical name reported to agents, for example "StateMachine". */
         public final String canonical;
         /** Native Cameo type names to try, in order; the first is the documented one. */
         public final List<String> nativeTypes;
+        /** Family the type belongs to: "uml" or "sysml". */
         public final String family;
+        /** Other accepted spellings, matched through {@link DiagramTypes#lookupKey}. */
         public final List<String> aliases;
 
+        /**
+         * Creates a spec.
+         *
+         * @param canonical the canonical name
+         * @param family the family
+         * @param nativeTypes the native Cameo type names, documented one first
+         * @param aliases other accepted spellings
+         */
         Spec(String canonical, String family, List<String> nativeTypes, String... aliases) {
             this.canonical = canonical;
             this.family = family;
@@ -33,13 +44,22 @@ public final class DiagramTypes {
             this.aliases = Collections.unmodifiableList(Arrays.asList(aliases));
         }
 
+        /**
+         * The documented native Cameo type name.
+         *
+         * @return the first of {@link #nativeTypes}
+         */
         public String nativeType() {
             return nativeTypes.get(0);
         }
     }
 
-    // Lookup table: canonical name, every native type name and every alias, all keyed by lookupKey().
+    /** Every validated diagram type, in the order cameo_list_diagram_types reports them. */
     public static final List<Spec> VALIDATED;
+    /**
+     * Lookup table from the {@link #lookupKey} of each canonical name, native type name and alias to its
+     * spec.
+     */
     private static final Map<String, Spec> BY_KEY = new LinkedHashMap<>();
 
     static {
@@ -88,18 +108,28 @@ public final class DiagramTypes {
         }
     }
 
+    /** Not instantiable; all members are static. */
     private DiagramTypes() {
     }
 
+    /**
+     * Shorthand for a fixed list.
+     *
+     * @param v the items
+     * @return the items as a fixed-size list
+     */
     private static List<String> list(String... v) {
         return Arrays.asList(v);
     }
 
-    /*
+    /**
      * Normalizes a type token for lookup: splits camelCase and acronym boundaries, lower-cases, treats
-     * '-' and '_' as spaces and collapses whitespace.
+     * '-' and '_' as spaces and collapses whitespace. For example "StateMachineDiagram" and
+     * "state_machine-diagram" both become "state machine diagram".
+     *
+     * @param value the text, may be null
+     * @return the key; "" for null
      */
-    /** "StateMachineDiagram" / "state_machine-diagram" -> "state machine diagram". */
     public static String lookupKey(String value) {
         if (value == null) {
             return "";
@@ -112,7 +142,12 @@ public final class DiagramTypes {
         return String.join(" ", normalized.trim().split("\\s+"));
     }
 
-    /** The validated spec for an input token or alias, or null for unknown (native) types. */
+    /**
+     * The validated spec for an input token or alias, or null for unknown (native) types.
+     *
+     * @param input a type token or alias, may be null
+     * @return the spec, or null
+     */
     public static Spec find(String input) {
         if (input == null) {
             return null;
@@ -130,7 +165,12 @@ public final class DiagramTypes {
         return s;
     }
 
-    /** Native type names to try when creating a diagram for {@code input}. Unknown inputs pass through. */
+    /**
+     * Native type names to try when creating a diagram for {@code input}. Unknown inputs pass through.
+     *
+     * @param input a type token or alias, may be null
+     * @return the spec's native names, or the trimmed input itself
+     */
     public static List<String> nativeCandidates(String input) {
         Spec s = find(input);
         if (s != null) {
@@ -139,12 +179,23 @@ public final class DiagramTypes {
         return Collections.singletonList(input == null ? "" : input.trim());
     }
 
-    // Relation maps need extra setup (context, scope, criteria) after creation; see DiagramService.createDiagram.
+    /**
+     * Whether a native type is a relation map. Relation maps need extra setup (context, scope, criteria)
+     * after creation; see DiagramService.createDiagram.
+     *
+     * @param nativeType the native type name
+     * @return true for "Relation Map Diagram"
+     */
     public static boolean isRelationMap(String nativeType) {
         return "Relation Map Diagram".equals(nativeType);
     }
 
-    // cameo_list_diagram_types: the validated types with their native names, fallbacks and aliases.
+    /**
+     * Implements cameo_list_diagram_types: the validated types with their native names, fallbacks and
+     * aliases.
+     *
+     * @return the types and lookup notes
+     */
     public static JsonObject listJson() {
         JsonArray arr = new JsonArray();
         for (Spec s : VALIDATED) {

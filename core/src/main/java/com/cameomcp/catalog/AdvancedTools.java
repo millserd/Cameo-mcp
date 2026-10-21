@@ -16,17 +16,26 @@ import static com.cameomcp.mcp.ToolSpec.tool;
  */
 public final class AdvancedTools {
 
-    // Family name used in docs and in cameo_list_tools filters.
+    /** Family name used in docs and in cameo_list_tools filters. */
     public static final String FAMILY = "advanced";
 
-    // Appended to every capability-probe description so agents know those tools are safe to call any time.
+    /**
+     * Appended to every capability-probe description so agents know those tools are safe to call any time.
+     */
     private static final String PROBE_NOTE = " Probe-first: reports class/plugin evidence (available, status, classProbe, "
             + "pluginDirectoriesFound, projectState); never changes anything.";
 
+    /** Static methods only. */
     private AdvancedTools() {
     }
 
-    // A read-only, project-independent capability probe for one optional Cameo feature.
+    /**
+     * A read-only, project-independent capability probe for one optional Cameo feature.
+     *
+     * @param name tool name
+     * @param what the first part of the description: which feature the probe checks
+     * @return the probe's spec
+     */
     private static ToolSpec caps(String name, String what) {
         return tool(name, FAMILY).noProject().readOnly().desc(what + PROBE_NOTE);
     }
@@ -34,6 +43,8 @@ public final class AdvancedTools {
     /**
      * The family's specs, in the order clients see them. Descriptions and parameter help are the
      * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     *
+     * @return the specs, a fixed-size list built on every call
      */
     public static List<ToolSpec> specs() {
         return Arrays.asList(

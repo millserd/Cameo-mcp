@@ -27,6 +27,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link MethodologyRuntime}: workflow guidance, plans that skip existing artifacts, execution
+ * with bindings, primary-ID extraction, conformance and evidence bundles, semantic findings, binding errors
+ * and receipts on a failed step.
+ */
 class MethodologyRuntimeTest {
 
     private static Map<String, Object> ref(String key) {

@@ -6,6 +6,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests for {@link Bind}: a binding is registered under both its snake_case and camelCase argument
+ * spellings.
+ */
 class BindTest {
     @Test
     void addsBothSpellings() {

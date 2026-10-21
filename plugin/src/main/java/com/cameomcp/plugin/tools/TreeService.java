@@ -13,6 +13,7 @@ public interface TreeService {
      * @param operation which operation, e.g. "createMatrix"; each service documents its own set
      * @param params    the tool arguments (with snake_case/camelCase aliases)
      * @return the structured tool result
+     * @throws Exception any failure; a ToolException reaches the agent as is
      */
     JsonObject call(String operation, JsonObject params) throws Exception;
 }

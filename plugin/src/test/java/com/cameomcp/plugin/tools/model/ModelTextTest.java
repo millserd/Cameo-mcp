@@ -17,6 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link ModelText}: element and relationship kind aliases, stereotype preference and ambiguity,
+ * type name normalization, view validation, paging, multiplicities, parameter directions, and batch plan
+ * validation and ref resolution.
+ */
 class ModelTextTest {
 
     @Test

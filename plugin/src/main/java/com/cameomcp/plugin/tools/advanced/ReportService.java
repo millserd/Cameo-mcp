@@ -27,15 +27,25 @@ import java.util.Map;
  */
 final class ReportService {
 
+    /** Report Wizard's template registry; its static listTemplates() returns the installed templates. */
     private static final String TEMPLATE_HELPER = "com.nomagic.magicdraw.magicreport.helper.TemplateHelper";
+    /** Report Wizard task that renders one template bean to a file. */
     private static final String GENERATE_TASK = "com.nomagic.magicdraw.magicreport.GenerateTask";
+    /** Report Wizard command-line entry point; only probed, never called. */
     private static final String REPORT_COMMAND_LINE = "com.nomagic.magicdraw.magicreport.commandline.ReportCommandLine";
+    /** Bean type of one template, the constructor argument of {@link #GENERATE_TASK}. */
     private static final String TEMPLATE_BEAN = "com.nomagic.magicdraw.magicreport.ui.bean.TemplateBean";
+    /** Bean holding a report's output file, format and viewer settings. */
     private static final String REPORT_PROPERTY_BEAN = "com.nomagic.magicdraw.magicreport.ui.bean.ReportPropertyBean";
+    /** Bean holding a report's scope: package IDs and recursion flags. */
     private static final String PACKAGE_SELECTION_BEAN = "com.nomagic.magicdraw.magicreport.ui.bean.PackageSelectionBean";
+    /** Generic Cameo task class whose static executeTaskOnSameThread runs a task synchronously. */
     private static final String TASK = "com.nomagic.task.Task";
 
-    // Completed generations by jobId (generation is synchronous, so only finished jobs exist); last 50 kept, in memory only.
+    /**
+     * Completed generations by jobId. Generation is synchronous, so only finished jobs exist. The last 50 are
+     * kept, in memory only, and are lost when Cameo restarts. Access is synchronized.
+     */
     private static final Map<String, JsonObject> JOBS = Collections.synchronizedMap(
             new LinkedHashMap<String, JsonObject>() {
                 @Override
@@ -44,12 +54,15 @@ final class ReportService {
                 }
             });
 
+    /** Static helpers only. */
     private ReportService() {
     }
 
-    /*
-     * cameo_get_report_capabilities: Report Wizard counts as available when at least two of the three probed classes
-     * load (ReportCommandLine is not used for generation, so it alone may be missing).
+    /**
+     * cameo_get_report_capabilities. Report Wizard counts as available when at least two of the three probed
+     * classes load (ReportCommandLine is not used for generation, so it alone may be missing).
+     *
+     * @return the capability object; safe to call with no project open
      */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("reportWizard", "native-direct");
@@ -70,7 +83,13 @@ final class ReportService {
         return response;
     }
 
-    // cameo_list_report_templates: native TemplateHelper.listTemplates(); a template's list index is its stable "id".
+    /**
+     * cameo_list_report_templates. Lists templates via the native TemplateHelper.listTemplates(); a
+     * template's list index is its stable "id". Failures do not throw: templateDiscovery becomes
+     * "unavailable" or "failed" with a reason.
+     *
+     * @return the capabilities plus templates, count and templateDiscovery
+     */
     static JsonObject templates() {
         JsonObject response = capabilities();
         JsonArray templates = new JsonArray();
@@ -112,15 +131,27 @@ final class ReportService {
         return b;
     }
 
+    /**
+     * Copies one member under a new name when it is present.
+     *
+     * @param from source object
+     * @param key member name in from
+     * @param to target object
+     * @param as member name in to
+     */
     private static void copy(JsonObject from, String key, JsonObject to, String as) {
         if (Gs.has(from, key)) {
             to.add(as, from.get(key));
         }
     }
 
-    /*
-     * cameo_generate_report_preview: checks the output path and, if Report Wizard is present, resolves the template
-     * exactly as generation would, so a bad template id is reported before anything is written.
+    /**
+     * cameo_generate_report_preview. Checks the output path and, if Report Wizard is present, resolves the
+     * template exactly as generation would, so a bad template id is reported before anything is written.
+     * Never throws for a bad template: the problem is returned as templateProblem.
+     *
+     * @param p tool arguments
+     * @return a preview envelope with outputPathCheck, templateResolved or templateProblem, and nextStep
      */
     static JsonObject preview(JsonObject p) {
         JsonObject body = body(p);
@@ -147,9 +178,17 @@ final class ReportService {
         return response;
     }
 
-    /*
-     * cameo_generate_report: requires allow_write=true and an absolute output file path. Generation runs on the Swing
-     * event thread via Edt.onEdt with a 10..600 s limit, default 120.
+    /**
+     * cameo_generate_report. Requires allow_write=true and an absolute output file path. Generation runs on
+     * the Swing event thread via {@link Edt#onEdt} with a time limit of timeout_seconds clamped to 10..600,
+     * default 120. Missing parent folders are created.
+     *
+     * @param p tool arguments
+     * @return the completed job record plus capabilities; the record is also stored for {@link #job}
+     * @throws ToolException PRECONDITION_FAILED without allow_write, INVALID_PARAMS for a missing, relative
+     *     or directory output_path, UNSUPPORTED when Report Wizard is missing, TOOL_FAILED when generation
+     *     fails, or NO_PROJECT and TIMEOUT from the EDT call
+     * @throws Exception any other reflective failure
      */
     static JsonObject generate(JsonObject p) throws Exception {
         JsonObject body = body(p);
@@ -187,10 +226,19 @@ final class ReportService {
                 timeoutSeconds);
     }
 
-    /*
-     * Configures a copy of the selected template/report and runs GenerateTask synchronously via
+    /**
+     * Configures a clone of the selected template and report and runs GenerateTask synchronously via
      * Task.executeTaskOnSameThread. Success is judged by the output file, since the task reports failure
-     * through getException() rather than by throwing.
+     * through getException() rather than by throwing. Runs on the EDT.
+     *
+     * @param project the open project
+     * @param body client-shaped request from {@link #body}
+     * @param parameters the nested "parameters" object, or null
+     * @param outputFile absolute output file
+     * @return the job record
+     * @throws ToolException NOT_FOUND for an unknown template or scope element, TOOL_FAILED when the task
+     *     fails or the file is not written or updated
+     * @throws Exception reflective failures from the Report Wizard API
      */
     private static JsonObject generateReport(Project project, JsonObject body, JsonObject parameters, File outputFile)
             throws Exception {
@@ -247,7 +295,13 @@ final class ReportService {
         return response;
     }
 
-    // cameo_get_report_job: returns a stored completed job; unknown IDs are refused with NOT_FOUND.
+    /**
+     * cameo_get_report_job. Returns a stored completed job.
+     *
+     * @param p tool arguments; job_id is required
+     * @return a copy of the stored job record
+     * @throws ToolException INVALID_PARAMS without job_id, NOT_FOUND for an unknown or evicted job
+     */
     static JsonObject job(JsonObject p) {
         String jobId = Gs.reqStr(p, "job_id").trim();
         JsonObject job = JOBS.get(jobId);
@@ -262,9 +316,18 @@ final class ReportService {
         return job.deepCopy();
     }
 
-    /*
-     * Fills the report's package selection (scope, defaulting to the primary model) and output properties.
-     * Beans are created when the template has none; setters are called only if this Report Wizard version has them.
+    /**
+     * Fills the report's package selection and output properties. The scope defaults to the primary model.
+     * Beans are created when the template has none, and setters are called only if this Report Wizard version
+     * has them.
+     *
+     * @param project the open project
+     * @param report the report bean to configure (a clone)
+     * @param body client-shaped request
+     * @param parameters the nested "parameters" object, or null
+     * @param outputFile absolute output file
+     * @throws ToolException NOT_FOUND or SYSML2_ELEMENT for a scope ID that does not resolve
+     * @throws Exception reflective failures
      */
     private static void configureReport(Project project, Object report, JsonObject body, JsonObject parameters, File outputFile)
             throws Exception {
@@ -297,7 +360,13 @@ final class ReportService {
         invokeIfPresent(report, "setFileName", outputFile.getAbsolutePath());
     }
 
-    // Templates known to the installed Report Wizard, via reflection on TemplateHelper.
+    /**
+     * Templates known to the installed Report Wizard, via reflection on TemplateHelper.
+     *
+     * @return the templates in Report Wizard's order
+     * @throws ClassNotFoundException when Report Wizard is not installed
+     * @throws Exception other reflective failures
+     */
     private static List<Object> listTemplates() throws Exception {
         Class<?> helper = Support.loadClass(TEMPLATE_HELPER);
         Object value = helper.getMethod("listTemplates").invoke(null);
@@ -308,7 +377,16 @@ final class ReportService {
         return templates;
     }
 
-    // Picks a template by list index, then by name, path or template file name (case-insensitive); default is the first.
+    /**
+     * Picks a template by list index, then by name, path or template file name (case-insensitive). With no
+     * template requested, the first one is used.
+     *
+     * @param templates templates from {@link #listTemplates}
+     * @param body client-shaped request; templateId, templateName or template names the template
+     * @param parameters the nested "parameters" object, or null
+     * @return the selected template bean
+     * @throws ToolException NOT_FOUND when there are no templates or none matches
+     */
     private static Object selectTemplate(List<Object> templates, JsonObject body, JsonObject parameters) {
         if (templates.isEmpty()) {
             throw new ToolException("NOT_FOUND", "No Report Wizard templates are available.");
@@ -337,7 +415,14 @@ final class ReportService {
                 + "for valid ids (index) and names.");
     }
 
-    // Named report configuration, else the template's default, selected or first one; returned as a clone when possible.
+    /**
+     * Named report configuration, else the template's default, selected or first one.
+     *
+     * @param template template bean
+     * @param reportName requested report name, or null
+     * @return a clone of the chosen report when the bean can be cloned, else the bean itself; null if the
+     *     template has none
+     */
     private static Object selectReport(Object template, String reportName) {
         Object report = null;
         if (reportName != null && !reportName.trim().isEmpty()) {
@@ -366,7 +451,13 @@ final class ReportService {
         return cloneIfPossible(report);
     }
 
-    // Template metadata via whichever getters the installed TemplateBean class has; index < 0 omits the id fields.
+    /**
+     * Template metadata via whichever getters the installed TemplateBean class has.
+     *
+     * @param template template bean
+     * @param index list index used as the id, or a negative number to omit the id fields
+     * @return the template description
+     */
     private static JsonObject serializeTemplate(Object template, int index) {
         JsonObject json = new JsonObject();
         if (index >= 0) {
@@ -395,6 +486,15 @@ final class ReportService {
         return json;
     }
 
+    /**
+     * Adds the value of a public zero-argument getter under key; skipped silently when the getter is missing
+     * or fails.
+     *
+     * @param json target object
+     * @param target bean to read
+     * @param key member name to add
+     * @param methodName getter name
+     */
     private static void putGetter(JsonObject json, Object target, String key, String methodName) {
         try {
             Method method = target.getClass().getMethod(methodName);
@@ -406,13 +506,27 @@ final class ReportService {
         }
     }
 
-    // Uses the bean's public clone() when it has one; otherwise the original object is used.
+    /**
+     * Uses the bean's public clone() when it has one.
+     *
+     * @param value bean to copy
+     * @return the clone, or the original object when it cannot be cloned
+     */
     private static Object cloneIfPossible(Object value) {
         Object clone = ElementJson.invokeZeroArg(value, "clone");
         return clone != null ? clone : value;
     }
 
-    // Calls a one-argument setter by name if a compatible overload exists; silently skips null args and missing setters.
+    /**
+     * Calls a public one-argument method by name if a compatible overload exists. Null targets, null
+     * arguments and missing methods are skipped silently. A primitive parameter is treated as compatible and
+     * relies on reflection to unbox the argument.
+     *
+     * @param target object to call, or null
+     * @param methodName setter name
+     * @param arg argument, or null
+     * @throws Exception if the setter itself fails
+     */
     private static void invokeIfPresent(Object target, String methodName, Object arg) throws Exception {
         if (target == null || arg == null) {
             return;
@@ -430,7 +544,15 @@ final class ReportService {
         }
     }
 
-    // The first key found wins; for each key the top-level body is checked before the nested "parameters" object.
+    /**
+     * First string value among keys. For each key the top-level body is checked before the nested parameters
+     * object.
+     *
+     * @param body client-shaped request
+     * @param parameters the nested "parameters" object, or null
+     * @param keys keys to try, in order
+     * @return the first string value found, or null
+     */
     private static String firstString(JsonObject body, JsonObject parameters, String... keys) {
         for (String key : keys) {
             String value = stringValue(body, key);
@@ -445,6 +567,13 @@ final class ReportService {
         return null;
     }
 
+    /**
+     * A primitive member as a string.
+     *
+     * @param source object to read, or null
+     * @param key member name
+     * @return the string form, or null when the member is missing, null or not a primitive
+     */
     private static String stringValue(JsonObject source, String key) {
         if (source == null || !source.has(key)) {
             return null;
@@ -456,7 +585,14 @@ final class ReportService {
         return value.getAsString();
     }
 
-    // Same lookup order as firstString; a single string is accepted as a one-item list.
+    /**
+     * Same lookup order as {@link #firstString}, for lists. A single string is accepted as a one-item list.
+     *
+     * @param body client-shaped request
+     * @param parameters the nested "parameters" object, or null
+     * @param keys keys to try, in order
+     * @return the first non-empty list found, or a new empty list
+     */
     private static List<String> firstStringList(JsonObject body, JsonObject parameters, String... keys) {
         for (String key : keys) {
             List<String> values = stringList(body, key);
@@ -471,6 +607,14 @@ final class ReportService {
         return new ArrayList<>();
     }
 
+    /**
+     * Strings from an array member, or a single primitive as a one-item list. Non-primitive array items are
+     * skipped.
+     *
+     * @param source object to read, or null
+     * @param key member name
+     * @return a new list, empty when the member is missing
+     */
     private static List<String> stringList(JsonObject source, String key) {
         List<String> values = new ArrayList<>();
         if (source == null || !source.has(key)) {
@@ -489,6 +633,15 @@ final class ReportService {
         return values;
     }
 
+    /**
+     * Boolean from the body, else from the nested parameters object, else the default.
+     *
+     * @param body client-shaped request
+     * @param parameters the nested "parameters" object, or null
+     * @param key member name
+     * @param defaultValue value when neither object has a primitive under key
+     * @return the flag
+     */
     private static boolean firstBoolean(JsonObject body, JsonObject parameters, String key, boolean defaultValue) {
         Boolean value = booleanValue(body, key);
         if (value != null) {
@@ -498,6 +651,13 @@ final class ReportService {
         return value != null ? value : defaultValue;
     }
 
+    /**
+     * A primitive member as a boolean.
+     *
+     * @param source object to read, or null
+     * @param key member name
+     * @return the value, or null when the member is missing or not a primitive
+     */
     private static Boolean booleanValue(JsonObject source, String key) {
         if (source == null || !source.has(key) || !source.get(key).isJsonPrimitive()) {
             return null;
@@ -505,7 +665,13 @@ final class ReportService {
         return Gs.bool(source, key, false);
     }
 
-    // String[] of package IDs for PackageSelectionBean.setPackageIds.
+    /**
+     * String[] of package IDs for PackageSelectionBean.setPackageIds, built reflectively so it passes {@link
+     * #invokeIfPresent}'s array check.
+     *
+     * @param values package IDs
+     * @return a new String array
+     */
     private static Object toStringArray(List<String> values) {
         Object array = Array.newInstance(String.class, values.size());
         for (int i = 0; i < values.size(); i++) {
@@ -514,7 +680,13 @@ final class ReportService {
         return array;
     }
 
-    // Explicit format, else the output file's extension, else docx.
+    /**
+     * Report output format: the explicit format, else the output file's extension, else docx.
+     *
+     * @param requested requested format, or null
+     * @param outputFile output file whose extension is the fallback
+     * @return the lower-case format
+     */
     static String normalizeFormat(String requested, File outputFile) {
         if (requested != null && !requested.trim().isEmpty()) {
             return requested.trim().toLowerCase(Locale.ROOT);
@@ -527,15 +699,33 @@ final class ReportService {
         return "docx";
     }
 
+    /**
+     * Null-safe view of a getter result as a collection.
+     *
+     * @param value any object
+     * @return value when it is a collection, else an empty list
+     */
     private static Collection<?> asCollection(Object value) {
         return value instanceof Collection ? (Collection<?>) value : Collections.emptyList();
     }
 
+    /**
+     * Case-insensitive, trimmed comparison against an already normalized needle.
+     *
+     * @param normalizedNeedle trimmed lower-case text to look for
+     * @param candidate value to compare, or null
+     * @return true when candidate, trimmed and lower-cased, equals the needle
+     */
     private static boolean equalsIgnoreCase(String normalizedNeedle, String candidate) {
         return candidate != null && normalizedNeedle.equals(candidate.trim().toLowerCase(Locale.ROOT));
     }
 
-    // Innermost cause's class and message, which is usually the useful part of a reflective failure.
+    /**
+     * Innermost cause's class and message, which is usually the useful part of a reflective failure.
+     *
+     * @param t any throwable
+     * @return "SimpleClassName: message" of the innermost cause
+     */
     private static String rootMessage(Throwable t) {
         Throwable c = t;
         while (c.getCause() != null && c.getCause() != c) {

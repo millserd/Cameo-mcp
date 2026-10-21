@@ -48,15 +48,26 @@ public final class Catalog {
             "cameo_execute_macro runs Groovy inside Cameo as an escape hatch; prefer structured tools. Call cameo_reset_session if a macro leaves a session open.",
             "cameo_list_tools filters this catalog by family or keyword. The resource cameo://guide is the full usage guide.");
 
+    /** Static methods only. */
     private Catalog() {
     }
 
-    /** True for tools that run user-supplied Groovy; the plugin blocks them when macros are off. */
+    /**
+     * True for tools that run user-supplied Groovy; the plugin blocks them when macros are off.
+     *
+     * @param name tool name
+     * @return true for cameo_execute_macro and cameo_execute_probe
+     */
     public static boolean isScriptTool(String name) {
         return SCRIPT_TOOLS.contains(name);
     }
 
-    /** All specs in family order. Throws if a family class is missing or two tools share a name. */
+    /**
+     * All specs in family order. Throws if a family class is missing or two tools share a name.
+     *
+     * @return a new list of every spec
+     * @throws IllegalStateException if a family cannot be loaded or a name is duplicated
+     */
     public static List<ToolSpec> all() {
         List<ToolSpec> out = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
@@ -75,6 +86,8 @@ public final class Catalog {
      * Loads one family's specs by calling its static {@code specs()} method.
      *
      * @param className fully qualified family class, one of {@link #FAMILIES}
+     * @return the family's specs
+     * @throws IllegalStateException if the class or its specs() method is missing or fails
      */
     @SuppressWarnings("unchecked")
     public static List<ToolSpec> family(String className) {

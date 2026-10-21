@@ -32,15 +32,27 @@ import java.util.Map;
 /** Element, stereotype, profile and relationship changes. Every method is one undoable session. */
 final class MutationService {
 
-    // Upper bound for cameo_create_elements; larger plans risk the EDT timeout and a huge single undo step.
+    /**
+     * Most entries one cameo_create_elements call may hold. Larger plans risk the EDT timeout and one huge
+     * undo step.
+     */
     static final int BULK_MAX_ENTRIES = 500;
 
+    /** Not instantiable; all members are static. */
     private MutationService() {
     }
 
     // ------------------------------------------------------------------ create
 
-    // cameo_create_element: parses and validates the request before opening the session, then creates.
+    /**
+     * Implements cameo_create_element. The request is parsed and validated before the session opens, then the
+     * element is created in one write session (one undo step) on the EDT.
+     *
+     * @param a the tool arguments, see {@link ElementCreator.Request#from}
+     * @return {@code created: true} and the full {@code element}
+     * @throws ToolException for bad input, a missing parent or stereotype, or no open project
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject createElement(Args a) throws Exception {
         ElementCreator.Request r = ElementCreator.Request.from(a);
         return Edt.write("Create " + r.type + " " + r.name, project -> {
@@ -52,7 +64,14 @@ final class MutationService {
         });
     }
 
-    // cameo_create_relationship: same pattern for relationships.
+    /**
+     * Implements cameo_create_relationship, with the same pattern as {@link #createElement}.
+     *
+     * @param a the tool arguments, see {@code RelationshipCreator.Request.from}
+     * @return {@code created: true}, the {@code relationshipType} as sent, and the full {@code relationship}
+     * @throws ToolException for bad input, missing ends or stereotypes, or no open project
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject createRelationship(Args a) throws Exception {
         RelationshipCreator.Request r = RelationshipCreator.Request.from(a);
         return Edt.write("Create " + r.type + " relationship", project -> {
@@ -65,7 +84,17 @@ final class MutationService {
         });
     }
 
-    /** cameo_create_elements: all entries in one session; any failure rolls everything back. */
+    /**
+     * cameo_create_elements: all entries in one session; any failure rolls everything back.
+     *
+     * <p>Entries are created in order, so a later entry can name an earlier one with "ref:name" in any id
+     * field. The timeout grows with the plan size.
+     *
+     * @param a the tool arguments: {@code elements} (the entries) and {@code view} (compact or full)
+     * @return the counts, the {@code refs} map from ref name to id, and one {@code results} item per entry
+     * @throws ToolException for an invalid plan, or naming the failed entry; nothing is kept in either case
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject createElements(Args a) throws Exception {
         List<Map<String, Object>> entries = a.maps("elements");
         List<String> refNames = ModelText.validatePlan(entries, BULK_MAX_ENTRIES);
@@ -139,9 +168,17 @@ final class MutationService {
         }, timeout);
     }
 
-    /*
-     * Sets an entry's tagged_values. The stereotype that owns the tags is tag_stereotype, else the
-     * entry's stereotype, else the default SysML stereotype of its type (e.g. requirement).
+    /**
+     * Sets an entry's tagged_values. The stereotype that owns the tags is tag_stereotype, else the entry's
+     * stereotype, else the default SysML stereotype of its type (for example requirement).
+     *
+     * @param project the open project
+     * @param created the element the entry just created
+     * @param entry the entry's arguments, for tag_stereotype
+     * @param req the entry's parsed request
+     * @param tags tag name to plain JSON value
+     * @throws ToolException INVALID_PARAMS when no stereotype can be found, it is not applied, or a tag is
+     *     unknown
      */
     private static void applyTaggedValues(Project project, Element created, Args entry, ElementCreator.Request req,
                                           Map<String, Object> tags) {
@@ -164,7 +201,17 @@ final class MutationService {
         setTags(project, created, st, Gs.toTree(tags));
     }
 
-    // Validates every tag name against the stereotype, coerces each value to the tag's type, and sets it.
+    /**
+     * Validates every tag name against the stereotype, coerces each value to the tag's type, and sets it.
+     * Stops at the first unknown tag; tags set before it stay set unless the caller's session is cancelled.
+     *
+     * @param project the open project
+     * @param element the element whose tags are set
+     * @param st a stereotype applied to the element
+     * @param values tag name to JSON value
+     * @return the number of tags set
+     * @throws ToolException INVALID_PARAMS for an unknown tag or a bad enumeration literal
+     */
     private static int setTags(Project project, Element element, Stereotype st, JsonObject values) {
         List<String> known = TaggedValues.tagNames(st);
         int count = 0;
@@ -182,7 +229,19 @@ final class MutationService {
 
     // ------------------------------------------------------------------ modify / move / delete
 
-    // cameo_modify_element: rename and/or replace documentation; everything else goes through cameo_set_specification.
+    /**
+     * Implements cameo_modify_element: renames the element and/or replaces its documentation. Every other
+     * property goes through cameo_set_specification.
+     *
+     * @param a the tool arguments: {@code element_id}, and at least one of {@code name} and {@code
+     *     documentation}
+     * @return {@code modified: true} and the full {@code element}
+     * @throws ToolException INVALID_PARAMS when neither field is given or the element has no name, NOT_FOUND
+     *     or
+     * PRECONDITION_FAILED for a missing or read-only element
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject modifyElement(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String newName = a.str("name");
@@ -210,7 +269,18 @@ final class MutationService {
         });
     }
 
-    // cameo_delete_element: removes the element and everything it owns; reports what was deleted for the agent's log.
+    /**
+     * Implements cameo_delete_element: removes the element and everything it owns, and reports what was
+     * deleted.
+     *
+     * @param a the tool arguments: {@code element_id}
+     * @return {@code deleted: true}, the {@code elementId}, {@code name}, {@code type} and {@code ownerId}
+     * @throws ToolException NOT_FOUND for a missing element, PRECONDITION_FAILED for the primary model or a
+     *     read-only
+     * element
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject deleteElement(Args a) throws Exception {
         String id = a.reqStr("element_id");
         return Edt.write("Delete element", project -> {
@@ -237,10 +307,23 @@ final class MutationService {
         });
     }
 
-    /*
-     * cameo_move_element: changes the owner. Guards against cycles and read-only elements, puts states
-     * into a region of the target state machine, and verifies afterwards because Cameo can silently
-     * refuse an incompatible owner.
+    /**
+     * Implements cameo_move_element: changes the owner. Guards against cycles and read-only elements, puts
+     * states into a region of the target state machine or state, and checks the owner afterwards because
+     * Cameo can silently refuse an owner of the wrong kind.
+     *
+     * @param a the tool arguments: {@code element_id} and {@code new_owner_id} (or its aliases owner_id and
+     * parent_id)
+     *
+     * @return {@code moved: false} with a message when the owner is unchanged; otherwise {@code moved: true},
+     *     the
+     * previous and new owner, and the full {@code element}
+     *
+     * @throws ToolException INVALID_PARAMS for a cyclic move or an owner of the wrong kind, NOT_FOUND for a
+     *     missing
+     * element, PRECONDITION_FAILED for the primary model, a read-only element, or a move Cameo did not accept
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
      */
     static JsonObject moveElement(Args a) throws Exception {
         String id = a.reqStr("element_id");
@@ -304,7 +387,19 @@ final class MutationService {
 
     // ------------------------------------------------------------------ stereotypes / profiles
 
-    // cameo_apply_stereotype: idempotent; re-checks afterwards because Cameo ignores stereotypes that don't fit the metaclass.
+    /**
+     * Implements cameo_apply_stereotype. Applying a stereotype that is already applied is not an error. The
+     * element is checked afterwards because Cameo ignores a stereotype that does not extend its metaclass.
+     *
+     * @param a the tool arguments: {@code element_id}, {@code stereotype} and an optional {@code profile}
+     * @return {@code applied: true}, {@code alreadyApplied}, the stereotype name and id, and the full {@code
+     *     element}
+     * @throws ToolException NOT_FOUND for a missing element or stereotype, PRECONDITION_FAILED when Cameo did
+     *     not
+     * apply it
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject applyStereotype(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String stereotype = a.reqStr("stereotype").trim();
@@ -331,7 +426,17 @@ final class MutationService {
         });
     }
 
-    // cameo_remove_stereotype: removes the first applied stereotype with that name (optionally from a given profile).
+    /**
+     * Implements cameo_remove_stereotype: removes the first applied stereotype with that name, ignoring case,
+     * and optionally only one from the given profile.
+     *
+     * @param a the tool arguments: {@code element_id}, {@code stereotype} and an optional {@code profile}
+     * @return {@code removed: false} with the applied stereotype names when nothing matched; otherwise
+     * {@code removed: true}, the stereotype id and the full {@code element}
+     *
+     * @throws ToolException NOT_FOUND for a missing element, PRECONDITION_FAILED for a read-only element
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject removeStereotype(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String stereotype = a.reqStr("stereotype").trim();
@@ -378,7 +483,18 @@ final class MutationService {
         });
     }
 
-    // cameo_set_tagged_values: sets tags of a stereotype that is already applied to the element.
+    /**
+     * Implements cameo_set_tagged_values: sets tags of a stereotype that is already applied to the element.
+     *
+     * @param a the tool arguments: {@code element_id}, {@code stereotype} and {@code values} (tag name to
+     *     value)
+     * @return {@code updated: true}, the {@code tagCount} and the full {@code element}
+     * @throws ToolException INVALID_PARAMS for missing values or an unknown tag, NOT_FOUND for a missing
+     *     element or
+     * stereotype, PRECONDITION_FAILED when the stereotype is not applied
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject setTaggedValues(Args a) throws Exception {
         String id = a.reqStr("element_id");
         String stereotype = a.reqStr("stereotype").trim();
@@ -411,7 +527,20 @@ final class MutationService {
         });
     }
 
-    // cameo_set_stereotype_metaclasses: replaces the metaclasses a custom stereotype extends.
+    /**
+     * Implements cameo_set_stereotype_metaclasses: replaces the metaclasses a custom stereotype extends.
+     *
+     * @param a the tool arguments: {@code stereotype_id} and {@code metaclasses} (UML metaclass names)
+     * @return {@code updated: true}, the stereotype id and name, its {@code metaclasses} after the change,
+     *     and the
+     * full {@code element}
+     *
+     * @throws ToolException INVALID_PARAMS for an unknown metaclass or an id that is not a stereotype,
+     *     NOT_FOUND or
+     * PRECONDITION_FAILED for a missing or read-only stereotype
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject setStereotypeMetaclasses(Args a) throws Exception {
         String id = a.reqStr("stereotype_id");
         List<String> metaclasses = a.reqStrList("metaclasses");
@@ -444,7 +573,21 @@ final class MutationService {
         });
     }
 
-    // cameo_apply_profile: applies a profile (by id or name) to a package so its stereotypes can be used inside.
+    /**
+     * Implements cameo_apply_profile: applies a profile, by id or name, to a package so its stereotypes can
+     * be used inside it. Applying a profile that is already applied is not an error.
+     *
+     * @param a the tool arguments: {@code package_id}, and {@code profile_id} or {@code profile_name}
+     * @return the package and profile ids and names, {@code applied}, {@code alreadyApplied} and the
+     *     package's
+     * {@code appliedProfiles}
+     *
+     * @throws ToolException INVALID_PARAMS when neither profile parameter is given, NOT_FOUND for a missing
+     *     package
+     * or profile, PRECONDITION_FAILED when Cameo says the profile cannot be applied
+     *
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject applyProfile(Args a) throws Exception {
         String pkgId = a.reqStr("package_id");
         String profileId = a.optTrim("profile_id");
@@ -494,7 +637,17 @@ final class MutationService {
         });
     }
 
-    // cameo_set_usecase_subject: sets or appends the classifiers a use case applies to (shown as the system boundary).
+    /**
+     * Implements cameo_set_usecase_subject: sets, or with append adds to, the classifiers a use case applies
+     * to. The subject is drawn as the system boundary.
+     *
+     * @param a the tool arguments: {@code element_id}, {@code subject_ids} and {@code append} (default false)
+     * @return {@code updated: true}, {@code subjectCount}, the given {@code subjects} and the full {@code
+     *     element}
+     * @throws ToolException INVALID_PARAMS when an id is not a use case or classifier, NOT_FOUND for a
+     *     missing element
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject setUseCaseSubject(Args a) throws Exception {
         String id = a.reqStr("element_id");
         List<String> subjectIds = a.reqStrList("subject_ids");
@@ -525,7 +678,18 @@ final class MutationService {
         });
     }
 
-    /** Used by specification writes: sets one stereotype tag with type-aware coercion. */
+    /**
+     * Used by specification writes: sets one stereotype tag with type-aware coercion.
+     *
+     * <p>Threading: must run inside a write session on the EDT.
+     *
+     * @param project the open project
+     * @param element the element whose tag is set
+     * @param st a stereotype applied to the element
+     * @param tag the tag name
+     * @param value the JSON value; JSON null clears the tag
+     * @throws ToolException INVALID_PARAMS for a bad enumeration literal
+     */
     static void setTag(Project project, Element element, Stereotype st, String tag, JsonElement value) {
         StereotypesHelper.setStereotypePropertyValue(element, st, tag,
                 TaggedValues.coerceForTag(project, st, tag, value));

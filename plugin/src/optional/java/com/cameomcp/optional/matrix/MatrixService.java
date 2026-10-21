@@ -53,6 +53,7 @@ public final class MatrixService implements TreeService {
             </callExpressionSpecification>
             """;
 
+    /** Created reflectively by OptionalModules the first time a dependency matrix tool runs. */
     public MatrixService() {
     }
 

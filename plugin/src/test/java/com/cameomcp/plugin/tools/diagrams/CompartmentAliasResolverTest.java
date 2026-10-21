@@ -9,6 +9,10 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link CompartmentAliasResolver}: show and suppress aliases, snake_case and bare keys, and
+ * unknown aliases.
+ */
 class CompartmentAliasResolverTest {
 
     @Test

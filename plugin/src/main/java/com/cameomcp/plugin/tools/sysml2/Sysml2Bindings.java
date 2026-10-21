@@ -8,23 +8,40 @@ import com.cameomcp.json.tree.JsonObject;
 /** Binds the sysml2 family (see {@code com.cameomcp.catalog.Sysml2Tools}). */
 public final class Sysml2Bindings {
 
+    /** Not instantiable; all members are static. */
     private Sysml2Bindings() {
     }
 
     /** A sysml2 tool body: reads typed arguments from Args and returns a tree result. */
     @FunctionalInterface
     private interface Impl {
+        /**
+         * Runs the tool.
+         *
+         * @param a the tool arguments
+         * @return the tool result as a JSON object
+         * @throws Exception any failure, which the registry turns into a tool error
+         */
         JsonObject run(Args a) throws Exception;
     }
 
-    // Adapts an Impl to the core registry, converting its tree result to the plain-Map JSON the core expects.
+    /**
+     * Registers an {@link Impl} under a tool name, converting its tree result to the plain-Map JSON the core
+     * expects.
+     *
+     * @param r the registry to add to
+     * @param name the tool name from the catalog
+     * @param impl the implementation
+     */
     private static void bind(ToolRegistry r, String name, Impl impl) {
         r.bind(name, (a, c) -> Gs.fromTree(impl.run(a)));
     }
 
-    /*
-     * Registers every cameo_sysml2_* tool. Argument defaults and clamping ranges live here (intIn
-     * min/max), so Sysml2Service methods receive already-validated values.
+    /**
+     * Registers every cameo_sysml2_* tool. Argument defaults and clamping ranges live here (intIn min and
+     * max), so Sysml2Service methods receive values that are already checked.
+     *
+     * @param r the registry to add to; every name must already be declared in the catalog
      */
     public static void bind(ToolRegistry r) {
         bind(r, "cameo_sysml2_status", a -> Sysml2Service.status());

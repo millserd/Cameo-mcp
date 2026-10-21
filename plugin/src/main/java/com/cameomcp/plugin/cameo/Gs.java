@@ -22,25 +22,46 @@ import java.util.Map;
  */
 public final class Gs {
 
+    /** Static methods only. */
     private Gs() {
     }
 
-    /** Converts a core JSON object to a tree; null becomes an empty object. */
+    /**
+     * Converts a core JSON object to a tree; null becomes an empty object.
+     *
+     * @param map the core JSON object, may be null
+     * @return a new tree object
+     */
     public static JsonObject toTree(Map<String, Object> map) {
         return map == null ? new JsonObject() : JsonParser.parseString(Json.write(map)).getAsJsonObject();
     }
 
-    /** The tool-call arguments as a JSON tree object, for services written against JSON trees. */
+    /**
+     * The tool-call arguments as a JSON tree object, for services written against JSON trees.
+     *
+     * @param args the tool-call arguments
+     * @return a new tree object with the raw arguments (no camelCase aliasing)
+     */
     public static JsonObject toTree(Args args) {
         return toTree(args.raw());
     }
 
-    /** Converts a tree element back to core JSON values (Map, List, String, Long/Double, Boolean). */
+    /**
+     * Converts a tree element back to core JSON values (Map, List, String, Long/Double, Boolean).
+     *
+     * @param el the tree element, may be null
+     * @return the core JSON value; null for null or JSON null
+     */
     public static Object fromTree(JsonElement el) {
         return el == null || el.isJsonNull() ? null : Json.parse(el.toString());
     }
 
-    /** Builds a JSON tree object from key/value pairs; values are converted with {@link #toElement}. */
+    /**
+     * Builds a JSON tree object from key/value pairs; values are converted with {@link #toElement}.
+     *
+     * @param kv alternating keys and values; must have an even length
+     * @return a new tree object
+     */
     public static JsonObject obj(Object... kv) {
         JsonObject o = new JsonObject();
         for (int i = 0; i < kv.length; i += 2) {
@@ -49,7 +70,12 @@ public final class Gs {
         return o;
     }
 
-    /** Convert any JSON-shaped Java value (or tree element) to a tree element. */
+    /**
+     * Convert any JSON-shaped Java value (or tree element) to a tree element.
+     *
+     * @param v a String, Number, Boolean, Character, Map, Collection or tree element, or null
+     * @return the tree element; other types become their string form
+     */
     public static JsonElement toElement(Object v) {
         if (v == null) {
             return JsonNull.INSTANCE;
@@ -75,7 +101,12 @@ public final class Gs {
         return new JsonPrimitive(String.valueOf(v));
     }
 
-    /** A tree array of the given strings; null gives an empty array. */
+    /**
+     * A tree array of the given strings; null gives an empty array.
+     *
+     * @param values the strings, may be null
+     * @return a new array
+     */
     public static JsonArray strings(Collection<String> values) {
         JsonArray a = new JsonArray();
         if (values != null) {
@@ -88,17 +119,36 @@ public final class Gs {
 
     // ------------------------------------------------------------- readers
 
-    /** True when the key is present and not JSON null. */
+    /**
+     * True when the key is present and not JSON null.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @return whether the member exists with a non-null value
+     */
     public static boolean has(JsonObject o, String key) {
         return o != null && o.has(key) && !o.get(key).isJsonNull();
     }
 
-    /** String value or null; non-string values are returned as their JSON text. */
+    /**
+     * String value or null; non-string values are returned as their JSON text.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @return the value, or null
+     */
     public static String str(JsonObject o, String key) {
         return str(o, key, null);
     }
 
-    /** String value or {@code dflt}. */
+    /**
+     * String value or {@code dflt}.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @param dflt value when absent or JSON null
+     * @return the value, or {@code dflt}
+     */
     public static String str(JsonObject o, String key, String dflt) {
         if (!has(o, key)) {
             return dflt;
@@ -107,7 +157,14 @@ public final class Gs {
         return e.isJsonPrimitive() ? e.getAsString() : e.toString();
     }
 
-    /** String value that must be present and non-blank. */
+    /**
+     * String value that must be present and non-blank.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @return the value
+     * @throws ToolException INVALID_PARAMS when absent or blank
+     */
     public static String reqStr(JsonObject o, String key) {
         String s = str(o, key);
         if (s == null || s.trim().isEmpty()) {
@@ -116,7 +173,15 @@ public final class Gs {
         return s;
     }
 
-    /** Integer value or {@code dflt}; decimals are truncated. */
+    /**
+     * Integer value or {@code dflt}; decimals are truncated.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @param dflt value when absent
+     * @return the value
+     * @throws ToolException INVALID_PARAMS when the value is not numeric
+     */
     public static int integer(JsonObject o, String key, int dflt) {
         if (!has(o, key)) {
             return dflt;
@@ -128,7 +193,15 @@ public final class Gs {
         }
     }
 
-    /** Number value or {@code dflt}. */
+    /**
+     * Number value or {@code dflt}.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @param dflt value when absent
+     * @return the value
+     * @throws ToolException INVALID_PARAMS when the value is not numeric
+     */
     public static double number(JsonObject o, String key, double dflt) {
         if (!has(o, key)) {
             return dflt;
@@ -140,7 +213,14 @@ public final class Gs {
         }
     }
 
-    /** Boolean value or {@code dflt}; the strings true/1/yes count as true, anything else as false. */
+    /**
+     * Boolean value or {@code dflt}; the strings true/1/yes count as true, anything else as false.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @param dflt value when absent
+     * @return the value
+     */
     public static boolean bool(JsonObject o, String key, boolean dflt) {
         if (!has(o, key)) {
             return dflt;
@@ -149,16 +229,29 @@ public final class Gs {
         if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isBoolean()) {
             return e.getAsBoolean();
         }
+        // Note: an object or array value reaches getAsString() here and throws UnsupportedOperationException.
         String s = e.getAsString().trim().toLowerCase();
         return s.equals("true") || s.equals("1") || s.equals("yes");
     }
 
-    /** Nested object, or null if absent or not an object. */
+    /**
+     * Nested object, or null if absent or not an object.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @return the live nested object, or null
+     */
     public static JsonObject object(JsonObject o, String key) {
         return has(o, key) && o.get(key).isJsonObject() ? o.getAsJsonObject(key) : null;
     }
 
-    /** Array value; a single non-array value becomes a one-element array; absent gives an empty array. */
+    /**
+     * Array value; a single non-array value becomes a one-element array; absent gives an empty array.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @return the live array, or a new array wrapping a single value or empty when absent
+     */
     public static JsonArray array(JsonObject o, String key) {
         if (!has(o, key)) {
             return new JsonArray();
@@ -172,7 +265,13 @@ public final class Gs {
         return a;
     }
 
-    /** List of strings from an array (or a single value); nulls are skipped. */
+    /**
+     * List of strings from an array (or a single value); nulls are skipped.
+     *
+     * @param o the object to read, may be null
+     * @param key member name
+     * @return a new list; non-primitive entries become their JSON text
+     */
     public static List<String> strList(JsonObject o, String key) {
         List<String> out = new ArrayList<>();
         for (JsonElement e : array(o, key)) {

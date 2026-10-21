@@ -20,31 +20,52 @@ import java.util.logging.Logger;
  */
 public final class CameoLog {
 
+    /** Prefix of every line this plugin logs, so users can filter for it. */
     public static final String PREFIX = "[Cameo MCP] ";
+    /** java.util.logging fallback, used when md.log cannot be written and for stack traces. */
     private static final Logger JUL = Logger.getLogger("com.cameomcp");
-    // Cameo's md.log logger, resolved lazily once; null if MDLog isn't available.
+    /** Cameo's md.log logger, resolved lazily once; null if MDLog isn't available. */
     private static volatile Object mdLogger;
+    /** True once {@link #mdLogger()} has looked for the logger, whatever the outcome. */
     private static volatile boolean mdLoggerResolved;
 
+    /** Static methods only. */
     private CameoLog() {
     }
 
-    /** Info that goes to md.log and the Notification window. */
+    /**
+     * Info that goes to md.log and the Notification window.
+     *
+     * @param message the text, without the prefix
+     */
     public static void info(String message) {
         write("info", message, true);
     }
 
-    /** Info that goes to md.log only (not the Notification window) - for high-volume events. */
+    /**
+     * Info that goes to md.log only (not the Notification window) - for high-volume events.
+     *
+     * @param message the text, without the prefix
+     */
     public static void fileOnly(String message) {
         write("info", message, false);
     }
 
-    /** A warning to md.log and the Notification window. */
+    /**
+     * A warning to md.log and the Notification window.
+     *
+     * @param message the text, without the prefix
+     */
     public static void warn(String message) {
         write("warn", message, true);
     }
 
-    /** An error to md.log and the Notification window; the stack trace goes to JUL at FINE level. */
+    /**
+     * An error to md.log and the Notification window; the stack trace goes to JUL at FINE level.
+     *
+     * @param message the text, without the prefix
+     * @param t the cause, or null; its toString() is appended to the message
+     */
     public static void error(String message, Throwable t) {
         write("error", message + (t == null ? "" : ": " + t), true);
         if (t != null) {
@@ -52,7 +73,14 @@ public final class CameoLog {
         }
     }
 
-    // Every message reaches a log file: md.log if possible, java.util.logging otherwise.
+    /**
+     * Writes one line. Every message reaches a log file: md.log if possible, java.util.logging otherwise.
+     * Safe to call from any thread.
+     *
+     * @param level "info", "warn" or "error"
+     * @param message the text, without the prefix
+     * @param gui whether to also show it in the Notification window
+     */
     private static void write(String level, String message, boolean gui) {
         String line = PREFIX + message;
         if (!toMdLog(level, line)) {
@@ -63,7 +91,12 @@ public final class CameoLog {
         }
     }
 
-    // The GUI log is a Swing component, so it is only touched on the event thread.
+    /**
+     * Shows a line in the Notification window. The GUI log is a Swing component, so it is only touched
+     * on the event thread (directly if already there, else queued with invokeLater).
+     *
+     * @param line the full line, with prefix
+     */
     private static void toGuiLog(String line) {
         Runnable r = () -> {
             try {
@@ -82,7 +115,13 @@ public final class CameoLog {
         }
     }
 
-    // Returns false when md.log can't be written, so the caller falls back to JUL.
+    /**
+     * Writes a line to md.log through MDLog's logger, by reflection.
+     *
+     * @param level "info", "warn" or "error": the logger method name
+     * @param line the full line, with prefix
+     * @return false when md.log can't be written, so the caller falls back to JUL
+     */
     private static boolean toMdLog(String level, String line) {
         Object logger = mdLogger();
         if (logger == null) {
@@ -100,7 +139,14 @@ public final class CameoLog {
         }
     }
 
-    // MDLog's logger is a log4j or SLF4J type depending on the release; find info/warn/error(String) by name.
+    /**
+     * Finds the logger's info/warn/error(String) method by name. MDLog's logger is a log4j or SLF4J
+     * type depending on the release, so no logger type is compiled in.
+     *
+     * @param type the logger's runtime class
+     * @param level the method name
+     * @return the one-argument method accepting a String, or null
+     */
     private static Method findLogMethod(Class<?> type, String level) {
         for (Method m : type.getMethods()) {
             if (m.getName().equals(level) && m.getParameterCount() == 1
@@ -112,7 +158,11 @@ public final class CameoLog {
         return null;
     }
 
-    // Double-checked lazy lookup: getPluginsLog where present, else the general log.
+    /**
+     * Double-checked lazy lookup of MDLog's logger: getPluginsLog where present, else getGeneralLog.
+     *
+     * @return the logger object, or null when MDLog is unavailable
+     */
     private static Object mdLogger() {
         if (!mdLoggerResolved) {
             synchronized (CameoLog.class) {

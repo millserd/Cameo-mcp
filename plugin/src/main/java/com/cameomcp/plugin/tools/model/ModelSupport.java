@@ -24,12 +24,22 @@ import java.util.List;
 /** Cameo-facing helpers shared by the model family's services. */
 final class ModelSupport {
 
+    /** Not instantiable; all members are static. */
     private ModelSupport() {
     }
 
     // ------------------------------------------------------------------ lookup
 
-    /** Element by id, or NOT_FOUND naming the parameter. */
+    /**
+     * Element by id, or NOT_FOUND naming the parameter.
+     *
+     * @param project the open project
+     * @param id the element id; surrounding spaces are ignored
+     * @param param the parameter name the id came from, used in error messages
+     * @return the element
+     * @throws ToolException INVALID_PARAMS when the id is blank, NOT_FOUND when it does not resolve to a UML
+     *     element
+     */
     static Element element(Project project, String id, String param) {
         if (id == null || id.trim().isEmpty()) {
             throw ToolException.invalid("Missing required parameter '" + param + "'.");
@@ -42,7 +52,15 @@ final class ModelSupport {
         return (Element) found;
     }
 
-    /** Element by id or null when the id is blank; NOT_FOUND when it does not resolve. */
+    /**
+     * Element by id or null when the id is blank; NOT_FOUND when it does not resolve.
+     *
+     * @param project the open project
+     * @param id the element id, or null or blank for none
+     * @param param the parameter name, used in error messages
+     * @return the element, or null when no id was given
+     * @throws ToolException NOT_FOUND when a non-blank id does not resolve
+     */
     static Element optionalElement(Project project, String id, String param) {
         if (id == null || id.trim().isEmpty()) {
             return null;
@@ -50,7 +68,20 @@ final class ModelSupport {
         return element(project, id, param);
     }
 
-    /** Element of the given type, or INVALID_PARAMS describing what was found instead. */
+    /**
+     * Element of the given type, or INVALID_PARAMS describing what was found instead.
+     *
+     * @param <T> the expected element type
+     * @param project the open project
+     * @param id the element id
+     * @param param the parameter name, used in error messages
+     * @param type the class the element must be an instance of
+     * @param expected a phrase such as "a Behavior" naming the expected kind, used in error messages
+     * @return the element cast to the expected type
+     * @throws ToolException INVALID_PARAMS when the id is blank or the element is of the wrong type,
+     *     NOT_FOUND when
+     * the id does not resolve
+     */
     static <T> T typed(Project project, String id, String param, Class<T> type, String expected) {
         Element e = element(project, id, param);
         if (!type.isInstance(e)) {
@@ -60,7 +91,15 @@ final class ModelSupport {
         return type.cast(e);
     }
 
-    /** The given element, or the project's primary model when no id is given (the usual default root). */
+    /**
+     * The given element, or the project's primary model when no id is given (the usual default root).
+     *
+     * @param project the open project
+     * @param id the element id, or null or blank for the primary model
+     * @param param the parameter name, used in error messages
+     * @return the element or the primary model
+     * @throws ToolException NOT_FOUND when a non-blank id does not resolve
+     */
     static Element root(Project project, String id, String param) {
         if (id != null && !id.trim().isEmpty()) {
             return element(project, id, param);
@@ -70,7 +109,12 @@ final class ModelSupport {
 
     // ------------------------------------------------------------------ naming
 
-    /** The element's name, or "" for unnamed and non-named elements. */
+    /**
+     * The element's name, or "" for unnamed and non-named elements.
+     *
+     * @param e the element
+     * @return the name, never null
+     */
     static String name(Element e) {
         if (e instanceof NamedElement) {
             String n = ((NamedElement) e).getName();
@@ -79,7 +123,12 @@ final class ModelSupport {
         return "";
     }
 
-    /** The metaclass short name (Class, Package, ...), falling back to the human type. */
+    /**
+     * The metaclass short name (Class, Package, ...), falling back to the human type.
+     *
+     * @param e the element
+     * @return the short metaclass name, the human type if that fails, or ""
+     */
     static String typeName(Element e) {
         try {
             String shortName = ClassTypes.getShortName(e.getClassType());
@@ -93,7 +142,12 @@ final class ModelSupport {
         return human == null ? "" : human;
     }
 
-    /** The Java interface name of the element's metaclass, or null. */
+    /**
+     * The Java interface name of the element's metaclass, or null.
+     *
+     * @param e the element
+     * @return the simple name of {@code getClassType()}, or null when it is unknown or the call fails
+     */
     static String className(Element e) {
         try {
             Class<?> c = e.getClassType();
@@ -103,7 +157,12 @@ final class ModelSupport {
         }
     }
 
-    /** "Class 'Engine' [id=...]" for error messages. */
+    /**
+     * "Class 'Engine' [id=...]" for error messages.
+     *
+     * @param element the element, may be null
+     * @return a description with type, human name and id; never throws
+     */
     static String describe(Element element) {
         if (element == null) {
             return "<null>";
@@ -128,7 +187,12 @@ final class ModelSupport {
         return type + " '" + human + "' [id=" + (id == null ? "<no-id>" : id) + "]";
     }
 
-    /** Minimal {id, name} reference used inside results. */
+    /**
+     * Minimal {id, name} reference used inside results.
+     *
+     * @param e the element
+     * @return an object with {@code id} and, for named elements, {@code name}
+     */
     static JsonObject ref(Element e) {
         JsonObject o = new JsonObject();
         o.addProperty("id", e.getID());
@@ -138,23 +202,34 @@ final class ModelSupport {
         return o;
     }
 
-    // Stable orderings so query results and listings come back the same way every time.
+    /** Stable order for query results: metaclass name, then name, then id, all ignoring case. */
     static final Comparator<Element> BY_TYPE_NAME_ID = Comparator
             .comparing(ModelSupport::typeName, String.CASE_INSENSITIVE_ORDER)
             .thenComparing(ModelSupport::name, String.CASE_INSENSITIVE_ORDER)
             .thenComparing(ModelSupport::safeId, String.CASE_INSENSITIVE_ORDER);
 
+    /** Stable order for child listings: name ignoring case, then id. */
     static final Comparator<Element> BY_NAME_ID = Comparator
             .comparing(ModelSupport::name, String.CASE_INSENSITIVE_ORDER)
             .thenComparing(ModelSupport::safeId);
 
-    /** The element id, or "" if it has none. */
+    /**
+     * The element id, or "" if it has none.
+     *
+     * @param e the element
+     * @return the id, never null
+     */
     static String safeId(Element e) {
         String id = e.getID();
         return id == null ? "" : id;
     }
 
-    /** Owned elements sorted by name, then id. */
+    /**
+     * Owned elements sorted by name, then id.
+     *
+     * @param e the owner
+     * @return a new mutable list of its owned elements in {@link #BY_NAME_ID} order
+     */
     static List<Element> sortedChildren(Element e) {
         Collection<Element> owned = e.getOwnedElement();
         List<Element> out = owned == null ? new ArrayList<>() : new ArrayList<>(owned);
@@ -164,7 +239,13 @@ final class ModelSupport {
 
     // ------------------------------------------------------------------ stereotypes
 
-    /** True if any applied stereotype has this name (case-insensitive). */
+    /**
+     * True if any applied stereotype has this name (case-insensitive).
+     *
+     * @param element the element to check
+     * @param name the stereotype name, compared ignoring case
+     * @return true on a match; false when nothing matches or Cameo throws
+     */
     static boolean hasStereotypeNamed(Element element, String name) {
         try {
             List<Stereotype> list = StereotypesHelper.getStereotypes(element);
@@ -181,7 +262,12 @@ final class ModelSupport {
         return false;
     }
 
-    /** Names of the applied stereotypes. */
+    /**
+     * Names of the applied stereotypes.
+     *
+     * @param element the element to read
+     * @return the applied stereotype names; empty when there are none or Cameo throws
+     */
     static JsonArray stereotypeNames(Element element) {
         JsonArray a = new JsonArray();
         try {
@@ -199,7 +285,14 @@ final class ModelSupport {
         return a;
     }
 
-    /** Names of the stereotype's profile and owner chain, used for preference ranking. */
+    /**
+     * Names of the stereotype's profile and owner chain, used for preference ranking.
+     *
+     * @param stereotype the stereotype
+     * @return the profile name first (when known), then the names of the stereotype and each of its owners up
+     *     to
+     * the root; blank names are left out
+     */
     static List<String> contexts(Stereotype stereotype) {
         List<String> out = new ArrayList<>();
         try {
@@ -221,7 +314,13 @@ final class ModelSupport {
         return out;
     }
 
-    // Every stereotype in the project (including used profiles) with this name, case-insensitive.
+    /**
+     * Every stereotype in the project, including those of used profiles, with this name ignoring case.
+     *
+     * @param project the open project
+     * @param name the stereotype name
+     * @return the matches in the order Cameo lists them; may be empty
+     */
     private static List<Stereotype> stereotypesNamed(Project project, String name) {
         List<Stereotype> matches = new ArrayList<>();
         Collection<Stereotype> all = StereotypesHelper.getAllStereotypes(project);
@@ -238,6 +337,11 @@ final class ModelSupport {
     /**
      * Lenient lookup used for applying stereotypes: the named profile first, then every loaded
      * stereotype with that name, preferring SysML contexts; falls back to the first match.
+     *
+     * @param project the open project
+     * @param name the stereotype name, compared ignoring case
+     * @param profileName the profile to look in first, or null or blank for any profile
+     * @return the best match, or null when no stereotype has that name
      */
     static Stereotype findStereotype(Project project, String name, String profileName) {
         if (profileName != null && !profileName.trim().isEmpty()) {
@@ -278,7 +382,15 @@ final class ModelSupport {
         return best;
     }
 
-    /** Lenient lookup that fails with an actionable message. */
+    /**
+     * Lenient lookup that fails with an actionable message.
+     *
+     * @param project the open project
+     * @param name the stereotype name
+     * @param profileName the profile to look in first, or null
+     * @return the stereotype found by {@link #findStereotype}
+     * @throws ToolException NOT_FOUND when there is none
+     */
     static Stereotype requireStereotypeLenient(Project project, String name, String profileName) {
         Stereotype st = findStereotype(project, name, profileName);
         if (st == null) {
@@ -293,6 +405,13 @@ final class ModelSupport {
     /**
      * Strict lookup used for relationship stereotypes (Satisfy, Allocate, ItemFlow...): ambiguous
      * candidates that preference cannot separate are an error rather than a silent guess.
+     *
+     * @param project the open project
+     * @param name the stereotype name, for example Satisfy
+     * @return the single preferred match
+     * @throws ToolException PRECONDITION_FAILED when the stereotype is not in the project, CONFLICT listing
+     *     the
+     * candidates when the preferred contexts cannot pick one
      */
     static Stereotype requireStereotypeStrict(Project project, String name) {
         List<Stereotype> matches = stereotypesNamed(project, name);
@@ -331,7 +450,12 @@ final class ModelSupport {
         throw new ToolException("CONFLICT", sb.toString());
     }
 
-    /** "Model > Package > Sub" path of the element's owners, or "<root>". */
+    /**
+     * "Model > Package > Sub" path of the element's owners, or "<root>".
+     *
+     * @param element the element, may be null
+     * @return the names of its owners from the root down, joined by " > "; blank names are skipped
+     */
     static String ownerPath(Element element) {
         List<String> names = new ArrayList<>();
         Element cur = element == null ? null : element.getOwner();
@@ -345,7 +469,12 @@ final class ModelSupport {
         return names.isEmpty() ? "<root>" : String.join(" > ", names);
     }
 
-    /** The SysML FlowProperty stereotype applied to the element, or null; both name spellings are tried. */
+    /**
+     * The SysML FlowProperty stereotype applied to the element, or null; both name spellings are tried.
+     *
+     * @param element the element
+     * @return the applied stereotype, or null when it is not applied or Cameo throws
+     */
     static Stereotype flowPropertyStereotype(Element element) {
         try {
             Stereotype st = StereotypesHelper.getAppliedStereotypeByString(element, "FlowProperty");
@@ -360,7 +489,12 @@ final class ModelSupport {
 
     // ------------------------------------------------------------------ documentation
 
-    /** The bodies of the element's owned comments joined by newlines, or null if there are none. */
+    /**
+     * The bodies of the element's owned comments joined by newlines, or null if there are none.
+     *
+     * @param element the element
+     * @return the joined text, or null when there is no non-empty comment or Cameo throws
+     */
     static String documentation(Element element) {
         try {
             Collection<Comment> comments = element.getOwnedComment();
@@ -383,7 +517,16 @@ final class ModelSupport {
         }
     }
 
-    /** Replace the first owned comment's body, or add a new owned comment. */
+    /**
+     * Replace the first owned comment's body, or add a new owned comment.
+     *
+     * <p>Threading: must run inside a write session on the EDT.
+     *
+     * @param project the open project, whose factory creates a new comment
+     * @param element the element to document
+     * @param text the new documentation text
+     * @throws Exception any Cameo failure while adding the comment
+     */
     static void setDocumentation(Project project, Element element, String text) throws Exception {
         Collection<Comment> comments = element.getOwnedComment();
         if (comments != null && !comments.isEmpty()) {
@@ -400,6 +543,10 @@ final class ModelSupport {
     /**
      * Fails with PRECONDITION_FAILED when Cameo reports the element read-only. If the check itself
      * throws (older API), the element is treated as editable and the write decides.
+     *
+     * @param element the element to check
+     * @param what a word such as "Parent" or "Element" that starts the error message
+     * @throws ToolException PRECONDITION_FAILED when the element is read-only
      */
     static void requireEditable(Element element, String what) {
         boolean editable;
@@ -415,7 +562,14 @@ final class ModelSupport {
         }
     }
 
-    /** True if {@code candidateAncestor} is the element itself or one of its owners; used to block cyclic moves. */
+    /**
+     * True if {@code candidateAncestor} is the element itself or one of its owners; used to block cyclic
+     * moves.
+     *
+     * @param candidateAncestor the would-be new owner; compared by identity, then by id
+     * @param element the element being moved
+     * @return true when the move would put the element inside itself
+     */
     static boolean isAncestorOrSelf(Element candidateAncestor, Element element) {
         Element cur = element;
         while (cur != null) {

@@ -11,6 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for {@link DiagramTypes}: canonical tokens, alias normalization, the requirement diagram fallback,
+ * pass-through of unknown types, lookup keys and the type list.
+ */
 class DiagramTypesTest {
 
     private static String nativeOf(String input) {

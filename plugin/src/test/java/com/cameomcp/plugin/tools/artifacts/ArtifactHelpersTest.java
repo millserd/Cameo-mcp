@@ -18,6 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for the artifact helper classes: string-list parsing, scalar helpers, type tokens, traceability
+ * direction and filters, explicit roots, criteria templates, reflective calls and probe guards.
+ */
 class ArtifactHelpersTest {
 
     @Test

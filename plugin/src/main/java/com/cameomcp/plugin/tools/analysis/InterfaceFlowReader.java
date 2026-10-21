@@ -21,12 +21,20 @@ import java.util.Map;
  */
 final class InterfaceFlowReader {
 
+    /** Static methods only. */
     private InterfaceFlowReader() {
     }
 
     /**
-     * Validates the ID list, then reads all interface blocks and flow properties in a single
-     * EDT read transaction and converts the tree result into plain maps for the analysis code.
+     * Validates the ID list, then reads all interface blocks and flow properties in a single model read
+     * ({@link Edt#read}, on the calling thread) and converts the tree result into plain maps for the
+     * analysis code.
+     *
+     * @param interfaceIds interface block element IDs
+     * @return {interfaceBlocks: [...], flowProperties: [...]} as plain Java maps and lists; each flow
+     *     property carries ownerId, ownerName and, when set, direction
+     * @throws ToolException INVALID_PARAMS for an empty list or a non-Class ID, NOT_FOUND for an unknown ID
+     * @throws Exception NO_PROJECT or MODEL_CHANGED from the model read
      */
     @SuppressWarnings("unchecked")
     static Map<String, Object> read(List<String> interfaceIds) throws Exception {
@@ -38,8 +46,16 @@ final class InterfaceFlowReader {
         return (Map<String, Object>) Gs.fromTree(response);
     }
 
-    // Runs on the EDT. Each ID must resolve to a Class (InterfaceBlock or Block); owned attributes
-    // without a FlowProperty stereotype are ordinary value/part properties and are skipped.
+    /**
+     * Reads the blocks inside the model read. Each ID must resolve to a Class (InterfaceBlock or Block);
+     * owned attributes without a FlowProperty stereotype are ordinary value or part properties and are
+     * skipped.
+     *
+     * @param project the open project
+     * @param interfaceIds interface block element IDs
+     * @return compact interface blocks and flow properties
+     * @throws ToolException NOT_FOUND for an unknown ID, INVALID_PARAMS for a non-Class ID
+     */
     private static JsonObject readIn(Project project, List<String> interfaceIds) {
         JsonArray interfaceBlocks = new JsonArray();
         JsonArray flowProperties = new JsonArray();

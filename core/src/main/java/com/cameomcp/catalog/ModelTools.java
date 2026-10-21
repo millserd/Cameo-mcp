@@ -14,7 +14,7 @@ import static com.cameomcp.mcp.ToolSpec.tool;
  */
 public final class ModelTools {
 
-    // Family name used in docs and in cameo_list_tools filters.
+    /** Family name used in docs and in cameo_list_tools filters. */
     public static final String FAMILY = "model";
 
     /** Element types cameo_create_element understands (aliases are case-insensitive; '-' and ' ' optional). */
@@ -32,12 +32,15 @@ public final class ModelTools {
             + "Dependency, Include, Extend, ControlFlow, ObjectFlow, Allocate, Satisfy, Derive, Refine, Trace, Verify, "
             + "Transition, Connector, InformationFlow, ItemFlow";
 
+    /** Static methods only. */
     private ModelTools() {
     }
 
     /**
      * The family's specs, in the order clients see them. Descriptions and parameter help are the
      * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     *
+     * @return the specs, a fixed-size list built on every call
      */
     public static List<ToolSpec> specs() {
         return Arrays.asList(
