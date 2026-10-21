@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="760" viewBox="0 0 1100 760" font-family="Segoe UI, -apple-system, Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">How Cameo MCP works</title>
+  <desc id="desc">MCP clients connect over HTTP to the Cameo MCP plugin running inside Cameo's Java VM, either directly or through the stdio launcher. The plugin's HTTP endpoint passes JSON-RPC to the MCP server, which dispatches tool calls to Cameo's UI thread, where each write is one undoable step through the Cameo Java API on the open project.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <style>
+      .h { font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .t { font-size: 12.5px; fill: #334155; }
+      .s { font-size: 11.5px; fill: #475569; }
+      .m { font-family: Consolas, Menlo, monospace; font-size: 12px; fill: #1e293b; }
+      .lbl { font-size: 12px; font-weight: 600; fill: #475569; }
+      .line { stroke: #475569; stroke-width: 1.8; fill: none; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1100" height="760" rx="14" fill="#f8fafc"/>
+  <text x="30" y="42" font-size="22" font-weight="700" fill="#0f172a">How Cameo MCP works</text>
+  <text x="30" y="66" class="t">The MCP server lives inside Cameo. Agents talk to it over HTTP at http://&lt;host&gt;:&lt;port&gt;/mcp (default 127.0.0.1:18740).</text>
+
+  <!-- ===== Left: clients ===== -->
+  <text x="30" y="104" class="lbl">AI AGENT SIDE</text>
+
+  <rect x="30" y="114" width="270" height="112" rx="10" fill="#e0ecff" stroke="#3b6fd8" stroke-width="1.5"/>
+  <text x="46" y="140" class="h">MCP client with HTTP</text>
+  <text x="46" y="162" class="t">Any agent or IDE that speaks</text>
+  <text x="46" y="180" class="t">MCP Streamable HTTP</text>
+  <text x="46" y="204" class="m">url: http://HOST:PORT/mcp</text>
+
+  <rect x="30" y="262" width="270" height="86" rx="10" fill="#e0ecff" stroke="#3b6fd8" stroke-width="1.5"/>
+  <text x="46" y="288" class="h">MCP client, stdio only</text>
+  <text x="46" y="310" class="t">Desktop chat apps and CLI agents</text>
+  <text x="46" y="328" class="t">that start a local command</text>
+
+  <line x1="165" y1="348" x2="165" y2="388" class="line" marker-end="url(#arrow)"/>
+  <text x="174" y="373" class="s">stdin / stdout</text>
+
+  <rect x="30" y="392" width="270" height="132" rx="10" fill="#e0ecff" stroke="#3b6fd8" stroke-width="1.5"/>
+  <text x="46" y="418" class="h">cameo-mcp-stdio.jar</text>
+  <text x="46" y="440" class="t">Bridges stdio to the HTTP endpoint</text>
+  <text x="46" y="458" class="t">Lists tools even while Cameo is closed</text>
+  <text x="46" y="476" class="t">Reconnects when Cameo restarts</text>
+  <text x="46" y="500" class="m">--host --port --url --token</text>
+  <text x="46" y="516" class="m">--diagnose  --install</text>
+
+  <!-- ===== Cameo JVM container ===== -->
+  <rect x="370" y="88" width="700" height="500" rx="14" fill="#eef1f5" stroke="#8a94a6" stroke-width="1.5"/>
+  <text x="388" y="112" class="lbl">CAMEO SYSTEMS MODELER 2024x / 2026x  ·  ONE JAVA VM</text>
+
+  <!-- Plugin container -->
+  <rect x="386" y="124" width="668" height="326" rx="12" fill="#e6f4ea" stroke="#2f8a4a" stroke-width="1.5"/>
+  <text x="402" y="148" class="h">Cameo MCP plugin</text>
+  <text x="560" y="148" class="s">plugins/com.cameomcp.plugin  ·  pure Java, no extra process</text>
+
+  <!-- Row of pipeline boxes -->
+  <rect x="402" y="164" width="158" height="150" rx="9" fill="#ffffff" stroke="#2f8a4a" stroke-width="1.2"/>
+  <text x="414" y="188" class="h">HTTP endpoint</text>
+  <text x="414" y="208" class="m">HOST:PORT/mcp</text>
+  <text x="414" y="228" class="s">Bind 127.0.0.1 by default</text>
+  <text x="414" y="246" class="s">Optional bearer token</text>
+  <text x="414" y="264" class="s">Rejects foreign origins</text>
+  <text x="414" y="284" class="m">GET /status</text>
+  <text x="414" y="300" class="s">health, no token needed</text>
+
+  <line x1="560" y1="239" x2="578" y2="239" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="580" y="164" width="150" height="150" rx="9" fill="#ffffff" stroke="#2f8a4a" stroke-width="1.2"/>
+  <text x="592" y="188" class="h">MCP server</text>
+  <text x="592" y="208" class="s">JSON-RPC 2.0</text>
+  <text x="592" y="226" class="s">initialize, sessions</text>
+  <text x="592" y="244" class="s">tools/list, tools/call</text>
+  <text x="592" y="262" class="s">resources:</text>
+  <text x="592" y="280" class="m">cameo://guide</text>
+  <text x="592" y="296" class="m">cameo://tools</text>
+
+  <line x1="730" y1="239" x2="748" y2="239" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="750" y="164" width="140" height="150" rx="9" fill="#ffffff" stroke="#2f8a4a" stroke-width="1.2"/>
+  <text x="762" y="188" class="h">183 tools</text>
+  <text x="762" y="208" class="s">server</text>
+  <text x="762" y="224" class="s">model</text>
+  <text x="762" y="240" class="s">diagrams</text>
+  <text x="762" y="256" class="s">artifacts</text>
+  <text x="762" y="272" class="s">advanced</text>
+  <text x="762" y="288" class="s">analysis</text>
+  <text x="762" y="304" class="s">sysml2 (2026x)</text>
+
+  <line x1="890" y1="239" x2="908" y2="239" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="910" y="164" width="130" height="150" rx="9" fill="#ffffff" stroke="#2f8a4a" stroke-width="1.2"/>
+  <text x="922" y="188" class="h">Cameo UI</text>
+  <text x="922" y="206" class="h">thread</text>
+  <text x="922" y="228" class="s">Writes run one</text>
+  <text x="922" y="244" class="s">at a time</text>
+  <text x="922" y="264" class="s">Each write is one</text>
+  <text x="922" y="280" class="s">undo step:</text>
+  <text x="922" y="298" class="m">MCP: &lt;op&gt;</text>
+
+  <!-- Lower row inside plugin -->
+  <rect x="402" y="332" width="300" height="102" rx="9" fill="#ffffff" stroke="#2f8a4a" stroke-width="1.2"/>
+  <text x="414" y="356" class="h">MCP menu and status window</text>
+  <text x="414" y="378" class="t">Port, state, connected clients, call log</text>
+  <text x="414" y="396" class="t">Test connection, Settings (port, bind</text>
+  <text x="414" y="414" class="t">address, token, macros), copy client config</text>
+
+  <rect x="718" y="332" width="172" height="102" rx="9" fill="#ffffff" stroke="#2f8a4a" stroke-width="1.2"/>
+  <text x="730" y="356" class="h">Cameo log</text>
+  <text x="730" y="378" class="t">Notification window</text>
+  <text x="730" y="396" class="t">and md.log, lines</text>
+  <text x="730" y="414" class="m">[Cameo MCP] ...</text>
+
+  <!-- UI thread down to Java API -->
+  <line x1="975" y1="314" x2="975" y2="472" class="line" marker-end="url(#arrow)"/>
+
+  <!-- Below plugin: API and model -->
+  <rect x="870" y="474" width="184" height="98" rx="10" fill="#ffffff" stroke="#8a94a6" stroke-width="1.5"/>
+  <text x="884" y="500" class="h">Cameo Java API</text>
+  <text x="884" y="522" class="t">Called directly,</text>
+  <text x="884" y="540" class="t">in Cameo's own JVM</text>
+  <text x="884" y="558" class="t">and editing sessions</text>
+
+  <line x1="870" y1="523" x2="822" y2="523" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="386" y="474" width="434" height="98" rx="10" fill="#ffffff" stroke="#8a94a6" stroke-width="1.5"/>
+  <text x="400" y="500" class="h">The project open in Cameo</text>
+  <text x="400" y="522" class="t">SysML v1 / UML model, or a SysML v2 model in 2026x</text>
+  <text x="400" y="540" class="t">Changes appear live in the Cameo window; Edit &gt; Undo reverts them</text>
+  <text x="400" y="558" class="t">Nothing is saved until cameo_save_project or the user saves</text>
+
+  <!-- ===== Bottom: request flow ===== -->
+  <text x="30" y="622" class="lbl">ONE REQUEST, START TO FINISH</text>
+
+  <rect x="30" y="634" width="196" height="100" rx="9" fill="#fff4e0" stroke="#c98a12" stroke-width="1.3"/>
+  <text x="44" y="660" class="h">1  Ask the user</text>
+  <text x="44" y="682" class="t">Which host and port?</text>
+  <text x="44" y="700" class="t">Token? Default is</text>
+  <text x="44" y="718" class="m">127.0.0.1:18740</text>
+
+  <line x1="226" y1="684" x2="236" y2="684" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="238" y="634" width="196" height="100" rx="9" fill="#fff4e0" stroke="#c98a12" stroke-width="1.3"/>
+  <text x="252" y="660" class="h">2  Check health</text>
+  <text x="252" y="682" class="m">GET /status</text>
+  <text x="252" y="700" class="t">running? authRequired?</text>
+  <text x="252" y="718" class="t">project open?</text>
+
+  <line x1="434" y1="684" x2="444" y2="684" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="446" y="634" width="196" height="100" rx="9" fill="#fff4e0" stroke="#c98a12" stroke-width="1.3"/>
+  <text x="460" y="660" class="h">3  Connect</text>
+  <text x="460" y="682" class="t">initialize, then</text>
+  <text x="460" y="700" class="t">tools/list; first tool</text>
+  <text x="460" y="718" class="m">cameo_status</text>
+
+  <line x1="642" y1="684" x2="652" y2="684" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="654" y="634" width="196" height="100" rx="9" fill="#fff4e0" stroke="#c98a12" stroke-width="1.3"/>
+  <text x="668" y="660" class="h">4  Call a tool</text>
+  <text x="668" y="682" class="t">tools/call runs on</text>
+  <text x="668" y="700" class="t">Cameo's UI thread as</text>
+  <text x="668" y="718" class="t">one undoable step</text>
+
+  <line x1="850" y1="684" x2="860" y2="684" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="862" y="634" width="208" height="100" rx="9" fill="#fff4e0" stroke="#c98a12" stroke-width="1.3"/>
+  <text x="876" y="660" class="h">5  Get the result</text>
+  <text x="876" y="682" class="t">JSON with ids to use in</text>
+  <text x="876" y="700" class="t">the next call, or an error</text>
+  <text x="876" y="718" class="t">code that says what to do</text>
+  <!-- Arrows to the HTTP endpoint -->
+  <path d="M300,170 C340,170 350,215 398,215" class="line" marker-end="url(#arrow)"/>
+  <text x="304" y="160" class="s">POST /mcp</text>
+  <path d="M300,458 C350,458 350,262 398,262" class="line" marker-end="url(#arrow)"/>
+  <text x="312" y="476" class="s">HTTP</text>
+
+</svg>
