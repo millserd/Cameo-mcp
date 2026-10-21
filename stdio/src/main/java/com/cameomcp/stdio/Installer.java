@@ -32,16 +32,31 @@ import java.util.stream.Stream;
  */
 final class Installer {
 
+    /** The plugin folder name under {@code <cameo>/plugins}; must match the id in plugin.xml. */
     static final String PLUGIN_ID = "com.cameomcp.plugin";
 
-    // Folder names Cameo-family products install under.
+    /**
+     * Folder names Cameo-family products install under (case-insensitive), used to limit the search
+     * to likely product folders instead of scanning every directory.
+     */
     private static final Pattern PRODUCT = Pattern.compile(
             "(?i).*(cameo|catia ?magic|magic ?systems|magicdraw|magic ?cyber|magic ?software|no[ _]?magic|dassault).*");
 
+    /** Static methods only. */
     private Installer() {
     }
 
-    /** Runs the installer with the options after --install/--uninstall; returns the exit status. */
+    /**
+     * Runs the installer with the options after --install/--uninstall; returns the exit status.
+     *
+     * @param uninstall true to remove the plugin folder, false to install (replace) it
+     * @param homes Cameo installation folders given with --cameo-home; empty means search
+     * @param all with no --cameo-home, act on every installation found instead of asking
+     * @param source the plugin folder to copy (holding plugin.xml); ignored when uninstalling
+     * @param out where progress and errors are printed
+     * @return 0 on success; 1 if nothing was found or chosen, a target was not a Cameo installation, or a
+     *     copy or delete failed
+     */
     static int run(boolean uninstall, List<String> homes, boolean all, Path source, PrintStream out) {
         if (!uninstall) {
             if (source == null || !Files.isRegularFile(source.resolve("plugin.xml"))) {
@@ -85,6 +100,8 @@ final class Installer {
             }
         }
         int status = 0;
+        // Each target is replaced wholesale: the old plugin folder is deleted, then the new one copied.
+        // A failure part-way stops at once and leaves that target as it is (possibly half-copied).
         for (Path cameo : targets) {
             if (!isCameo(cameo)) {
                 out.println("Skipping " + cameo + ": not a Cameo installation (no plugins and lib folders).");
@@ -127,6 +144,8 @@ final class Installer {
     /**
      * The plugin folder to install: the folder holding this jar when it sits inside the plugin
      * folder, else {@code ../plugin/com.cameomcp.plugin} next to the release zip's launcher folder.
+     *
+     * @return the plugin folder, or null when the jar location cannot be determined
      */
     static Path defaultSource() {
         try {
@@ -145,11 +164,21 @@ final class Installer {
         }
     }
 
+    /**
+     * Tells whether a folder looks like a Cameo installation root.
+     *
+     * @param dir candidate folder
+     * @return true if it has both a plugins and a lib folder
+     */
     static boolean isCameo(Path dir) {
         return Files.isDirectory(dir.resolve("plugins")) && Files.isDirectory(dir.resolve("lib"));
     }
 
-    /** Cameo installations under the usual roots, one or two levels down, sorted and de-duplicated. */
+    /**
+     * Cameo installations under the usual roots, one or two levels down, sorted and de-duplicated.
+     *
+     * @return the installation roots found, possibly empty
+     */
     static List<Path> findHomes() {
         Set<Path> found = new LinkedHashSet<>();
         for (Path root : searchRoots()) {
@@ -175,6 +204,13 @@ final class Installer {
         return out;
     }
 
+    /**
+     * The folders searched for installations: Program Files, LOCALAPPDATA\Programs and the C: and D:
+     * drive roots on Windows; /Applications, ~/Applications, /opt and /usr/local elsewhere; plus the
+     * home folder and ~/Exe (where no-install builds are often unpacked) everywhere.
+     *
+     * @return the search roots; some may not exist
+     */
     private static List<Path> searchRoots() {
         List<Path> roots = new ArrayList<>();
         String home = System.getProperty("user.home", "");
@@ -204,7 +240,12 @@ final class Installer {
         return roots;
     }
 
-    // Subdirectories of dir; empty when dir is missing or unreadable.
+    /**
+     * Lists the immediate subdirectories of a folder.
+     *
+     * @param dir the folder
+     * @return its subdirectories; empty when dir is missing or unreadable
+     */
     private static List<Path> children(Path dir) {
         List<Path> out = new ArrayList<>();
         if (!Files.isDirectory(dir)) {
@@ -220,6 +261,12 @@ final class Installer {
         return out;
     }
 
+    /**
+     * Deletes a folder and everything in it, deepest entries first. Does nothing if it does not exist.
+     *
+     * @param dir the folder to delete
+     * @throws IOException if any entry cannot be deleted
+     */
     static void deleteTree(Path dir) throws IOException {
         if (!Files.exists(dir)) {
             return;
@@ -234,6 +281,13 @@ final class Installer {
         }
     }
 
+    /**
+     * Copies a folder tree, replacing files that already exist.
+     *
+     * @param from source folder
+     * @param to destination folder, created as needed
+     * @throws IOException if any entry cannot be copied
+     */
     static void copyTree(Path from, Path to) throws IOException {
         try (Stream<Path> walk = Files.walk(from)) {
             List<Path> all = new ArrayList<>();
@@ -249,6 +303,11 @@ final class Installer {
         }
     }
 
+    /**
+     * Reads one answer line from standard input.
+     *
+     * @return the trimmed line, or an empty string at end of input or on error
+     */
     private static String readLine() {
         try {
             String s = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)).readLine();

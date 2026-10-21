@@ -37,24 +37,41 @@ import java.util.function.Supplier;
  */
 public final class McpHttpTransport {
 
-    // Generous because bulk-create and import tools take large payloads; larger bodies get 413.
+    /**
+     * Largest accepted request body (64 MiB). Generous because bulk-create and import tools take
+     * large payloads; larger bodies get 413.
+     */
     public static final int MAX_BODY_BYTES = 64 * 1024 * 1024;
 
+    /** The protocol engine every POST is handed to. */
     private final McpServer server;
+    /** Bind address; defaults to 127.0.0.1. */
     private final String host;
+    /** Requested port; 0 picks a free one (see {@link #boundPort()}). */
     private final int port;
+    /** Bearer token clients must send, or null when none is required. */
     private final String token;
-    // Builds the /status payload; the plugin supplies Cameo and project state.
+    /** Builds the /status payload; the plugin supplies Cameo and project state. May be null. */
     private final Supplier<Map<String, Object>> status;
+    /** The running server, or null when stopped. Guarded by this object's lock. */
     private HttpServer http;
+    /** Request threads of the running server, or null when stopped. */
     private ExecutorService executor;
-    // Counters and last error feed the status window's diagnostics.
+    /** When the server last started, epoch milliseconds. Feeds the status window's diagnostics. */
     private volatile long startedMillis;
+    /** HTTP requests served since construction, across every endpoint. */
     private final AtomicLong httpRequests = new AtomicLong();
+    /** The last transport-level failure, or null. */
     private volatile String lastError;
 
     /**
-     * @param token  bearer token clients must send, or null/blank for none
+     * Creates a stopped transport; call {@link #start()} to serve.
+     *
+     * @param server the protocol engine
+     * @param host bind address; null or blank means 127.0.0.1. Anything other than loopback exposes the model
+     *     to the network.
+     * @param port TCP port, or 0 for any free port
+     * @param token bearer token clients must send, or null/blank for none
      * @param status supplier for the {@code /status} payload (may be null)
      */
     public McpHttpTransport(McpServer server, String host, int port, String token, Supplier<Map<String, Object>> status) {
@@ -111,35 +128,65 @@ public final class McpHttpTransport {
         server.endAllSessions("server stopped");
     }
 
+    /**
+     * Returns true while the server is bound and serving.
+     *
+     * @return true while the server is bound and serving
+     */
     public synchronized boolean isRunning() {
         return http != null;
     }
 
-    /** The actual bound port (useful when constructed with port 0). */
+    /**
+     * The actual bound port (useful when constructed with port 0).
+     *
+     * @return the bound port while running, otherwise the configured port
+     */
     public synchronized int boundPort() {
         return http == null ? port : http.getAddress().getPort();
     }
 
+    /**
+     * Returns the bind address.
+     *
+     * @return the bind address
+     */
     public String host() {
         return host;
     }
 
-    /** True when clients must send the bearer token. */
+    /**
+     * True when clients must send the bearer token.
+     *
+     * @return whether a bearer token is configured
+     */
     public boolean tokenRequired() {
         return token != null;
     }
 
-    /** When the server last started, in epoch milliseconds. */
+    /**
+     * When the server last started, in epoch milliseconds.
+     *
+     * @return epoch milliseconds, or 0 if never started
+     */
     public long startedMillis() {
         return startedMillis;
     }
 
-    /** HTTP requests served since start, across every endpoint. */
+    /**
+     * HTTP requests served since start, across every endpoint.
+     *
+     * @return the request count
+     */
     public long httpRequests() {
         return httpRequests.get();
     }
 
-    /** The last transport-level failure, or null; shown in the status window. */
+    /**
+     * The last transport-level failure, or null; shown in the status window.
+     *
+     * @return a description of the last I/O or runtime failure, or null
+     */
     public String lastError() {
         return lastError;
     }
@@ -147,6 +194,8 @@ public final class McpHttpTransport {
     /**
      * The URL clients should use. A wildcard bind address is reported as 127.0.0.1, which is
      * always reachable locally; IPv6 literals get the brackets URLs require.
+     *
+     * @return the MCP endpoint URL, for example {@code http://127.0.0.1:18740/mcp}
      */
     public String endpointUrl() {
         String h = host.equals("0.0.0.0") || host.equals("::") ? "127.0.0.1" : host;
@@ -158,9 +207,12 @@ public final class McpHttpTransport {
 
     // ------------------------------------------------------------------ handlers
 
-    /*
+    /**
      * The MCP endpoint. Checks run cheapest and most security-relevant first: path, origin,
-     * CORS preflight, token. Then the HTTP verb picks the action.
+     * CORS preflight, token. Then the HTTP verb picks the action. Runs on a transport worker thread.
+     *
+     * @param ex the exchange; always closed before returning
+     * @throws IOException if the response cannot be written
      */
     private void handleMcp(HttpExchange ex) throws IOException {
         httpRequests.incrementAndGet();
@@ -238,7 +290,14 @@ public final class McpHttpTransport {
         }
     }
 
-    // Health report for people and scripts. Deliberately unauthenticated: it exposes no model data.
+    /**
+     * Health report for people and scripts. Deliberately unauthenticated: it exposes no model data.
+     * Note: the payload map from the supplier must be mutable, because the endpoint and auth flags are added
+     * to it.
+     *
+     * @param ex the exchange; always closed before returning
+     * @throws IOException if the response cannot be written
+     */
     private void handleStatus(HttpExchange ex) throws IOException {
         httpRequests.incrementAndGet();
         try {
@@ -256,7 +315,13 @@ public final class McpHttpTransport {
         }
     }
 
-    // Plain-text banner for someone who opens the server address in a browser.
+    /**
+     * Plain-text banner for someone who opens the server address in a browser; any path other than "/" gets
+     * 404.
+     *
+     * @param ex the exchange; always closed before returning
+     * @throws IOException if the response cannot be written
+     */
     private void handleRoot(HttpExchange ex) throws IOException {
         httpRequests.incrementAndGet();
         try {
@@ -271,7 +336,13 @@ public final class McpHttpTransport {
 
     // ------------------------------------------------------------------ helpers
 
-    // Constant-time comparison so response timing doesn't leak how much of the token matched.
+    /**
+     * Checks the bearer token. Uses a constant-time comparison so response timing does not leak how much of
+     * the token matched.
+     *
+     * @param ex the exchange
+     * @return true if no token is configured or the Authorization header carries the right one
+     */
     private boolean authorized(HttpExchange ex) {
         if (token == null) {
             return true;
@@ -284,7 +355,12 @@ public final class McpHttpTransport {
         return MessageDigest.isEqual(given, token.getBytes(StandardCharsets.UTF_8));
     }
 
-    /** Requests without Origin (CLI clients) pass; browser origins must be local. */
+    /**
+     * Requests without Origin (CLI clients) pass; browser origins must be local.
+     *
+     * @param origin the Origin header value, or null
+     * @return true for no origin, or an http(s) origin on localhost, 127.0.0.1 or ::1
+     */
     static boolean isLocalOrigin(String origin) {
         if (origin == null || origin.isEmpty()) {
             return true;
@@ -305,11 +381,21 @@ public final class McpHttpTransport {
         }
     }
 
+    /**
+     * Applies {@link #isLocalOrigin} to the request's Origin header (DNS-rebinding protection).
+     *
+     * @param ex the exchange
+     * @return whether the request may proceed
+     */
     private static boolean originAllowed(HttpExchange ex) {
         return isLocalOrigin(ex.getRequestHeaders().getFirst("Origin"));
     }
 
-    // Echo local origins back so browser-based MCP clients can read responses and the session header.
+    /**
+     * Echoes local origins back so browser-based MCP clients can read responses and the session header.
+     *
+     * @param ex the exchange whose response headers are set
+     */
     private static void addCors(HttpExchange ex) {
         String origin = ex.getRequestHeaders().getFirst("Origin");
         if (origin != null && isLocalOrigin(origin)) {
@@ -320,7 +406,13 @@ public final class McpHttpTransport {
         }
     }
 
-    // Reads the whole body, giving up (null) once it passes MAX_BODY_BYTES.
+    /**
+     * Reads the whole body, giving up once it passes {@link #MAX_BODY_BYTES}.
+     *
+     * @param ex the exchange
+     * @return the body as UTF-8 text, or null when it is too large
+     * @throws IOException if reading fails
+     */
     private static String readBody(HttpExchange ex) throws IOException {
         try (InputStream in = ex.getRequestBody()) {
             ByteArrayOutputStream buf = new ByteArrayOutputStream();
@@ -336,10 +428,27 @@ public final class McpHttpTransport {
         }
     }
 
+    /**
+     * Sends a JSON response.
+     *
+     * @param ex the exchange
+     * @param code HTTP status
+     * @param body the JSON object to send
+     * @throws IOException if writing fails
+     */
     private static void sendJson(HttpExchange ex, int code, Map<String, Object> body) throws IOException {
         send(ex, code, "application/json; charset=utf-8", Json.write(body));
     }
 
+    /**
+     * Sends a text response with no caching.
+     *
+     * @param ex the exchange
+     * @param code HTTP status
+     * @param contentType the Content-Type header value
+     * @param text the body
+     * @throws IOException if writing fails
+     */
     private static void send(HttpExchange ex, int code, String contentType, String text) throws IOException {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().set("Content-Type", contentType);

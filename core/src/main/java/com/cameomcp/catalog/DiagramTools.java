@@ -13,27 +13,48 @@ import static com.cameomcp.mcp.ToolSpec.tool;
 /** Diagram creation, images, shapes, paths and presentation repair tools. */
 public final class DiagramTools {
 
-    // Family name used in docs and in cameo_list_tools filters.
+    /** Family name used in docs and in cameo_list_tools filters. */
     public static final String FAMILY = "diagrams";
 
     // Parameter help reused by many diagram tools, so every tool says the same thing.
+    /** Help text for a diagram id parameter. */
     private static final String DIAGRAM_ID = "Diagram ID from cameo_list_diagrams or cameo_create_diagram.";
+    /** Help text for an optional list of presentation ids. */
     private static final String PRESENTATION_IDS = "Optional presentationIds (from cameo_list_diagram_shapes) to "
             + "limit the operation to; omit to target every eligible presentation on the diagram.";
+    /** Help text for a dry_run flag. */
     private static final String DRY_RUN = "Preview what would change without modifying the diagram.";
 
+    /** Static methods only. */
     private DiagramTools() {
     }
 
-    // Raw JSON-schema fragments for the item properties of objArray(...) parameters.
+    /**
+     * Raw JSON-schema fragment for a string item property of objArray(...) parameters.
+     *
+     * @param desc property description
+     * @return the schema map
+     */
     private static Map<String, Object> str(String desc) {
         return Json.obj("type", "string", "description", desc);
     }
 
+    /**
+     * Raw JSON-schema fragment for an integer item property.
+     *
+     * @param desc property description
+     * @return the schema map
+     */
     private static Map<String, Object> num(String desc) {
         return Json.obj("type", "integer", "description", desc);
     }
 
+    /**
+     * Raw JSON-schema fragment for an {x, y} integer point.
+     *
+     * @param desc property description
+     * @return the schema map
+     */
     private static Map<String, Object> point(String desc) {
         return Json.obj("type", "object", "description", desc, "properties",
                 Json.obj("x", Json.obj("type", "integer"), "y", Json.obj("type", "integer")), "required",
@@ -43,6 +64,8 @@ public final class DiagramTools {
     /**
      * The family's specs, in the order clients see them. Descriptions and parameter help are the
      * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     *
+     * @return the specs, a fixed-size list built on every call
      */
     public static List<ToolSpec> specs() {
         return Arrays.asList(

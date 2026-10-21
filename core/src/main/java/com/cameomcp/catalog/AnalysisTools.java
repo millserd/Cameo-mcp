@@ -14,28 +14,36 @@ import static com.cameomcp.mcp.ToolSpec.tool;
  */
 public final class AnalysisTools {
 
-    // Family name used in docs and in cameo_list_tools filters.
+    /** Family name used in docs and in cameo_list_tools filters. */
     public static final String FAMILY = "analysis";
 
     // Parameter help shared by the methodology and comparison tools.
+    /** Help text for the methodology pack id parameter. */
     private static final String PACK_ID = "Methodology pack id: \"oosem\" or \"uaf\" (see cameo_list_methodology_packs).";
+    /** Help text for the recipe id parameter. */
     private static final String RECIPE_ID = "Recipe id from the pack, e.g. \"use_case_model\", \"system_requirements_package\", "
             + "\"logical_activity_flow\", \"logical_port_bdd\" (see cameo_get_methodology_pack).";
+    /** Help text for the recipe parameters object. */
     private static final String RECIPE_PARAMS = "Recipe parameter values by name (e.g. {\"subject_name\": \"ATM\", "
             + "\"actor_names\": [\"Customer\"]}); they materialize the expected artifact names. Parameters are listed "
             + "per recipe by cameo_get_methodology_pack. root_package_id here also seeds the workspace.";
+    /** Help text for the normalized artifact snapshots parameter. */
     private static final String ARTIFACTS = "Normalized artifact snapshots, each {\"key\", \"kind\", \"name\", \"element_id\"} "
             + "plus optional parent_key, stereotypes, properties, relationships. Keys are the recipe's artifact keys "
             + "(e.g. \"workspace\", \"use_case_package\").";
+    /** Help text for the artifacts compared by the comparison tools. */
     private static final String CMP_ARTIFACTS = "Artifact objects {\"key\" (or element_id/id), \"kind\" (or type/humanType), "
             + "\"name\", \"parent_key\", \"element_id\", \"stereotypes\", \"properties\"}.";
 
+    /** Static methods only. */
     private AnalysisTools() {
     }
 
     /**
      * The family's specs, in the order clients see them. Descriptions and parameter help are the
      * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     *
+     * @return the specs, a fixed-size list built on every call
      */
     public static List<ToolSpec> specs() {
         return Arrays.asList(

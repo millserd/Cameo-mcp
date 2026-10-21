@@ -8,10 +8,17 @@ import java.math.BigDecimal;
  */
 final class LazyNumber extends Number {
 
+    /** Number is Serializable; this class is never serialized but keeps the compiler quiet. */
     private static final long serialVersionUID = 1L;
 
+    /** The number exactly as it appeared in the JSON text. */
     private final String text;
 
+    /**
+     * Wraps a number literal without converting it.
+     *
+     * @param text a JSON number literal
+     */
     LazyNumber(String text) {
         this.text = text;
     }
@@ -21,6 +28,8 @@ final class LazyNumber extends Number {
         try {
             return Integer.parseInt(text);
         } catch (NumberFormatException e) {
+            // Too large for an int: truncate like a long-to-int cast, then fall back to BigDecimal for
+            // decimals.
             try {
                 return (int) Long.parseLong(text);
             } catch (NumberFormatException e2) {

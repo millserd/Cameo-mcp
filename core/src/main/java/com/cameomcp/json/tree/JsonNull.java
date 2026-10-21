@@ -3,8 +3,10 @@ package com.cameomcp.json.tree;
 /** JSON {@code null}. */
 public final class JsonNull extends JsonElement {
 
+    /** The single JSON null value; every null member or element refers to it. */
     public static final JsonNull INSTANCE = new JsonNull();
 
+    /** Use {@link #INSTANCE}. */
     private JsonNull() {
     }
 

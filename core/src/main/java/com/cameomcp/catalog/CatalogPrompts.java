@@ -8,10 +8,18 @@ import java.util.Map;
 /** Ready-made modeling workflows offered as MCP prompts. */
 public final class CatalogPrompts {
 
+    /** Static methods only. */
     private CatalogPrompts() {
     }
 
-    // A prompt argument's value, or the placeholder when the client left it out or blank.
+    /**
+     * Reads a prompt argument's value, or the placeholder when the client left it out or blank.
+     *
+     * @param args the client's prompt arguments
+     * @param name argument name
+     * @param dflt placeholder text
+     * @return the value as a string, or {@code dflt}
+     */
     private static String arg(Map<String, Object> args, String name, String dflt) {
         Object v = args.get(name);
         return v == null || String.valueOf(v).trim().isEmpty() ? dflt : String.valueOf(v);
@@ -20,6 +28,8 @@ public final class CatalogPrompts {
     /**
      * Adds the workflow prompts to the server. Each prompt expands into step-by-step instructions
      * that name the tools to call, so agents follow the tested path through the catalog.
+     *
+     * @param server the server to add the prompts to
      */
     public static void register(McpServer server) {
         server.addPrompt(new McpPrompt("model_system_structure", "Model a system structure",

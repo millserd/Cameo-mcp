@@ -9,25 +9,50 @@ import java.math.BigInteger;
  */
 public final class JsonPrimitive extends JsonElement {
 
+    /** Never null: a Boolean, a Number (possibly a {@link LazyNumber} from the parser) or a String. */
     private final Object value;
 
+    /**
+     * Creates a boolean primitive.
+     *
+     * @param value the boolean
+     * @throws NullPointerException if value is null
+     */
     public JsonPrimitive(Boolean value) {
         this.value = requireNonNull(value);
     }
 
+    /**
+     * Creates a number primitive. The number is stored as given, not converted.
+     *
+     * @param value the number
+     * @throws NullPointerException if value is null
+     */
     public JsonPrimitive(Number value) {
         this.value = requireNonNull(value);
     }
 
+    /**
+     * Creates a string primitive.
+     *
+     * @param value the string
+     * @throws NullPointerException if value is null
+     */
     public JsonPrimitive(String value) {
         this.value = requireNonNull(value);
     }
 
-    /** A character is stored as a one-character string. */
+    /**
+     * A character is stored as a one-character string.
+     *
+     * @param value the character
+     * @throws NullPointerException if value is null
+     */
     public JsonPrimitive(Character value) {
         this.value = requireNonNull(value).toString();
     }
 
+    /** Null check with a message naming this class (used by every constructor). */
     private static <T> T requireNonNull(T v) {
         if (v == null) {
             throw new NullPointerException("JsonPrimitive value");
@@ -40,14 +65,29 @@ public final class JsonPrimitive extends JsonElement {
         return this;
     }
 
+    /**
+     * Returns true if the value is a boolean.
+     *
+     * @return true if the value is a boolean
+     */
     public boolean isBoolean() {
         return value instanceof Boolean;
     }
 
+    /**
+     * Returns true if the value is a number.
+     *
+     * @return true if the value is a number
+     */
     public boolean isNumber() {
         return value instanceof Number;
     }
 
+    /**
+     * Returns true if the value is a string (including numeric strings).
+     *
+     * @return true if the value is a string (including numeric strings)
+     */
     public boolean isString() {
         return value instanceof String;
     }
@@ -119,11 +159,16 @@ public final class JsonPrimitive extends JsonElement {
         return new BigDecimal(getAsString()).toBigIntegerExact();
     }
 
-    /** The raw value: a Boolean, Number or String. */
+    /**
+     * The raw value: a Boolean, Number or String.
+     *
+     * @return the stored Boolean, Number or String, as {@link JsonWriter} needs it
+     */
     Object value() {
         return value;
     }
 
+    /** True for the integral boxed types, which compare and hash by their long value. */
     private static boolean isIntegral(Object v) {
         return v instanceof BigInteger || v instanceof Long || v instanceof Integer
                 || v instanceof Short || v instanceof Byte;
@@ -131,6 +176,8 @@ public final class JsonPrimitive extends JsonElement {
 
     @Override
     public int hashCode() {
+        // Integral numbers hash by long value, other numbers by double bits. Caveat (same as Gson):
+        // 1 and 1.0 are equal under equals() but hash differently, so avoid mixing them as map keys.
         if (isIntegral(value)) {
             long v = ((Number) value).longValue();
             return (int) (v ^ (v >>> 32));

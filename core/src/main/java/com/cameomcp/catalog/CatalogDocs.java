@@ -13,10 +13,16 @@ import java.util.Map;
 /** Renders the agent guide and a Markdown tool reference from the catalog. */
 public final class CatalogDocs {
 
+    /** Static methods only. */
     private CatalogDocs() {
     }
 
-    /** Writes the Markdown tool reference to the given file (used by the build to refresh docs/TOOLS.md). */
+    /**
+     * Writes the Markdown tool reference to the given file (used by the build to refresh docs/TOOLS.md).
+     *
+     * @param args optional output file path; with none, the reference is printed to standard output
+     * @throws Exception if the catalog cannot be loaded or the file cannot be written
+     */
     public static void main(String[] args) throws Exception {
         String text = toolReference(Catalog.all());
         if (args.length == 0) {
@@ -26,7 +32,12 @@ public final class CatalogDocs {
         }
     }
 
-    /** The bundled AGENT-GUIDE.md (docs/AGENT-GUIDE.md in the source tree). */
+    /**
+     * The bundled AGENT-GUIDE.md (docs/AGENT-GUIDE.md in the source tree).
+     *
+     * @return the guide text; a short fallback built from Catalog.INSTRUCTIONS if the resource is missing or
+     *     unreadable
+     */
     public static String guide() {
         try (InputStream in = CatalogDocs.class.getResourceAsStream("/com/cameomcp/AGENT-GUIDE.md")) {
             if (in == null) {
@@ -44,7 +55,12 @@ public final class CatalogDocs {
         }
     }
 
-    /** Markdown reference of the given tools, grouped by family. */
+    /**
+     * Markdown reference of the given tools, grouped by family.
+     *
+     * @param specs the tools to document
+     * @return Markdown with one section per family and, per tool, its kind, description and parameter table
+     */
     @SuppressWarnings("unchecked")
     public static String toolReference(Collection<ToolSpec> specs) {
         Map<String, StringBuilder> byFamily = new LinkedHashMap<>();

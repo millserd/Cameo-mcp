@@ -4,24 +4,42 @@ package com.cameomcp.mcp;
 /** Observes protocol activity, for the diagnostics window and the Cameo log. */
 public interface McpListener {
 
-    /** A client sent {@code initialize} and was given a new session id. */
+    /**
+     * A client sent {@code initialize} and was given a new session id.
+     *
+     * @param session the new session
+     */
     default void sessionStarted(McpSession session) {
     }
 
-    /** A session was closed (HTTP DELETE or server stop); {@code reason} is free text for the log. */
+    /**
+     * A session was closed (HTTP DELETE or server stop); {@code reason} is free text for the log.
+     *
+     * @param session the ended session
+     * @param reason why it ended: "client closed session", "idle" or "server stopped"
+     */
     default void sessionEnded(McpSession session, String reason) {
     }
 
     /**
-     * Called after every JSON-RPC request (tool is null unless method is tools/call).
-     * {@code millis} is the wall time spent handling it; {@code errorOrNull} is the error message
-     * sent back, or null on success.
+     * Called after every JSON-RPC request. Called on the HTTP worker thread that handled it, so
+     * implementations that touch Swing must hand off to the EDT themselves.
+     *
+     * @param session the client's session; null only for messages of a batch that come before its {@code initialize}
+     * @param method the JSON-RPC method, for example {@code tools/call}
+     * @param tool the tool name for tools/call, otherwise null
+     * @param millis wall time spent handling the request
+     * @param errorOrNull the error message sent back, or null on success
      */
-    /** Called after every JSON-RPC request (tool is null unless method is tools/call). */
     default void requestHandled(McpSession session, String method, String tool, long millis, String errorOrNull) {
     }
 
-    /** Free-form server log line; {@code level} is "info", "warn" or "error". */
+    /**
+     * Free-form server log line.
+     *
+     * @param level the severity: "info", "warn" or "error"
+     * @param message the line to log
+     */
     default void log(String level, String message) {
     }
 }

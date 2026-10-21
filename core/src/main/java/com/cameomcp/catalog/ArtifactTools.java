@@ -15,21 +15,25 @@ import static com.cameomcp.mcp.ToolSpec.tool;
  */
 public final class ArtifactTools {
 
-    // Family name used in docs and in cameo_list_tools filters.
+    /** Family name used in docs and in cameo_list_tools filters. */
     public static final String FAMILY = "artifacts";
 
     /** Seconds a relation-map refresh/expand/render may take at most (the tools clamp to 600). */
     private static final long LONG_TIMEOUT = 620;
 
+    /** Help text listing the matrix kinds the matrix tools accept. */
     private static final String MATRIX_KINDS = "refine (Refine Requirement Matrix), derive (Derive Requirement Matrix), "
             + "satisfy (Satisfy Requirement Matrix), allocation (SysML Allocation Matrix), dependency (Dependency Matrix)";
 
+    /** Static methods only. */
     private ArtifactTools() {
     }
 
     /**
      * The family's specs, in the order clients see them. Descriptions and parameter help are the
      * text agents read when choosing a tool, so they say what the tool returns and which tool to call next.
+     *
+     * @return the specs, a fixed-size list built on every call
      */
     public static List<ToolSpec> specs() {
         return Arrays.asList(
