@@ -128,4 +128,55 @@ class StdioLauncherTest {
                 StdioLauncher.printConfig("/usr/bin/java", "/x.jar", Collections.emptyList(), null)), "mcpServers", "cameo");
         assertNull(plain.get("env"));
     }
+
+    /** --call arguments: none, inline JSON, stdin, key=value with JSON-or-string values; bad words are rejected. */
+    @Test
+    void parsesCallArguments() throws Exception {
+        java.io.InputStream none = new ByteArrayInputStream(new byte[0]);
+        assertEquals(Json.obj(), StdioLauncher.parseCallArgs(java.util.Collections.emptyList(), none));
+        assertEquals(Json.obj("id", "_1"), StdioLauncher.parseCallArgs(java.util.Arrays.asList("{\"id\":\"_1\"}"), none));
+        assertEquals(Json.obj("limit", 5L), StdioLauncher.parseCallArgs(java.util.Arrays.asList("-"),
+                new ByteArrayInputStream("\uFEFF{\"limit\":5}".getBytes(StandardCharsets.UTF_8))));
+        Map<String, Object> kv = StdioLauncher.parseCallArgs(
+                java.util.Arrays.asList("name=Engine Block", "limit=5", "full=true", "ids=[\"a\"]"), none);
+        assertEquals("Engine Block", kv.get("name"));
+        assertEquals(5L, kv.get("limit"));
+        assertEquals(Boolean.TRUE, kv.get("full"));
+        assertEquals(java.util.Arrays.asList("a"), kv.get("ids"));
+        assertThrows(IllegalArgumentException.class,
+                () -> StdioLauncher.parseCallArgs(java.util.Arrays.asList("oops"), none));
+        assertThrows(IllegalArgumentException.class,
+                () -> StdioLauncher.parseCallArgs(java.util.Arrays.asList("[1]"), none));
+    }
+
+    /** --call prints the tool's structured result against a live server, and exits 1 offline. */
+    @Test
+    void oneShotCallsAndLists() throws Exception {
+        int port = freePort();
+        String url = "http://127.0.0.1:" + port + "/mcp";
+        McpHttpTransport t = new McpHttpTransport(echoServer(), "127.0.0.1", port, null, null);
+        t.start();
+        try {
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            assertEquals(0, StdioLauncher.oneShot("--call", "cameo_status", Collections.emptyList(), url, null, 5000,
+                    new PrintStream(buf, true, "UTF-8")));
+            Map<String, Object> r = Json.parseObject(buf.toString(StandardCharsets.UTF_8));
+            assertEquals(Boolean.TRUE, r.get("ok"));
+            assertEquals("cameo-mcp-cli", r.get("client"));
+        } finally {
+            t.stop();
+        }
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        assertEquals(1, StdioLauncher.oneShot("--call", "cameo_get_project", Collections.emptyList(), url, null, 5000,
+                new PrintStream(buf, true, "UTF-8")));
+        assertTrue(buf.toString(StandardCharsets.UTF_8).contains("CAMEO_NOT_RUNNING"));
+        buf.reset();
+        assertEquals(0, StdioLauncher.oneShot("--list", null, Collections.emptyList(), url, null, 5000,
+                new PrintStream(buf, true, "UTF-8")));
+        assertEquals(Catalog.all().size(), buf.toString(StandardCharsets.UTF_8).trim().split("\n").length);
+        buf.reset();
+        assertEquals(0, StdioLauncher.oneShot("--describe", "cameo_get_element", Collections.emptyList(), url, null,
+                5000, new PrintStream(buf, true, "UTF-8")));
+        assertNotNull(JsonPath.map(Json.parseObject(buf.toString(StandardCharsets.UTF_8)), "inputSchema"));
+    }
 }

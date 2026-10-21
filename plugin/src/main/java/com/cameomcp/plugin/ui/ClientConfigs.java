@@ -83,4 +83,28 @@ public final class ClientConfigs {
         File jar = dir == null ? null : new File(dir, "cameo-mcp-stdio.jar");
         return jar != null && jar.isFile() ? jar.getAbsolutePath() : "<path-to>/cameo-mcp-stdio.jar";
     }
+
+    /**
+     * Everything an AI agent needs, as text the user pastes into the chat: the endpoint, the token if
+     * one is set, where the agent skill is, and the command-line launcher.
+     *
+     * @param rt the runtime
+     * @return the text for the clipboard
+     */
+    public static String agentInfo(McpRuntime rt) {
+        File dir = CameoMcpPlugin.pluginDirectory();
+        File skill = dir == null ? null : new File(dir, "skills/cameo-mcp/SKILL.md");
+        StringBuilder sb = new StringBuilder("Use my Cameo model through the Cameo MCP server.\n")
+                .append("MCP endpoint: ").append(rt.endpointUrl()).append('\n');
+        String t = token(rt);
+        if (t != null) {
+            sb.append("Bearer token: ").append(t).append('\n');
+        }
+        return sb.append("Instructions (read first): ")
+                .append(skill != null && skill.isFile() ? skill.getAbsolutePath() : "skills/cameo-mcp/SKILL.md in the Cameo MCP plugin folder")
+                .append('\n')
+                .append("Command-line launcher: \"").append(javaExecutable()).append("\" -jar \"").append(launcherJar())
+                .append("\" --url ").append(rt.endpointUrl()).append('\n')
+                .toString();
+    }
 }

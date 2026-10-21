@@ -244,7 +244,12 @@ public final class McpHttpTransport {
             String sessionId = ex.getRequestHeaders().getFirst("Mcp-Session-Id");
             if ("GET".equals(method)) {
                 ex.getResponseHeaders().set("Allow", "POST, DELETE");
-                sendJson(ex, 405, Json.obj("error", "This server does not offer an SSE stream; use POST."));
+                // An agent that only opens the URL learns how to call it.
+                sendJson(ex, 405, Json.obj("error", "This is an MCP endpoint; send JSON-RPC with POST.",
+                        "example", Json.obj("jsonrpc", "2.0", "id", 1, "method", "tools/call",
+                                "params", Json.obj("name", "cameo_status", "arguments", Json.obj())),
+                        "help", "No handshake is needed. Agent instructions: skills/cameo-mcp/SKILL.md in the "
+                                + "Cameo MCP plugin folder."));
                 return;
             }
             if ("DELETE".equals(method)) {
@@ -327,7 +332,10 @@ public final class McpHttpTransport {
         try {
             String text = server.info().name() + " " + server.info().version() + " is running.\n"
                     + "MCP endpoint (Streamable HTTP): " + endpointUrl() + "\n"
-                    + "Health: " + endpointUrl().replace("/mcp", "/status") + "\n";
+                    + "Health: " + endpointUrl().replace("/mcp", "/status") + "\n"
+                    + "Call a tool: POST " + endpointUrl() + " with "
+                    + "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"cameo_status\",\"arguments\":{}}}\n"
+                    + "Agent instructions: skills/cameo-mcp/SKILL.md in the Cameo MCP plugin folder.\n";
             send(ex, "/".equals(ex.getRequestURI().getPath()) ? 200 : 404, "text/plain; charset=utf-8", text);
         } finally {
             ex.close();

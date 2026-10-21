@@ -84,6 +84,20 @@ class McpHttpTransportTest {
     }
 
     @Test
+    void oneShotCallNeedsNoHandshake() throws Exception {
+        // SKILL.md tells agents to POST tools/call with no initialize and no session header.
+        transport = new McpHttpTransport(McpServerTest.server(), "127.0.0.1", 0, null, null);
+        transport.start();
+        String url = transport.endpointUrl();
+        Resp call = http("POST", url, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":"
+                + "{\"name\":\"echo_tool\",\"arguments\":{\"text\":\"hi\"}}}", null);
+        assertEquals(200, call.code);
+        assertEquals("hi", JsonPath.str(Json.parse(call.body), "result", "structuredContent", "echo"));
+        Resp get = http("GET", url, null, null);
+        assertEquals("tools/call", JsonPath.str(Json.parse(get.body), "example", "method"));
+    }
+
+    @Test
     void rejectsForeignOriginsAndChecksToken() throws Exception {
         transport = new McpHttpTransport(McpServerTest.server(), "127.0.0.1", 0, "s3cret", null);
         transport.start();

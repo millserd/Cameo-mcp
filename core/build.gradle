@@ -7,16 +7,16 @@ dependencies {
 }
 
 processResources {
-    // The agent guide is served as an MCP resource; keep one source of truth in docs/.
-    from(rootProject.file('docs/AGENT-GUIDE.md')) { into 'com/cameomcp' }
+    // The agent guide is served as an MCP resource; keep one source of truth in skills/cameo-mcp/.
+    from(rootProject.file('skills/cameo-mcp/AGENT-GUIDE.md')) { into 'com/cameomcp' }
     inputs.property('version', project.version)
     filesMatching('com/cameomcp/version.properties') { expand(version: project.version) }
 }
 
 tasks.register('generateToolDocs', JavaExec) {
     group = 'documentation'
-    description = 'Regenerates docs/TOOLS.md from the tool catalog.'
+    description = 'Regenerates skills/cameo-mcp/TOOLS.md from the tool catalog.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.cameomcp.catalog.CatalogDocs'
-    args rootProject.file('docs/TOOLS.md').absolutePath
+    args rootProject.file('skills/cameo-mcp/TOOLS.md').absolutePath
 }
