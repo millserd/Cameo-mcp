@@ -23,7 +23,7 @@
     <edition>Architect</edition>
     <edition>Enterprise</edition>
     <installation>
-        <file from="plugins/${pluginId}/*.*" to="plugins/${pluginId}/*.*"/>
+@PLUGIN_FILES@
         <file from="${descriptorPath}" to="${descriptorPath}"/>
     </installation>
 </resourceDescriptor>
