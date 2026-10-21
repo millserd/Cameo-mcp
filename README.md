@@ -113,7 +113,9 @@ Windows `java.exe` from the WSL shell.
 
 [skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md) is a skill in the common `SKILL.md` format
 (frontmatter `name` and `description`, then instructions). Copy the `skills/cameo-mcp` folder into
-your agent's skills folder, or paste the file into its instructions. It makes the agent:
+your agent's skills folder, or paste the file into its instructions. The plugin install (rdzip or
+release zip) also puts a copy at `<Cameo install>/plugins/com.cameomcp.plugin/skills/cameo-mcp/SKILL.md`,
+so an agent on the Cameo machine can load it from there. It makes the agent:
 
 1. ask the user for the Cameo MCP host, port and token before its first model call,
 2. check `GET http://<host>:<port>/status`,

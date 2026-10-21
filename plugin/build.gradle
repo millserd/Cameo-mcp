@@ -70,6 +70,8 @@ tasks.register('assemblePlugin', Copy) {
     from(project(':stdio').tasks.named('jar'))
     from(rootProject.file('README.md'))
     from(rootProject.file('docs/AGENT-GUIDE.md'))
+    // The agent skill, so agents on the Cameo machine find it at plugins/<id>/skills/cameo-mcp/SKILL.md.
+    into('skills') { from(rootProject.file('skills')) }
     doFirst { delete out }
 }
 
@@ -103,7 +105,8 @@ tasks.register('rdzip', Zip) {
         // 2026x install the files one folder too deep (plugins/<id>/<id>/), so Cameo never saw plugin.xml.
         filter { line ->
             if (!line.contains('@PLUGIN_FILES@')) return line
-            tasks.named('assemblePlugin').get().destinationDir.listFiles().findAll { it.isFile() }*.name.sort().collect {
+            def root = tasks.named('assemblePlugin').get().destinationDir
+            fileTree(root).files.collect { root.toPath().relativize(it.toPath()).toString().replace('\\', '/') }.sort().collect {
                 def path = "plugins/${pluginId}/${it}"
                 "        <file from=\"${path}\" to=\"${path}\"/>"
             }.join('\n')
