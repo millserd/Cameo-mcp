@@ -99,6 +99,13 @@ The launcher answers `tools/list` even while Cameo is closed, returns a clear "s
 for tool calls until it is up, and reconnects on its own when Cameo starts or restarts.
 `java -jar cameo-mcp-stdio.jar --diagnose` checks the connection from a terminal.
 
+**Agents whose shell runs in a sandbox, VM, container or WSL** get "connection refused" at
+`127.0.0.1:18740` even when Cameo shows the server running, because their `127.0.0.1` is not the
+Windows host. Register the launcher above in the MCP client's own config instead, so the client
+starts it on Windows. From WSL2 you can also turn on mirrored networking (`networkingMode=mirrored`
+under `[wsl2]` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`) or start the launcher with
+Windows `java.exe` from the WSL shell.
+
 ## Agent skill
 
 [skills/cameo-mcp/SKILL.md](skills/cameo-mcp/SKILL.md) is a skill in the common `SKILL.md` format
