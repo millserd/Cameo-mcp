@@ -17,14 +17,19 @@ import java.util.TreeMap;
  */
 public final class MethodologyRegistry {
 
+    /** Parsed packs keyed by lower-case pack ID; null until first use. */
     private static volatile Map<String, Map<String, Object>> packs;
 
+    /** Static methods only. */
     private MethodologyRegistry() {
     }
 
-    /*
+    /**
      * Parses the embedded pack JSON once (double-checked locking on a volatile field) into a map keyed
      * by lower-cased pack ID; a duplicate ID is a data error and fails fast.
+     *
+     * @return the parsed packs, shared and not to be modified
+     * @throws IllegalStateException if the embedded JSON has a duplicate pack ID
      */
     private static Map<String, Map<String, Object>> packs() {
         Map<String, Map<String, Object>> local = packs;
@@ -48,7 +53,11 @@ public final class MethodologyRegistry {
         return local;
     }
 
-    /** All packs sorted by id. */
+    /**
+     * All packs sorted by id.
+     *
+     * @return deep copies of every pack
+     */
     public static List<Map<String, Object>> listPacks() {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> pack : packs().values()) {
@@ -57,7 +66,13 @@ public final class MethodologyRegistry {
         return out;
     }
 
-    /** One pack by id (case-insensitive). */
+    /**
+     * One pack by id (case-insensitive).
+     *
+     * @param packId pack ID, any case
+     * @return a deep copy of the pack
+     * @throws ToolException NOT_FOUND for an unknown or null ID
+     */
     public static Map<String, Object> getPack(String packId) {
         Map<String, Object> pack = packId == null ? null : packs().get(packId.toLowerCase(Locale.ROOT));
         if (pack == null) {
@@ -67,7 +82,14 @@ public final class MethodologyRegistry {
         return Json.copy(pack);
     }
 
-    /** One recipe of a pack by exact id. */
+    /**
+     * One recipe of a pack by exact id.
+     *
+     * @param packId pack ID, any case
+     * @param recipeId recipe ID, exact case
+     * @return a deep copy of the recipe
+     * @throws ToolException NOT_FOUND for an unknown pack or recipe
+     */
     public static Map<String, Object> getRecipe(String packId, String recipeId) {
         Map<String, Object> pack = getPack(packId);
         List<String> ids = new ArrayList<>();
@@ -82,7 +104,12 @@ public final class MethodologyRegistry {
                 + ". Valid recipe ids: " + String.join(", ", ids) + ".");
     }
 
-    /** The recipe list of an already-loaded pack (no copy). */
+    /**
+     * The recipe list of an already-loaded pack (no copy).
+     *
+     * @param pack a pack map
+     * @return its recipes
+     */
     public static List<Map<String, Object>> recipes(Map<String, Object> pack) {
         return J.maps(pack.get("recipes"));
     }

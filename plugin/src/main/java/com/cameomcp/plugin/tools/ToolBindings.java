@@ -14,7 +14,7 @@ import java.util.List;
  */
 public final class ToolBindings {
 
-    // Binder classes, one per catalog family, in catalog order.
+    /** Binder classes, one per catalog family, in catalog order. */
     public static final List<String> BINDERS = Arrays.asList(
             "com.cameomcp.plugin.tools.server.ServerBindings",
             "com.cameomcp.plugin.tools.model.ModelBindings",
@@ -24,10 +24,15 @@ public final class ToolBindings {
             "com.cameomcp.plugin.tools.analysis.AnalysisBindings",
             "com.cameomcp.plugin.tools.sysml2.Sysml2Bindings");
 
+    /** Static methods only. */
     private ToolBindings() {
     }
 
-    /** Binds every family into the registry, then logs any tools left without an implementation. */
+    /**
+     * Binds every family into the registry, then logs any tools left without an implementation.
+     *
+     * @param registry the registry holding the full catalog
+     */
     public static void bindAll(ToolRegistry registry) {
         for (String binder : BINDERS) {
             try {

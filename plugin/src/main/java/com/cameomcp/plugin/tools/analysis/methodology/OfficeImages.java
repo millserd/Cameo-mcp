@@ -20,20 +20,39 @@ import java.util.List;
 /** Raster images loaded for PDF / PPTX assembly (alpha flattened onto white). */
 public final class OfficeImages {
 
+    /** Static methods only. */
     private OfficeImages() {
     }
 
-    /** One exported diagram image. */
+    /**
+     * One exported diagram image.
+     *
+     * @param stem file name without extension, used for slide titles
+     * @param width width in pixels
+     * @param height height in pixels
+     * @param rgb the opaque RGB image
+     */
     public record Image(String stem, int width, int height, BufferedImage rgb) {
 
-        /** Lossless PNG encoding of the flattened RGB image (used for PPTX slides). */
+        /**
+         * Lossless PNG encoding of the flattened RGB image (used for PPTX slides).
+         *
+         * @return the PNG bytes
+         * @throws IOException if encoding fails
+         */
         public byte[] png() throws IOException {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             ImageIO.write(rgb, "png", out);
             return out.toByteArray();
         }
 
-        /** JPEG at the given quality (0..1); used for PDF pages, which embed images as DCTDecode streams. */
+        /**
+         * JPEG at the given quality (0..1); used for PDF pages, which embed images as DCTDecode streams.
+         *
+         * @param quality compression quality, 0.0 to 1.0
+         * @return the JPEG bytes
+         * @throws IOException if no JPEG encoder is available or encoding fails
+         */
         public byte[] jpeg(float quality) throws IOException {
             Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
             if (!writers.hasNext()) {
@@ -54,9 +73,13 @@ public final class OfficeImages {
         }
     }
 
-    /*
+    /**
      * Copies the image into an opaque RGB buffer over a white background. JPEG cannot carry alpha
      * and ImageIO's JPEG writer does not handle alpha reliably, so transparency is flattened here.
+     *
+     * @param stem file name without extension
+     * @param source any image, possibly with alpha
+     * @return the flattened image
      */
     public static Image fromBufferedImage(String stem, BufferedImage source) {
         BufferedImage rgb = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_RGB);
@@ -71,7 +94,14 @@ public final class OfficeImages {
         return new Image(stem, rgb.getWidth(), rgb.getHeight(), rgb);
     }
 
-    /** Load exported raster images (PNG/JPEG); vector formats cannot be placed into the deck. */
+    /**
+     * Load exported raster images (PNG/JPEG); vector formats cannot be placed into the deck.
+     *
+     * @param paths image files, in slide order
+     * @return the loaded images
+     * @throws ToolException TOOL_FAILED when a file is not a readable raster image
+     * @throws IOException if a file cannot be read
+     */
     public static List<Image> load(List<Path> paths) throws IOException {
         List<Image> images = new ArrayList<>();
         for (Path path : paths) {
@@ -85,14 +115,24 @@ public final class OfficeImages {
         return images;
     }
 
-    /** File name without its extension; used to derive slide titles. */
+    /**
+     * File name without its extension; used to derive slide titles.
+     *
+     * @param path a file path
+     * @return the name without its last extension
+     */
     static String stem(Path path) {
         String name = path.getFileName().toString();
         int dot = name.lastIndexOf('.');
         return dot > 0 ? name.substring(0, dot) : name;
     }
 
-    /** Python {@code str.title()}: upper-case the first cased letter of each run, lower-case the rest. */
+    /**
+     * Python {@code str.title()}: upper-case the first cased letter of each run, lower-case the rest.
+     *
+     * @param text any text
+     * @return the title-cased text
+     */
     public static String titleCase(String text) {
         StringBuilder sb = new StringBuilder(text.length());
         boolean prevCased = false;

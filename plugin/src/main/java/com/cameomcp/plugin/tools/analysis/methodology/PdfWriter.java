@@ -15,15 +15,29 @@ import java.util.Locale;
  */
 public final class PdfWriter {
 
+    /** Static methods only. */
     private PdfWriter() {
     }
 
-    /** Writes the PDF to {@code output}, replacing any existing file. */
+    /**
+     * Writes the PDF to {@code output}, replacing any existing file.
+     *
+     * @param images images, one per page
+     * @param output file to write
+     * @throws IOException if writing fails
+     * @throws IllegalArgumentException for an empty image list
+     */
     public static void write(List<OfficeImages.Image> images, Path output) throws IOException {
         Files.write(output, toBytes(images));
     }
 
-    /** Builds the PDF in memory; throws IllegalArgumentException for an empty image list. */
+    /**
+     * Builds the PDF in memory; throws IllegalArgumentException for an empty image list.
+     *
+     * @param images images, one per page
+     * @return the PDF bytes
+     * @throws IOException if JPEG encoding fails
+     */
     public static byte[] toBytes(List<OfficeImages.Image> images) throws IOException {
         if (images.isEmpty()) {
             throw new IllegalArgumentException("cannot assemble PDF without exported images");
@@ -93,6 +107,12 @@ public final class PdfWriter {
         return out.toByteArray();
     }
 
+    /**
+     * Appends a string as US-ASCII bytes.
+     *
+     * @param out target
+     * @param s ASCII text
+     */
     private static void ascii(ByteArrayOutputStream out, String s) {
         byte[] b = s.getBytes(StandardCharsets.US_ASCII);
         out.write(b, 0, b.length);

@@ -50,10 +50,15 @@ public final class ServerBindings {
             {"macros", "macros"},
     };
 
+    /** Static methods only. */
     private ServerBindings() {
     }
 
-    /** Binds the server family's tools; each lambda unpacks arguments and delegates to a method below. */
+    /**
+     * Binds the server family's tools; each lambda unpacks arguments and delegates to a method below.
+     *
+     * @param r the registry holding the server family's specs
+     */
     public static void bind(ToolRegistry r) {
         r.bind("cameo_status", (a, c) -> status());
         r.bind("cameo_get_capabilities", (a, c) -> capabilities(a));
@@ -65,7 +70,11 @@ public final class ServerBindings {
         r.bind("cameo_log", (a, c) -> log(a));
     }
 
-    // The runtime, or NOT_READY if the plugin hasn't initialized (only possible in tests).
+    /**
+     * The runtime, or NOT_READY if the plugin hasn't initialized (only possible in tests).
+     *
+     * @return the runtime
+     */
     private static McpRuntime rt() {
         McpRuntime rt = McpRuntime.get();
         if (rt == null) {
@@ -76,7 +85,12 @@ public final class ServerBindings {
 
     // ------------------------------------------------------------------ status
 
-    // cameo_status: the runtime status plus project state and any write in progress.
+    /**
+     * cameo_status: the runtime status plus project state and any write in progress. Runs on the
+     * HTTP thread and works without a project.
+     *
+     * @return the status map
+     */
     static Map<String, Object> status() {
         Map<String, Object> s = rt().status();
         boolean project = CameoInfo.hasProject();
@@ -93,9 +107,12 @@ public final class ServerBindings {
         return s;
     }
 
-    /*
+    /**
      * cameo_get_capabilities: tool counts per family, which optional Cameo plugins are loaded
      * (matched by plugin id fragment), macro setting and Cameo version.
+     *
+     * @param a arguments: include_tools (also list tool names per family)
+     * @return the capabilities map
      */
     static Map<String, Object> capabilities(Args a) {
         McpRuntime rt = rt();
@@ -137,7 +154,12 @@ public final class ServerBindings {
         return out;
     }
 
-    // Ids of every loaded Cameo plugin, read reflectively since PluginUtils isn't public API in every release.
+    /**
+     * Ids of every loaded Cameo plugin, read reflectively since PluginUtils isn't public API in every
+     * release.
+     *
+     * @return the plugin ids; empty outside Cameo
+     */
     private static List<String> loadedPluginIds() {
         List<String> ids = new ArrayList<>();
         try {
@@ -164,10 +186,12 @@ public final class ServerBindings {
 
     // ------------------------------------------------------------------ probe
 
-    /*
+    /**
      * cameo_probe_bridge: calls our own HTTP endpoint the way a client would, and checks that the
      * Swing event thread answers within 5 s. A stuck EDT (usually a modal dialog) is the most
-     * common reason write tools time out.
+     * common reason write tools time out. Must not run on the EDT (it would wait on itself).
+     *
+     * @return {healthy, checks}
      */
     static Map<String, Object> probe() {
         McpRuntime rt = rt();
@@ -208,7 +232,15 @@ public final class ServerBindings {
         return Json.obj("healthy", healthy, "checks", checks);
     }
 
-    // One timed HTTP request to our own server, with the configured token; the body is cut to 300 characters.
+    /**
+     * One timed HTTP request to our own server, with the configured token; the body is cut to 300 characters.
+     *
+     * @param method HTTP method
+     * @param url target URL
+     * @param body JSON body, or null
+     * @param rt the runtime, for the token
+     * @return {ok, httpStatus, latencyMs, body} or {ok: false, error}
+     */
     private static Map<String, Object> httpCheck(String method, String url, String body, McpRuntime rt) {
         long t0 = System.nanoTime();
         try {
@@ -238,6 +270,13 @@ public final class ServerBindings {
         }
     }
 
+    /**
+     * Reads a stream to the end as UTF-8 and closes it.
+     *
+     * @param in the stream, may be null
+     * @return the text; empty for null
+     * @throws java.io.IOException if reading fails
+     */
     private static String read(InputStream in) throws java.io.IOException {
         if (in == null) {
             return "";
@@ -255,7 +294,12 @@ public final class ServerBindings {
 
     // ------------------------------------------------------------------ catalog
 
-    // cameo_list_tools: catalog search by family and/or keyword, with a one-sentence summary per tool.
+    /**
+     * cameo_list_tools: catalog search by family and/or keyword, with a one-sentence summary per tool.
+     *
+     * @param a arguments: family, query (case-insensitive match on name or description)
+     * @return {count, total, families, tools}
+     */
     static Map<String, Object> listTools(Args a) {
         String family = a.optTrim("family");
         String query = a.optTrim("query");
@@ -279,7 +323,12 @@ public final class ServerBindings {
         return Json.obj("count", tools.size(), "total", rt().registry().size(), "families", families, "tools", tools);
     }
 
-    // Text up to and including the first ". ", or all of it.
+    /**
+     * Text up to and including the first ". ", or all of it.
+     *
+     * @param text a description
+     * @return its first sentence
+     */
     static String firstSentence(String text) {
         int i = text.indexOf(". ");
         return i < 0 ? text : text.substring(0, i + 1);
@@ -287,9 +336,13 @@ public final class ServerBindings {
 
     // ------------------------------------------------------------------ recovery
 
-    /*
+    /**
      * cameo_reset_session: cancels (rolls back) a session left open by a crashed macro. If cancel
      * itself fails, closing the session keeps the partial change but unblocks new writes.
+     *
+     * @return {reset, method} or {reset: false, message}
+     * @throws ToolException RESET_FAILED when neither cancel nor close works
+     * @throws Exception from the EDT hand-off (TIMEOUT, NO_PROJECT)
      */
     static Map<String, Object> resetSession() throws Exception {
         return Edt.onEdt("Reset session", project -> {
@@ -314,9 +367,15 @@ public final class ServerBindings {
         }, 30);
     }
 
-    /*
+    /**
      * cameo_undo / cameo_redo: steps through Cameo's command history on the EDT. Refuses while a
      * session is open, because undo inside a session would corrupt it.
+     *
+     * @param undo true to undo, false to redo
+     * @param steps how many steps to try (stops early when history runs out)
+     * @return {undone or redone, requested, more}
+     * @throws ToolException SESSION_OPEN, or UNSUPPORTED when the project has no command history API
+     * @throws Exception from the reflective calls or the EDT hand-off
      */
     static Map<String, Object> undoRedo(boolean undo, int steps) throws Exception {
         return Edt.onEdt(undo ? "Undo" : "Redo", project -> {
@@ -346,6 +405,11 @@ public final class ServerBindings {
     /**
      * 2024x has {@code canUndo()}/{@code canRedo()}; 2026x removed them and exposes
      * {@code getCommandForUndo()}/{@code getCommandForRedo()}, which return null when there is nothing to do.
+     *
+     * @param history the project's command history
+     * @param undo true for undo, false for redo
+     * @return whether another step is available
+     * @throws Exception if neither API variant exists
      */
     private static boolean canUndoRedo(Object history, boolean undo) throws Exception {
         try {
@@ -356,7 +420,12 @@ public final class ServerBindings {
         }
     }
 
-    // cameo_log: writes the agent's message to the Notification window, md.log and the activity list.
+    /**
+     * cameo_log: writes the agent's message to the Notification window, md.log and the activity list.
+     *
+     * @param a arguments: message (required), level (info, warn or error)
+     * @return {logged: true}
+     */
     static Map<String, Object> log(Args a) {
         String message = a.reqStr("message");
         String level = a.choice("level", "info", "info", "warn", "error");
@@ -372,7 +441,11 @@ public final class ServerBindings {
         return Json.obj("logged", true);
     }
 
-    /** For tests: the catalog's script tool list stays in sync with this family's assumptions. */
+    /**
+     * For tests: the catalog's script tool list stays in sync with this family's assumptions.
+     *
+     * @return whether the catalog treats cameo_execute_macro as a script tool
+     */
     static boolean macrosGuarded() {
         return Catalog.isScriptTool("cameo_execute_macro");
     }

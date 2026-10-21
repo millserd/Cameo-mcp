@@ -12,6 +12,7 @@ import java.util.Map;
 /** Small helpers for binding tool implementations to catalog specs. */
 public final class Bind {
 
+    /** Static methods only. */
     private Bind() {
     }
 
@@ -19,6 +20,10 @@ public final class Bind {
      * Bind a tree-style implementation. The tool's arguments arrive as a JSON tree object holding the
      * keys the client sent plus their snake_case/camelCase twins; the returned object becomes the
      * tool's structured result.
+     *
+     * @param registry the registry holding the spec
+     * @param name the tool name; its spec must exist
+     * @param tool the implementation
      */
     public static void tree(ToolRegistry registry, String name, TreeTool tool) {
         registry.bind(name, treeHandler(tool));
@@ -27,6 +32,9 @@ public final class Bind {
     /**
      * Adds the other spelling of every top-level key (snake_case and camelCase) when absent,
      * so tree-style code written against either convention sees what the client sent.
+     *
+     * @param in the arguments
+     * @return a deep copy with the aliases added; keys the client sent are never overwritten
      */
     static JsonObject withAliases(JsonObject in) {
         JsonObject out = in.deepCopy();
@@ -39,7 +47,13 @@ public final class Bind {
         return out;
     }
 
-    // some_name -> someName; a leading underscore is dropped without capitalizing the next letter.
+    /**
+     * Converts snake_case to camelCase: some_name to someName. A leading underscore is dropped without
+     * capitalizing the next letter.
+     *
+     * @param snake the snake_case name
+     * @return the camelCase name
+     */
     static String camel(String snake) {
         StringBuilder sb = new StringBuilder();
         boolean up = false;
@@ -54,7 +68,12 @@ public final class Bind {
         return sb.toString();
     }
 
-    // someName -> some_name.
+    /**
+     * Converts camelCase to snake_case: someName to some_name.
+     *
+     * @param camel the camelCase name
+     * @return the snake_case name
+     */
     static String snake(String camel) {
         StringBuilder sb = new StringBuilder();
         for (char c : camel.toCharArray()) {
@@ -67,7 +86,12 @@ public final class Bind {
         return sb.toString();
     }
 
-    /** Adapts a tree-style tool to a core handler; a null result becomes an empty object. */
+    /**
+     * Adapts a tree-style tool to a core handler; a null result becomes an empty object.
+     *
+     * @param tool the implementation
+     * @return a handler that converts arguments to a tree, adds aliases, and converts the result back
+     */
     public static ToolHandler treeHandler(TreeTool tool) {
         return (Args args, com.cameomcp.mcp.ToolContext ctx) -> {
             JsonObject result = tool.call(withAliases(Gs.toTree(args)));

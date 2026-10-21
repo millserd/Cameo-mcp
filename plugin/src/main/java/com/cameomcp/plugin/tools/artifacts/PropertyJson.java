@@ -19,15 +19,21 @@ import java.util.concurrent.Callable;
 /** Best-effort JSON for Cameo property managers and arbitrary reflected values. */
 public final class PropertyJson {
 
-    // Cap on collection/map entries serialized per value, to keep responses bounded.
+    /** Cap on collection and map entries serialized per value, to keep responses bounded. */
     private static final int MAX_ITEMS = 250;
 
+    /** Not instantiable; all members are static. */
     private PropertyJson() {
     }
 
     /**
      * Serializes every property of a Cameo PropertyManager (e.g. a table/matrix settings panel).
      * Never throws: a null manager or a failing getProperties() is reported under "warnings".
+     *
+     * @param manager the property manager, may be null
+     * @param includeRaw true to add raw value details
+     * @param summaryOnly true to give only counts for collections and maps
+     * @return {@code propertyCount}, {@code properties} and {@code warnings} when there are any
      */
     public static JsonObject serializeManager(PropertyManager manager, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = new JsonObject();
@@ -62,6 +68,11 @@ public final class PropertyJson {
     /**
      * One Property as {name, id, classType, value, valueType, valueString}; each read is guarded
      * separately so one failing accessor does not lose the rest. includeRaw adds a "raw" block.
+     *
+     * @param property the property, may be null
+     * @param includeRaw true to add the raw block
+     * @param summaryOnly true to give only counts for collections and maps
+     * @return the property JSON, with {@code warnings} for failed reads
      */
     public static JsonObject serializeProperty(Property property, boolean includeRaw, boolean summaryOnly) {
         JsonObject json = new JsonObject();
@@ -102,6 +113,11 @@ public final class PropertyJson {
      * Converts any value to JSON: primitives directly, Elements via ElementJson.toJsonCompact,
      * collections/maps as {count, items|entries} wrappers, anything else as {className, string}.
      * Nested items are always serialized summary-only, so only the top level is expanded.
+     *
+     * @param value the value, may be null
+     * @param includeRaw true to add getter values for unknown objects
+     * @param summaryOnly true to give only counts for collections and maps
+     * @return the JSON form; JSON null for null
      */
     public static JsonElement serializeValue(Object value, boolean includeRaw, boolean summaryOnly) {
         if (value == null) {
@@ -180,6 +196,12 @@ public final class PropertyJson {
     /**
      * Values of every public no-arg get/is method of {@code target}; failures go to warnings.
      * Used to dump settings objects whose API is not documented.
+     *
+     * @param target the object to read
+     * @param includeRaw passed on to {@link #serializeValue}
+     * @param summaryOnly passed on to {@link #serializeValue}
+     * @param warnings receives a line for each getter that throws
+     * @return getter name to serialized value
      */
     public static JsonObject reflectGetterValues(Object target, boolean includeRaw, boolean summaryOnly,
                                                  JsonArray warnings) {
@@ -203,7 +225,12 @@ public final class PropertyJson {
         return values;
     }
 
-    /** Public methods of a class as JSON (name, returnType, parameterCount, static, parameterTypes). */
+    /**
+     * Public methods of a class as JSON (name, returnType, parameterCount, static, parameterTypes).
+     *
+     * @param cls the class
+     * @return one object per public method
+     */
     public static JsonArray methods(Class<?> cls) {
         JsonArray array = new JsonArray();
         for (Method m : cls.getMethods()) {

@@ -38,12 +38,22 @@ import java.util.Set;
  */
 public final class TraceabilityGraph {
 
+    /** Not instantiable; all members are static. */
     private TraceabilityGraph() {
     }
 
     /**
      * Build the graph. {@code mapContext} is the Relation Map's context element used as root when the
      * request names no roots (may be null); {@code relationMapId} is echoed in the result.
+     *
+     * <p>Threading: call inside a model read (the tool runs it through Edt.read on the calling thread).
+     *
+     * @param project the active project
+     * @param body the tool arguments
+     * @param relationMapId the relation map id to echo, or null
+     * @param mapContext the relation map's context element, or null
+     * @return the roots, nodes, edges, limits and truncation flags
+     * @throws ToolException INVALID_PARAMS for a bad direction or no roots, NOT_FOUND for missing ids
      */
     public static JsonObject build(Project project, JsonObject body, String relationMapId, Element mapContext) {
         List<Element> roots = resolveRoots(project, body, relationMapId, mapContext);
@@ -121,7 +131,12 @@ public final class TraceabilityGraph {
         return response;
     }
 
-    /** True when the request names explicit roots (so no relation-map context lookup is needed). */
+    /**
+     * True when the request names explicit roots (so no relation-map context lookup is needed).
+     *
+     * @param body the tool arguments
+     * @return true when root_element_ids or context_element_id is given
+     */
     public static boolean hasExplicitRoots(JsonObject body) {
         List<String> ids = ArtifactSupport.optStrList(body, "root_element_ids");
         return (ids != null && !ids.isEmpty()) || ArtifactSupport.optStr(body, "context_element_id") != null;
@@ -155,6 +170,11 @@ public final class TraceabilityGraph {
     /**
      * Relationships touching element in the requested direction, filtered by type. Covers directed
      * relationships, activity flows, and (only for "both") undirected relationships and connectors.
+     *
+     * @param element the current node
+     * @param direction incoming, outgoing or both
+     * @param filter normalized relationship type tokens; empty for all
+     * @return the edges, with their far sides set for the traversal
      */
     static List<Edge> adjacentEdges(Element element, String direction, Set<String> filter) {
         List<Edge> edges = new ArrayList<>();
@@ -252,7 +272,13 @@ public final class TraceabilityGraph {
         return true;
     }
 
-    /** True when the filter is empty or any type token of the relationship (see tokens) is in it. */
+    /**
+     * True when the filter is empty or any type token of the relationship (see tokens) is in it.
+     *
+     * @param relationship the relationship
+     * @param filter normalized type tokens; empty for all
+     * @return true when it passes the filter
+     */
     static boolean matches(Element relationship, Set<String> filter) {
         if (filter.isEmpty()) {
             return true;
@@ -299,6 +325,12 @@ public final class TraceabilityGraph {
         return tokens;
     }
 
+    /**
+     * Adds a normalized token when it is not empty.
+     *
+     * @param tokens the set to add to
+     * @param value the raw value, may be null
+     */
     private static void addToken(Set<String> tokens, String value) {
         String n = normalizeToken(value);
         if (!n.isEmpty()) {
@@ -306,7 +338,12 @@ public final class TraceabilityGraph {
         }
     }
 
-    /** Relationship-type filter tokens: lower-case alphanumerics ("Derive Reqt" and "deriveReqt" match). */
+    /**
+     * Relationship-type filter tokens: lower-case alphanumerics ("Derive Reqt" and "deriveReqt" match).
+     *
+     * @param values the filter values, may be null
+     * @return the normalized tokens; empty for null
+     */
     public static Set<String> normalizedFilter(List<String> values) {
         Set<String> filter = new HashSet<>();
         if (values != null) {
@@ -317,12 +354,23 @@ public final class TraceabilityGraph {
         return filter;
     }
 
-    /** Lower-cases and strips everything but ASCII letters and digits; null becomes "". */
+    /**
+     * Lower-cases and strips everything but ASCII letters and digits; null becomes "".
+     *
+     * @param value the text, may be null
+     * @return the token
+     */
     public static String normalizeToken(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
     }
 
-    /** Validates direction; blank or null means "both". Throws invalid-params for anything else. */
+    /**
+     * Validates direction; blank or null means "both". Throws invalid-params for anything else.
+     *
+     * @param value the direction, may be null
+     * @return incoming, outgoing or both
+     * @throws ToolException INVALID_PARAMS for anything else
+     */
     public static String normalizeDirection(String value) {
         if (value == null || value.trim().isEmpty() || "both".equalsIgnoreCase(value.trim())) {
             return "both";
@@ -336,14 +384,29 @@ public final class TraceabilityGraph {
 
     /** One traversed relationship. */
     static final class Edge {
+        /** The relationship element. */
         final Element relationship;
+        /** incoming, outgoing or undirected, as seen from the node it was found from. */
         final String direction;
+        /** Source elements of a directed relationship. */
         final List<Element> sources;
+        /** Target elements of a directed relationship. */
         final List<Element> targets;
+        /** Related elements of an undirected relationship or connector. */
         final List<Element> related;
-        // The elements the BFS continues to from this edge (the far side relative to the current node).
+        /** The elements the walk continues to from this edge: the far side relative to the current node. */
         final List<Element> traversalTargets;
 
+        /**
+         * Creates an edge; null entries are dropped from every list.
+         *
+         * @param relationship the relationship
+         * @param direction the direction label
+         * @param sources the sources, may be null
+         * @param targets the targets, may be null
+         * @param related the related elements, may be null
+         * @param traversalTargets the far side, may be null
+         */
         private Edge(Element relationship, String direction, Collection<? extends Element> sources,
                      Collection<? extends Element> targets, Collection<? extends Element> related,
                      Collection<? extends Element> traversalTargets) {
@@ -355,14 +418,29 @@ public final class TraceabilityGraph {
             this.traversalTargets = nonNull(traversalTargets);
         }
 
-        // For a directed edge, the far side is the sources when walking incoming, else the targets.
+        /**
+         * A directed edge. The far side is the sources when walking incoming, else the targets.
+         *
+         * @param rel the relationship
+         * @param dir incoming or outgoing
+         * @param sources the sources
+         * @param targets the targets
+         * @return the edge
+         */
         static Edge directed(Element rel, String dir, Collection<? extends Element> sources,
                              Collection<? extends Element> targets) {
             return new Edge(rel, dir, sources, targets, Collections.<Element>emptyList(),
                     "incoming".equals(dir) ? sources : targets);
         }
 
-        // Undirected: the far side is every related element other than the current one (selfId).
+        /**
+         * An undirected edge. The far side is every related element other than the current one.
+         *
+         * @param rel the relationship
+         * @param selfId the current node's id
+         * @param related the related elements
+         * @return the edge
+         */
         static Edge undirected(Element rel, String selfId, Collection<? extends Element> related) {
             List<Element> next = new ArrayList<>();
             if (related != null) {
@@ -376,7 +454,14 @@ public final class TraceabilityGraph {
                     related, next);
         }
 
-        // A connector's ends are treated as related elements: the role and, if set, the part owning the port.
+        /**
+         * A connector edge. Its ends are treated as related elements: the role and, if set, the part owning
+         * the port.
+         *
+         * @param connector the connector
+         * @param selfId the current node's id
+         * @return the edge
+         */
         static Edge connector(Connector connector, String selfId) {
             List<Element> related = new ArrayList<>();
             Collection<ConnectorEnd> ends = connector.getEnd();
@@ -396,7 +481,12 @@ public final class TraceabilityGraph {
             return undirected(connector, selfId, related);
         }
 
-        /** Edge as an element reference plus direction, depth and compact sources/targets/related lists. */
+        /**
+         * Edge as an element reference plus direction, depth and compact sources/targets/related lists.
+         *
+         * @param depth the distance from the roots at which the edge was found
+         * @return the edge JSON
+         */
         JsonObject toJson(int depth) {
             JsonObject json = ElementJson.toJsonReference(relationship);
             json.addProperty("relationshipId", relationship.getID());
@@ -410,6 +500,12 @@ public final class TraceabilityGraph {
             return json;
         }
 
+        /**
+         * Copies a collection without nulls.
+         *
+         * @param in the collection, may be null
+         * @return a new list
+         */
         private static List<Element> nonNull(Collection<? extends Element> in) {
             List<Element> out = new ArrayList<>();
             if (in != null) {

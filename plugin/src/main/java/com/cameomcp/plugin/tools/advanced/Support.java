@@ -31,12 +31,19 @@ import java.util.Set;
  */
 final class Support {
 
+    /** Static helpers only. */
     private Support() {
     }
 
     // ------------------------------------------------------------------ envelopes
 
-    // Common head of every capability answer: family name, mode label and a snapshot of the open project.
+    /**
+     * Common head of every capability answer: family name, mode label and a snapshot of the open project.
+     *
+     * @param family tool family name, such as "simulation"
+     * @param mode mode label, such as "read-only" or "unsupported"
+     * @return a new object with family, mode and projectState
+     */
     static JsonObject baseCapabilities(String family, String mode) {
         JsonObject json = new JsonObject();
         json.addProperty("family", family);
@@ -45,7 +52,12 @@ final class Support {
         return json;
     }
 
-    // Null when no project is open, or when the Application singleton is unavailable (e.g. outside Cameo in tests).
+    /**
+     * The active project, or null when no project is open or the Application singleton is unavailable (for
+     * example outside Cameo in unit tests). Never throws.
+     *
+     * @return the open project, or null
+     */
     static Project currentProject() {
         try {
             return Application.getInstance().getProject();
@@ -54,7 +66,12 @@ final class Support {
         }
     }
 
-    // Open/name/file/remote/dirty for the active project; getters are guarded so a capability probe never fails on them.
+    /**
+     * Open, name, file, remote and dirty flags for the active project. Each getter is guarded so a capability
+     * probe never fails on them.
+     *
+     * @return a new object; "open" is false when no project is open
+     */
     static JsonObject projectState() {
         JsonObject state = new JsonObject();
         Project project = currentProject();
@@ -72,7 +89,15 @@ final class Support {
         return state;
     }
 
-    // Capability answer for a family that cannot run here, with the reason and what the caller should do next.
+    /**
+     * Capability answer for a family that cannot run here, with the reason and what the caller should do
+     * next.
+     *
+     * @param family tool family name
+     * @param reason why the family is unavailable
+     * @param nextAction what the agent should do instead
+     * @return a capability object with available=false and status "unsupported"
+     */
     static JsonObject unsupported(String family, String reason, String nextAction) {
         JsonObject json = baseCapabilities(family, "unsupported");
         json.addProperty("available", false);
@@ -82,7 +107,14 @@ final class Support {
         return json;
     }
 
-    // Standard envelope for preview-only tools: echoes the request and states that nothing was written.
+    /**
+     * Standard envelope for preview-only tools: echoes the request and states that nothing was written.
+     *
+     * @param family tool family name
+     * @param request the cleaned request to echo, or null for an empty object
+     * @param message human-readable explanation
+     * @return an object with preview=true and writePerformed=false
+     */
     static JsonObject previewAccepted(String family, JsonObject request, String message) {
         JsonObject json = new JsonObject();
         json.addProperty("family", family);
@@ -97,6 +129,10 @@ final class Support {
     /**
      * Refuse a gated operation: the refusal payload travels as the error's details so the
      * agent sees the same contract the reference bridge returned with its non-2xx status.
+     *
+     * @param code error code, such as PRECONDITION_FAILED or UNSUPPORTED
+     * @param payload refusal body; its "reason" (or "message") and "nextAction" build the error message
+     * @return the exception to throw; its details are the payload as plain Java maps
      */
     @SuppressWarnings("unchecked")
     static ToolException refusal(String code, JsonObject payload) {
@@ -107,7 +143,12 @@ final class Support {
         return new ToolException(code, message, details instanceof Map ? (Map<String, Object>) details : null);
     }
 
-    /** Arguments as received, minus JSON nulls, for "request" echoes. */
+    /**
+     * Arguments as received, minus JSON nulls, for "request" echoes.
+     *
+     * @param params tool arguments, or null
+     * @return a new object without JSON-null members (shares the member values with params)
+     */
     static JsonObject request(JsonObject params) {
         JsonObject out = new JsonObject();
         if (params != null) {
@@ -120,16 +161,25 @@ final class Support {
         return out;
     }
 
-    // Null-to-empty for strings that go into JSON properties or messages.
+    /**
+     * Null-to-empty for strings that go into JSON properties or messages.
+     *
+     * @param value any string, or null
+     * @return value, or "" when null
+     */
     static String safe(String value) {
         return value == null ? "" : value;
     }
 
     // ------------------------------------------------------------------ class probes
 
-    /*
-     * Tries to load each class (without initializing it) and reports found/missing plus the jar it came from.
-     * Optional products are detected this way rather than by version number, since their presence varies by install.
+    /**
+     * Tries to load each class (without initializing it) and reports found and missing names plus the jar
+     * each came from. Optional products are detected this way rather than by version number, since their
+     * presence varies by install.
+     *
+     * @param classNames fully qualified class names to look for
+     * @return an object with found, missing and per-class details arrays
      */
     static JsonObject classProbe(String... classNames) {
         JsonObject probe = new JsonObject();
@@ -160,7 +210,12 @@ final class Support {
         return probe;
     }
 
-    // Boolean form of classProbe for a single class.
+    /**
+     * Boolean form of {@link #classProbe} for a single class.
+     *
+     * @param className fully qualified class name
+     * @return true when any known class loader can load it
+     */
     static boolean classAvailable(String className) {
         try {
             loadClass(className);
@@ -170,7 +225,17 @@ final class Support {
         }
     }
 
-    /** Load a class from this plugin, Cameo core, or any loaded Cameo plugin (optional products live there). */
+    /**
+     * Load a class from this plugin, Cameo core, or any loaded Cameo plugin (optional products live there).
+     *
+     * <p>Tries the context, plugin, Cameo core and system loaders, then every loaded Cameo plugin's loader.
+     * The class is not initialized.
+     *
+     * @param className fully qualified class name
+     * @return the loaded class
+     * @throws ClassNotFoundException if no loader finds it; the last loader's failure is attached as
+     *     suppressed
+     */
     static Class<?> loadClass(String className) throws ClassNotFoundException {
         Set<ClassLoader> loaders = new LinkedHashSet<>();
         loaders.add(Thread.currentThread().getContextClassLoader());
@@ -202,7 +267,12 @@ final class Support {
         throw e;
     }
 
-    // Class loaders of every loaded Cameo plugin, fetched reflectively so this also compiles/runs without PluginUtils.
+    /**
+     * Class loaders of every loaded Cameo plugin. PluginUtils is called reflectively so this compiles and
+     * runs without it; any failure yields an empty list.
+     *
+     * @return plugin class loaders, possibly empty
+     */
     private static List<ClassLoader> pluginClassLoaders() {
         List<ClassLoader> out = new ArrayList<>();
         try {
@@ -224,7 +294,12 @@ final class Support {
         return out;
     }
 
-    // Jar or folder the class was loaded from; empty when the JVM does not expose it.
+    /**
+     * Jar or folder the class was loaded from.
+     *
+     * @param cls a loaded class
+     * @return the code source location, or "" when the JVM does not expose it
+     */
     private static String codeSource(Class<?> cls) {
         try {
             CodeSource source = cls.getProtectionDomain().getCodeSource();
@@ -240,7 +315,12 @@ final class Support {
 
     // ------------------------------------------------------------------ plugin folders
 
-    /** Plugin folders under {@code <install>/plugins} whose name contains any hint, as {name, path} objects. */
+    /**
+     * Plugin folders under {@code <install>/plugins} whose name contains any hint, as {name, path} objects.
+     *
+     * @param names case-insensitive substrings to match against folder names
+     * @return one {name, path} object per matching folder
+     */
     static JsonArray pluginDirectories(String... names) {
         JsonArray array = new JsonArray();
         for (File child : pluginFolders()) {
@@ -258,7 +338,12 @@ final class Support {
         return array;
     }
 
-    /** Same as {@link #pluginDirectories} but as plain absolute paths (feature probe contract). */
+    /**
+     * Same as {@link #pluginDirectories} but as plain absolute paths (feature probe contract).
+     *
+     * @param hints case-insensitive substrings to match against folder names
+     * @return absolute paths of matching folders; empty when hints is empty
+     */
     static JsonArray pluginDirectoryPaths(Collection<String> hints) {
         JsonArray matches = new JsonArray();
         if (hints.isEmpty()) {
@@ -276,7 +361,11 @@ final class Support {
         return matches;
     }
 
-    // Immediate subdirectories of <install>/plugins, or empty when the install root cannot be located.
+    /**
+     * Immediate subdirectories of {@code <install>/plugins}.
+     *
+     * @return plugin folders, or an empty list when the install root cannot be located
+     */
     private static List<File> pluginFolders() {
         List<File> out = new ArrayList<>();
         File root = installRoot();
@@ -292,9 +381,12 @@ final class Support {
         return out;
     }
 
-    /*
-     * Locates the Cameo install folder: system properties, CAMEO_HOME, CameoInfo, then the working directory.
-     * The first candidate that actually contains a plugins/ folder wins; null if none does.
+    /**
+     * Locates the Cameo install folder. Candidates are tried in order: the cameo.home and md.home system
+     * properties, the CAMEO_HOME environment variable, CameoInfo, then the working directory. The first
+     * candidate that contains a plugins folder wins.
+     *
+     * @return the install folder, or null if no candidate has a plugins folder
      */
     static File installRoot() {
         List<String> candidates = new ArrayList<>();
@@ -318,7 +410,14 @@ final class Support {
 
     // ------------------------------------------------------------------ model helpers
 
-    // Lenient lookup: null for blank IDs and for IDs that resolve to non-UML objects (e.g. SysML v2 elements).
+    /**
+     * Lenient element lookup.
+     *
+     * @param project the open project
+     * @param id element ID, possibly blank
+     * @return the UML element, or null for blank IDs, unknown IDs and IDs of non-UML objects (for example
+     *     SysML v2 elements)
+     */
     static Element element(Project project, String id) {
         if (id == null || id.trim().isEmpty()) {
             return null;
@@ -327,7 +426,15 @@ final class Support {
         return o instanceof Element ? (Element) o : null;
     }
 
-    // Like element() but throws: SYSML2_ELEMENT when the ID is a SysML v2 element, otherwise NOT_FOUND.
+    /**
+     * Like {@link #element} but throws when the element is missing.
+     *
+     * @param project the open project
+     * @param id element ID
+     * @param what label for the error message, such as "Requirement"
+     * @return the UML element
+     * @throws ToolException SYSML2_ELEMENT when the ID names a SysML v2 element, otherwise NOT_FOUND
+     */
     static Element requireElement(Project project, String id, String what) {
         Element e = element(project, id);
         if (e == null) {
@@ -337,7 +444,13 @@ final class Support {
         return e;
     }
 
-    // Element reference JSON that never throws: falls back to just the ID if serialization fails.
+    /**
+     * Element reference JSON that never throws: falls back to just the ID plus a warning if serialization
+     * fails.
+     *
+     * @param element a non-null element
+     * @return the element reference
+     */
     static JsonObject ref(Element element) {
         try {
             return ElementJson.toJsonReference(element);
@@ -351,7 +464,18 @@ final class Support {
 
     // ------------------------------------------------------------------ reflection value dumps
 
-    /** Port of the reference PropertySerializer.serializeValue (diagnostic dumps of native objects). */
+    /**
+     * Port of the reference PropertySerializer.serializeValue (diagnostic dumps of native objects).
+     *
+     * <p>Strings, numbers, booleans and characters become primitives; elements become compact element JSON.
+     * Collections and maps become wrappers with type and count; their first 250 items are included unless
+     * summaryOnly is set. Other objects become class name and toString.
+     *
+     * @param value the object to dump, or null
+     * @param includeRaw for unknown objects, also dump one level of zero-argument get/is getter values
+     * @param summaryOnly for collections and maps, give only type and count
+     * @return the JSON form; JSON null for a null value
+     */
     static JsonElement serializeValue(Object value, boolean includeRaw, boolean summaryOnly) {
         if (value == null) {
             return JsonNull.INSTANCE;
@@ -438,7 +562,13 @@ final class Support {
         return fallback;
     }
 
-    // invokeZeroArg rendered as a string, empty when it returned null or failed.
+    /**
+     * {@link ElementJson#invokeZeroArg} rendered as a string.
+     *
+     * @param target object to call the getter on
+     * @param methodName zero-argument method name
+     * @return the result as a string, or "" when it returned null or failed
+     */
     static String stringGetter(Object target, String methodName) {
         Object v = ElementJson.invokeZeroArg(target, methodName);
         return v == null ? "" : String.valueOf(v);

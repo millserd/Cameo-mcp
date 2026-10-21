@@ -23,10 +23,17 @@ import java.util.Map;
 /** Diagram image export: inline MCP image content and export to a file. */
 final class DiagramImageService {
 
+    /** Not instantiable; all members are static. */
     private DiagramImageService() {
     }
 
-    // Shared scale_percentage argument of both image tools: 100 by default, 25-1000 allowed.
+    /**
+     * Reads the scale_percentage argument shared by both image tools: 100 by default, 25 to 1000 allowed.
+     *
+     * @param a the tool arguments
+     * @return the scale in percent
+     * @throws ToolException INVALID_PARAMS when it is out of range
+     */
     static int scalePercentage(Args a) {
         Integer scale = a.integerOrNull("scale_percentage");
         if (scale == null) {
@@ -40,10 +47,23 @@ final class DiagramImageService {
 
     // ------------------------------------------------------------------ inline image
 
-    /*
-     * cameo_get_diagram_image: renders the diagram with Cameo's ImageExporter and returns it as an MCP
-     * image content block plus JSON metadata. Optional downscale (max_width/max_height) and JPEG/WebP
-     * transcoding happen off the EDT in ImageTransform; include_image=false returns only the metadata.
+    /**
+     * Implements cameo_get_diagram_image: renders the diagram with Cameo's ImageExporter on the EDT and
+     * returns it as an MCP image content block plus JSON metadata. Optional downscaling (max_width,
+     * max_height) and JPEG or WebP transcoding happen off the EDT in ImageTransform. include_image=false
+     * returns only the metadata.
+     *
+     * @param a the tool arguments: {@code diagram_id}, {@code include_image}, {@code format}, {@code
+     *     max_width},
+     * {@code max_height}, {@code quality} (1 to 100) and {@code scale_percentage}
+     *
+     * @param ctx the calling context; in-process callers also get the base64 image in the structured content
+     * @return a result with the metadata as text and structured content, plus the image block unless omitted
+     * @throws ToolException INVALID_PARAMS for bad arguments, NOT_FOUND for a missing diagram, TOOL_FAILED
+     *     when Cameo
+     * returns no image
+     *
+     * @throws Exception any failure while handing the work to the EDT or encoding the image
      */
     static ToolResult getImage(Args a, ToolContext ctx) throws Exception {
         String diagramId = a.reqStr("diagram_id");
@@ -121,20 +141,49 @@ final class DiagramImageService {
         return result;
     }
 
-    // In-process calls (Internal.call) have no MCP session and the client name "internal".
+    /**
+     * Whether the call came in-process (Internal.call), which has no MCP session and the client name
+     * "internal".
+     *
+     * @param ctx the calling context, may be null
+     * @return true for in-process calls
+     */
     private static boolean isInternal(ToolContext ctx) {
         return ctx != null && ctx.sessionId() == null && "internal".equals(ctx.clientName());
     }
 
+    /**
+     * Treats zero and negative sizes as "not given".
+     *
+     * @param v the size, may be null
+     * @return v when positive, else null
+     */
     private static Integer positiveOrNull(Integer v) {
         return v != null && v > 0 ? v : null;
     }
 
     // ------------------------------------------------------------------ export to file
 
-    /*
-     * cameo_export_diagram_image: writes the diagram to an absolute file path as PNG, JPEG or SVG via
-     * ImageExporter. The format comes from the format argument or else the file extension.
+    /**
+     * Implements cameo_export_diagram_image: writes the diagram to an absolute file path as PNG, JPEG or SVG
+     * through ImageExporter. The format comes from the format argument or else the file extension. Missing
+     * parent folders are created.
+     *
+     * @param a the tool arguments: {@code diagram_id}, {@code file_path}, {@code format}, {@code dpi} (36 to
+     *     1200),
+     * {@code scale_percentage} and {@code overwrite}
+     *
+     * @return {@code diagramId}, {@code name}, {@code path}, {@code format}, {@code mimeType}, {@code bytes},
+     *     the
+     * image size, {@code scalePercentage}, {@code exported}, and {@code dpi} and {@code diagramBounds} when
+     * known
+     *
+     * @throws ToolException INVALID_PARAMS for a relative path, a directory, a bad format or dpi; CONFLICT
+     *     when the
+     * file exists without overwrite; TOOL_FAILED when Cameo writes nothing; UNSUPPORTED for a format this
+     * Cameo lacks
+     *
+     * @throws Exception any failure while handing the work to the EDT
      */
     static Map<String, Object> exportToFile(Args a) throws Exception {
         String diagramId = a.reqStr("diagram_id");
@@ -252,7 +301,13 @@ final class DiagramImageService {
         }
     }
 
-    // Width/height of the first image in a raster file via ImageIO, without decoding the pixels; null if unreadable.
+    /**
+     * Reads the width and height of the first image in a raster file through ImageIO, without decoding the
+     * pixels.
+     *
+     * @param file the image file
+     * @return {width, height}, or null when the file cannot be read
+     */
     private static int[] rasterSize(File file) {
         try (ImageInputStream in = ImageIO.createImageInputStream(file)) {
             if (in == null) {

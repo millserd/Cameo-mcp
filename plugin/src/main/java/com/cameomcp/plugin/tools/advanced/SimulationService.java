@@ -20,17 +20,27 @@ import java.util.Locale;
 /** Simulation Toolkit probe-first contract (reference SimulationHandler): execution is refused. */
 final class SimulationService {
 
+    /** Simulation Toolkit manager class; must load for simulation to count as available. */
     private static final String SIMULATION_MANAGER = "com.nomagic.magicdraw.simulation.SimulationManager";
+    /** Simulation Toolkit result class; must load for simulation to count as available. */
     private static final String SIMULATION_RESULT = "com.nomagic.magicdraw.simulation.execution.SimulationResult";
+    /** Simulation Toolkit session class; must load for simulation to count as available. */
     private static final String SIMULATION_SESSION = "com.nomagic.magicdraw.simulation.execution.SimulationSession";
-    // Caps for configuration discovery: results returned and elements walked.
+    /** Most configurations returned by configuration discovery. */
     private static final int MAX_CONFIGURATIONS = 500;
+    /** Most elements walked by configuration discovery. */
     private static final int SCAN_LIMIT = 250_000;
 
+    /** Not instantiable; all members are static. */
     private SimulationService() {
     }
 
-    // cameo_get_simulation_capabilities: available only when all three Simulation Toolkit classes load; execution is always off.
+    /**
+     * Implements cameo_get_simulation_capabilities: available only when all three Simulation Toolkit classes
+     * load. Execution is always off.
+     *
+     * @return the capability answer
+     */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("simulation", "probe-first");
         JsonObject probe = Support.classProbe(SIMULATION_MANAGER, SIMULATION_RESULT, SIMULATION_SESSION);
@@ -44,9 +54,13 @@ final class SimulationService {
         return response;
     }
 
-    /*
-     * cameo_list_simulation_configurations: heuristic list of elements that look like simulation configurations.
-     * Without the toolkit classes it returns an unsupported answer rather than an error, so agents can branch on it.
+    /**
+     * Implements cameo_list_simulation_configurations: a heuristic list of elements that look like simulation
+     * configurations. Without the toolkit classes it returns an unsupported answer rather than an error, so
+     * agents can branch on it.
+     *
+     * @return the configurations with truncation flags, or the unsupported answer
+     * @throws Exception when no project is open or the hand-off to the EDT fails
      */
     static JsonObject configurations() throws Exception {
         JsonObject caps = capabilities();
@@ -67,7 +81,13 @@ final class SimulationService {
         });
     }
 
-    // Depth-first walk of the primary model; returns true when the walk or the result list hit its cap.
+    /**
+     * Depth-first walk of the primary model, collecting candidate configurations.
+     *
+     * @param project the active project
+     * @param out receives compact JSON for each candidate
+     * @return true when the walk or the result list hit its cap
+     */
     private static boolean scan(Project project, JsonArray out) {
         Element root = project.getPrimaryModel();
         if (root == null) {
@@ -98,9 +118,13 @@ final class SimulationService {
         return false;
     }
 
-    /*
-     * Name/type/stereotype keyword heuristic ("simulation", "config", "parametric"). It deliberately over-matches:
-     * the toolkit's configuration stereotype API is not used, so this is discovery, not classification.
+    /**
+     * Keyword heuristic over the class, name and stereotypes ("simulation", "config", "parametric"). It
+     * deliberately matches too much: the toolkit's configuration stereotype API is not used, so this is
+     * discovery, not classification.
+     *
+     * @param element the element
+     * @return true when any keyword appears
      */
     private static boolean looksSimulationConfiguration(Element element) {
         StringBuilder text = new StringBuilder(element.getClass().getSimpleName()).append(' ');
@@ -127,7 +151,13 @@ final class SimulationService {
         return lower.contains("simulation") || lower.contains("config") || lower.contains("parametric");
     }
 
-    // cameo_run_simulation_preview: echo plus configuration_id resolution; nothing is executed.
+    /**
+     * Implements cameo_run_simulation_preview: echoes the request and resolves configuration_id. Nothing is
+     * executed.
+     *
+     * @param p the tool arguments
+     * @return a preview-accepted answer with the capabilities and the resolved configuration
+     */
     static JsonObject preview(JsonObject p) {
         JsonObject response = Support.previewAccepted("simulation", Support.request(p),
                 "Simulation run preview recorded. No executable model was run.");
@@ -147,7 +177,14 @@ final class SimulationService {
         return response;
     }
 
-    // cameo_run_simulation: always refused with UNSUPPORTED; the refusal payload tells the agent to use the UI.
+    /**
+     * Implements cameo_run_simulation, which is always refused. The refusal payload tells the agent to use
+     * the UI.
+     *
+     * @param p the tool arguments, echoed in the refusal
+     * @return never returns normally
+     * @throws com.cameomcp.mcp.ToolException UNSUPPORTED, always
+     */
     static JsonObject run(JsonObject p) {
         JsonObject response = Support.unsupported("simulation",
                 "Simulation execution is disabled until runtime classes and a disposable executable model are validated.",
@@ -157,7 +194,13 @@ final class SimulationService {
         throw Support.refusal("UNSUPPORTED", response);
     }
 
-    // cameo_get_simulation_result: there is no job store, so every run_id is NOT_FOUND.
+    /**
+     * Implements cameo_get_simulation_result. There is no job store, so every run_id is NOT_FOUND.
+     *
+     * @param p the tool arguments: {@code run_id}
+     * @return never returns normally
+     * @throws com.cameomcp.mcp.ToolException NOT_FOUND, always (INVALID_PARAMS when run_id is missing)
+     */
     static JsonObject result(JsonObject p) {
         String runId = Gs.reqStr(p, "run_id");
         JsonObject response = new JsonObject();
@@ -167,7 +210,13 @@ final class SimulationService {
         throw Support.refusal("NOT_FOUND", response);
     }
 
-    // cameo_terminate_simulation: nothing can be running, so this is NOT_FOUND too.
+    /**
+     * Implements cameo_terminate_simulation. Nothing can be running, so this is NOT_FOUND too.
+     *
+     * @param p the tool arguments: {@code run_id}
+     * @return never returns normally
+     * @throws com.cameomcp.mcp.ToolException NOT_FOUND, always (INVALID_PARAMS when run_id is missing)
+     */
     static JsonObject terminate(JsonObject p) {
         String runId = Gs.reqStr(p, "run_id");
         JsonObject response = Support.unsupported("simulation",

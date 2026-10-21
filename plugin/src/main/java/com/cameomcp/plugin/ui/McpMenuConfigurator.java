@@ -22,7 +22,10 @@ import java.util.List;
  */
 public final class McpMenuConfigurator implements AMConfigurator {
 
-    // Action id of the menu category; reused so a second configure() call doesn't add a second menu.
+    /**
+     * Action id of the menu category; reused so a second configure() call does not add a second MCP menu.
+     * (Its items would still be added again.)
+     */
     static final String CATEGORY_ID = "CAMEO_MCP_MENU";
 
     /**
@@ -64,12 +67,24 @@ public final class McpMenuConfigurator implements AMConfigurator {
         return AMConfigurator.MEDIUM_PRIORITY;
     }
 
-    // A start/stop/restart step; returns false on failure so the UI can show rt.lastError().
+    /** A start/stop/restart step; returns false on failure so the UI can show rt.lastError(). */
     private interface RuntimeAction {
+        /**
+         * Performs the step.
+         *
+         * @param rt the runtime
+         * @return true on success
+         * @throws Exception on unexpected failure (logged)
+         */
         boolean run(McpRuntime rt) throws Exception;
     }
 
-    // Runs a server action off the Swing thread (binding a port can block) and reports failure in a dialog.
+    /**
+     * Runs a server action off the Swing thread (binding a port can block) and reports failure in a dialog.
+     *
+     * @param label action name for the error dialog, for example "Start"
+     * @param action the step to run
+     */
     private static void run(String label, RuntimeAction action) {
         McpRuntime rt = McpRuntime.get();
         if (rt == null) {
@@ -95,7 +110,10 @@ public final class McpMenuConfigurator implements AMConfigurator {
         }.execute();
     }
 
-    // Runs the connection self-test in the background, then shows each step's PASS/FAIL in a dialog and the log.
+    /**
+     * Runs the connection self-test in the background, then shows each step's PASS/FAIL in a dialog and the
+     * log.
+     */
     private static void test() {
         McpRuntime rt = McpRuntime.get();
         if (rt == null) {
@@ -130,9 +148,19 @@ public final class McpMenuConfigurator implements AMConfigurator {
 
     /** A menu item whose enabled state follows the server state. */
     private static final class Item extends MDAction {
+        /** What the item does when clicked; runs on the EDT. */
         private final Runnable onClick;
+        /** Decides whether the item is enabled for the current server state. */
         private final java.util.function.Predicate<McpRuntime> enabled;
 
+        /**
+         * Creates a menu item.
+         *
+         * @param id unique action id
+         * @param name menu label
+         * @param onClick click handler; exceptions are logged, not thrown
+         * @param enabled enablement rule, evaluated each time the menu opens
+         */
         Item(String id, String name, Runnable onClick, java.util.function.Predicate<McpRuntime> enabled) {
             super(id, name, null, null);
             this.onClick = onClick;

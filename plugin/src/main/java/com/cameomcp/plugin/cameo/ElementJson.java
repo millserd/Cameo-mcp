@@ -38,6 +38,7 @@ import java.util.logging.Logger;
  * and the field is left out, so one odd element never breaks a whole query result.
  */
 public final class ElementJson {
+    /** Logger for fields that could not be read (FINE level: expected on some element kinds). */
     private static final Logger LOG = Logger.getLogger(ElementJson.class.getName());
 
     /**
@@ -157,15 +158,18 @@ public final class ElementJson {
         return json;
     }
 
+    /**
+     * The compact form plus qualified name, stereotype names, multiplicity, and the fields that apply
+     * to properties, ports, parameters, information flows and connectors. The default for references
+     * to other elements inside a result.
+     *
+     * @param element the Cameo model element
+     * @return a reference-level JsonObject
+     */
     public static JsonObject toJsonReference(Element element) {
         JsonObject json = toJsonCompact(element);
         appendQualifiedName(json, element);
         appendStereotypeNames(json, element);
-        /**
-         * The compact form plus qualified name, stereotype names, multiplicity, and the fields that apply
-         * to properties, ports, parameters, information flows and connectors. The default for references
-         * to other elements inside a result.
-         */
         appendMultiplicityFields(json, element);
         appendPropertyLikeFields(json, element);
         appendPortLikeFields(json, element);
@@ -180,10 +184,15 @@ public final class ElementJson {
         return json;
     }
 
+    /**
+     * One end of a connector: its role, the part owning the port (if any) and the defining association end.
+     *
+     * @param end the connector end, may be null
+     * @return the end as JSON; an empty object for null
+     */
     public static JsonObject toJsonConnectorEnd(ConnectorEnd end) {
         JsonObject json = new JsonObject();
         if (end == null) {
-            /** One end of a connector: its role, the part owning the port (if any) and the defining association end. */
             return json;
         }
 
@@ -205,11 +214,16 @@ public final class ElementJson {
         return json;
     }
 
+    /**
+     * Reference-level JSON for each non-null element.
+     *
+     * @param elements the elements, may be null
+     * @return a new array, empty for null input
+     */
     public static JsonArray toJsonReferenceArray(Collection<? extends Element> elements) {
         JsonArray array = new JsonArray();
         if (elements == null) {
             return array;
-        /** Reference-level JSON for each non-null element. */
         }
         for (Element element : elements) {
             if (element != null) {
@@ -219,11 +233,16 @@ public final class ElementJson {
         return array;
     }
 
+    /**
+     * The SysML FlowProperty stereotype applied to the element, or null; both name spellings are tried.
+     *
+     * @param element the element to inspect
+     * @return the applied stereotype, or null when not applied or unreadable
+     */
     public static Stereotype getFlowPropertyStereotype(Element element) {
         try {
             Stereotype flowProperty = StereotypesHelper.getAppliedStereotypeByString(
                     element,
-                    /** The SysML FlowProperty stereotype applied to the element, or null; both name spellings are tried. */
                     "FlowProperty");
             if (flowProperty == null) {
                 flowProperty = StereotypesHelper.getAppliedStereotypeByString(
@@ -237,11 +256,17 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * The flow property's direction (in, out, inout), or null if unset or unreadable.
+     *
+     * @param property the flow property
+     * @param flowPropertyStereo the FlowProperty stereotype applied to it
+     * @return the direction literal's name, or null
+     */
     public static String readFlowPropertyDirection(Property property, Stereotype flowPropertyStereo) {
         if (property == null || flowPropertyStereo == null) {
             return null;
         }
-        /** The flow property's direction (in, out, inout), or null if unset or unreadable. */
         try {
             Object direction = StereotypesHelper.getStereotypePropertyFirst(
                     property,
@@ -254,16 +279,22 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * Just id, type and name; no owner, so it is safe to use for type references without recursion.
+     *
+     * @param element the element
+     * @return a new JsonObject with id, type, humanType and (for named elements) name
+     */
     private static JsonObject toJsonShallow(Element element) {
         JsonObject json = new JsonObject();
         json.addProperty("id", element.getID());
 
-        // Just id, type and name; no owner, so it is safe to use for type references without recursion.
+        // The metaclass short name (Class, Package, ...); falls back to the human type if Cameo can't name
+        // it.
         try {
             String shortName = ClassTypes.getShortName(element.getClassType());
             json.addProperty("type", shortName != null ? shortName : element.getClassType().getSimpleName());
         } catch (Exception e) {
-            // The metaclass short name (Class, Package, ...); falls back to the human type if Cameo can't name it.
             json.addProperty("type", element.getHumanType());
         }
 
@@ -277,11 +308,17 @@ public final class ElementJson {
         return json;
     }
 
+    /**
+     * Sources, targets, conveyed items, realizing connectors and the SysML ItemFlow itemProperty.
+     *
+     * @param json the object to add to
+     * @param informationFlow the flow (an ItemFlow is an InformationFlow with the SysML stereotype)
+     * @param includeRealizingConnectorDetails also add each realizing connector with its ends
+     */
     private static void appendInformationFlowFields(
             JsonObject json,
             InformationFlow informationFlow,
             boolean includeRealizingConnectorDetails) {
-        // Sources, targets, conveyed items, realizing connectors and the SysML ItemFlow itemProperty.
         try {
             json.add("informationSources", toJsonReferenceArray(informationFlow.getInformationSource()));
             json.add("informationTargets", toJsonReferenceArray(informationFlow.getInformationTarget()));
@@ -322,11 +359,16 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * Every connector end, plus the end count.
+     *
+     * @param json the object to add to
+     * @param connector the connector
+     */
     private static void appendConnectorFields(JsonObject json, Connector connector) {
         try {
             JsonArray connectorEnds = new JsonArray();
             Collection<ConnectorEnd> ends = connector.getEnd();
-            // Every connector end, plus the end count.
             if (ends != null) {
                 for (ConnectorEnd end : ends) {
                     if (end != null) {
@@ -343,6 +385,12 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * Adds the qualified name of a named element, when it has a non-blank one.
+     *
+     * @param json the object to add to
+     * @param element the element
+     */
     private static void appendQualifiedName(JsonObject json, Element element) {
         if (!(element instanceof NamedElement)) {
             return;
@@ -357,11 +405,16 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * Owner id, name and type, so agents can navigate up without a second call.
+     *
+     * @param json the object to add to
+     * @param owner the owner, may be null (then nothing is added)
+     */
     private static void appendOwnerFields(JsonObject json, Element owner) {
         if (owner == null) {
             return;
         }
-        // Owner id, name and type, so agents can navigate up without a second call.
         json.addProperty("ownerId", owner.getID());
         if (owner instanceof NamedElement) {
             String ownerName = ((NamedElement) owner).getName();
@@ -375,11 +428,17 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * typeId/typeName/typeRef for anything with getType(); reflective because many unrelated metaclasses have
+     * one.
+     *
+     * @param json the object to add to
+     * @param typedElement the element; ignored when it has no getType() or no type
+     */
     private static void appendTypedElementFields(JsonObject json, Object typedElement) {
         Object type = invokeZeroArg(typedElement, "getType");
         if (!(type instanceof Element)) {
             return;
-        // typeId/typeName/typeRef for anything with getType(); reflective because many unrelated metaclasses have one.
         }
         Element typeElement = (Element) type;
         json.addProperty("typeId", typeElement.getID());
@@ -392,20 +451,31 @@ public final class ElementJson {
         json.add("typeRef", toJsonShallow(typeElement));
     }
 
+    /**
+     * Lower/upper bounds and collection flags for multiplicity elements; absent for elements without them.
+     *
+     * @param json the object to add to
+     * @param element any element; read reflectively
+     */
     private static void appendMultiplicityFields(JsonObject json, Object element) {
         appendIntegerProperty(json, "lower", invokeIntegerZeroArg(element, "getLower"));
         appendIntegerProperty(json, "upper", invokeIntegerZeroArg(element, "getUpper"));
         appendBooleanProperty(json, "isOrdered", invokeBooleanZeroArg(element, "isOrdered"));
-        // Lower/upper bounds and collection flags for multiplicity elements; absent for elements without them.
         appendBooleanProperty(json, "isUnique", invokeBooleanZeroArg(element, "isUnique"));
         appendBooleanProperty(json, "isMultivalued", invokeBooleanZeroArg(element, "isMultivalued"));
     }
 
+    /**
+     * Association, aggregation, composite flag, represented element and SysML flow direction (type fields for
+     * any typed element).
+     *
+     * @param json the object to add to
+     * @param element the element; the property-specific fields are added only for a Property
+     */
     private static void appendPropertyLikeFields(JsonObject json, Element element) {
         appendTypedElementFields(json, element);
         if (!(element instanceof Property)) {
             return;
-        // Association, aggregation, composite flag, represented element and SysML flow direction.
         }
 
         Property property = (Property) element;
@@ -436,20 +506,30 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * Port flags. The conjugation getter is named differently across releases, so both spellings are tried.
+     *
+     * @param json the object to add to
+     * @param element any element; fields missing on it are left out
+     */
     private static void appendPortLikeFields(JsonObject json, Element element) {
         appendBooleanProperty(json, "isConjugated", firstBoolean(
                 invokeBooleanZeroArg(element, "isConjugated"),
                 invokeBooleanZeroArg(element, "isIsConjugated")));
-        // Port flags. The conjugation getter is named differently across releases, so both spellings are tried.
         appendBooleanProperty(json, "isService", invokeBooleanZeroArg(element, "isService"));
         appendBooleanProperty(json, "isBehavior", invokeBooleanZeroArg(element, "isBehavior"));
     }
 
+    /**
+     * Parameter direction, and the parameter behind an activity parameter node.
+     *
+     * @param json the object to add to
+     * @param element the element
+     */
     private static void appendParameterLikeFields(JsonObject json, Element element) {
         if (element instanceof Parameter) {
             String direction = stringifyEnumLike(((Parameter) element).getDirection());
             if (direction != null && !direction.isEmpty()) {
-                // Parameter direction, and the parameter behind an activity parameter node.
                 json.addProperty("direction", direction);
             }
         }
@@ -462,11 +542,16 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * Names of applied stereotypes, in application order.
+     *
+     * @param json the object to add to
+     * @param element the element
+     */
     private static void appendStereotypeNames(JsonObject json, Element element) {
         try {
             List<Stereotype> stereotypes = StereotypesHelper.getStereotypes(element);
             if (stereotypes != null && !stereotypes.isEmpty()) {
-                // Names of applied stereotypes, in application order.
                 JsonArray stArray = new JsonArray();
                 for (Stereotype st : stereotypes) {
                     if (st != null && st.getName() != null && !st.getName().isEmpty()) {
@@ -482,11 +567,16 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * Tagged value to JSON: primitives as-is, elements as compact references, collections recursively.
+     *
+     * @param value a tagged value, may be null
+     * @return the JSON value, or null for null; other types become their string form
+     */
     private static JsonElement serializeTaggedValue(Object value) {
         if (value == null) {
             return null;
         }
-        // Tagged value to JSON: primitives as-is, elements as compact references, collections recursively.
         if (value instanceof Boolean) {
             return new JsonPrimitive((Boolean) value);
         }
@@ -515,7 +605,13 @@ public final class ElementJson {
         return new JsonPrimitive(String.valueOf(value));
     }
 
-    /** Calls a public no-argument method by name; null when the target is null or the call fails in any way. */
+    /**
+     * Calls a public no-argument method by name; null when the target is null or the call fails in any way.
+     *
+     * @param target the object, may be null
+     * @param methodName the method name
+     * @return the result, or null
+     */
     public static Object invokeZeroArg(Object target, String methodName) {
         if (target == null) {
             return null;
@@ -529,6 +625,13 @@ public final class ElementJson {
         }
     }
 
+    /**
+     * Calls a no-argument method and keeps the result only when it is a number.
+     *
+     * @param target the object
+     * @param methodName the method name
+     * @return the value as an Integer, or null
+     */
     private static Integer invokeIntegerZeroArg(Object target, String methodName) {
         Object value = invokeZeroArg(target, methodName);
         if (value instanceof Number) {
@@ -537,6 +640,13 @@ public final class ElementJson {
         return null;
     }
 
+    /**
+     * Calls a no-argument method and keeps the result only when it is a Boolean.
+     *
+     * @param target the object
+     * @param methodName the method name
+     * @return the value, or null
+     */
     private static Boolean invokeBooleanZeroArg(Object target, String methodName) {
         Object value = invokeZeroArg(target, methodName);
         if (value instanceof Boolean) {
@@ -545,31 +655,63 @@ public final class ElementJson {
         return null;
     }
 
+    /**
+     * Adds an integer field when the value is known.
+     *
+     * @param json the object to add to
+     * @param key field name
+     * @param value the value, or null to skip
+     */
     private static void appendIntegerProperty(JsonObject json, String key, Integer value) {
         if (value != null) {
             json.addProperty(key, value);
         }
     }
 
+    /**
+     * Adds a boolean field when the value is known.
+     *
+     * @param json the object to add to
+     * @param key field name
+     * @param value the value, or null to skip
+     */
     private static void appendBooleanProperty(JsonObject json, String key, Boolean value) {
         if (value != null) {
             json.addProperty(key, value);
         }
     }
 
+    /**
+     * The first non-null of two values.
+     *
+     * @param first preferred value
+     * @param second fallback value
+     * @return {@code first} if not null, else {@code second}
+     */
     private static Boolean firstBoolean(Boolean first, Boolean second) {
         return first != null ? first : second;
     }
 
+    /**
+     * Boxes a primitive boolean, for the null-skipping helpers.
+     *
+     * @param value the value
+     * @return the boxed value
+     */
     private static Boolean safeBoolean(boolean value) {
         return value;
     }
 
+    /**
+     * Enum literals and enumeration-literal elements become their name; anything else its string form.
+     *
+     * @param value the value, may be null
+     * @return the name or text, or null for null or blank
+     */
     private static String stringifyEnumLike(Object value) {
         if (value == null) {
             return null;
         }
-        // Enum literals and enumeration-literal elements become their name; anything else its string form.
         if (value instanceof Enum<?>) {
             return ((Enum<?>) value).name();
         }
@@ -589,10 +731,22 @@ public final class ElementJson {
         return text.isEmpty() ? null : text;
     }
 
+    /**
+     * Size of a possibly null collection.
+     *
+     * @param collection the collection, may be null
+     * @return its size, or 0
+     */
     private static int safeSize(Collection<?> collection) {
         return collection != null ? collection.size() : 0;
     }
 
+    /**
+     * Element id for log messages.
+     *
+     * @param element the element, may be null
+     * @return its id, or "&lt;null&gt;"
+     */
     private static String safeId(Element element) {
         return element != null ? element.getID() : "<null>";
     }

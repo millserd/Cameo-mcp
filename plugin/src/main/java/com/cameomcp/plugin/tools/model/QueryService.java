@@ -37,17 +37,30 @@ import java.util.Set;
 final class QueryService {
 
     // Paging and depth limits: defaults keep answers small for agents; maxima cap the work on huge models.
+    /** Default page size of cameo_query_elements. */
     static final int QUERY_DEFAULT_LIMIT = 200;
+    /** Largest page size cameo_query_elements accepts; bigger limits are cut to this. */
     static final int QUERY_MAX_LIMIT = 1000;
+    /** Default depth of cameo_get_containment_tree. */
     static final int TREE_DEFAULT_DEPTH = 3;
+    /** Largest depth of cameo_get_containment_tree; bigger depths are cut to this. */
     static final int TREE_MAX_DEPTH = 10;
+    /** Default page size of cameo_list_containment_children. */
     static final int CHILD_DEFAULT_LIMIT = 50;
+    /** Largest page size of cameo_list_containment_children; bigger limits are an error. */
     static final int CHILD_MAX_LIMIT = 500;
 
+    /** Not instantiable; all members are static. */
     private QueryService() {
     }
 
-    /** First non-blank value among parameter aliases. */
+    /**
+     * First non-blank value among parameter aliases.
+     *
+     * @param a the tool arguments
+     * @param names the accepted parameter names, in order of preference
+     * @return the trimmed value, or null when none is given
+     */
     static String alias(Args a, String... names) {
         for (String n : names) {
             String v = a.optTrim(n);
@@ -58,7 +71,16 @@ final class QueryService {
         return null;
     }
 
-    // The limit parameter, capped at max; zero or negative is an error rather than silently "all".
+    /**
+     * Reads the limit parameter, capped at max. Zero or negative is an error rather than silently meaning
+     * "all".
+     *
+     * @param a the tool arguments
+     * @param dflt the value when limit is absent
+     * @param max the cap
+     * @return the page size
+     * @throws ToolException INVALID_PARAMS when limit is below 1
+     */
     private static int limit(Args a, int dflt, int max) {
         Long v = a.lng("limit");
         if (v == null) {
@@ -70,7 +92,13 @@ final class QueryService {
         return (int) Math.min(v, max);
     }
 
-    // The offset parameter; negative is an error.
+    /**
+     * Reads the offset parameter; negative is an error.
+     *
+     * @param a the tool arguments
+     * @return the offset, 0 when absent
+     * @throws ToolException INVALID_PARAMS when offset is negative
+     */
     private static int offset(Args a) {
         Long v = a.lng("offset");
         if (v == null) {
@@ -84,7 +112,14 @@ final class QueryService {
 
     // ------------------------------------------------------------------ get element
 
-    // cameo_get_element: full detail of one element.
+    /**
+     * Implements cameo_get_element: full detail of one element.
+     *
+     * @param a the tool arguments: {@code element_id}
+     * @return the element's full JSON
+     * @throws ToolException NOT_FOUND for a missing element, NO_PROJECT when no project is open
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject getElement(Args a) throws Exception {
         String id = a.reqStr("element_id");
         return Edt.read(project -> ElementJson.toJson(ModelSupport.element(project, id, "element_id")));
@@ -92,9 +127,21 @@ final class QueryService {
 
     // ------------------------------------------------------------------ query
 
-    /*
-     * cameo_query_elements: finds elements under a scope (default: the primary model) by metaclass,
-     * name and stereotype, sorted by type, name and id so paging is stable between calls.
+    /**
+     * Implements cameo_query_elements: finds elements under a scope (default: the primary model) by
+     * metaclass, name
+     * and stereotype. Results are sorted by type, name and id so paging is stable between calls.
+     *
+     * @param a the tool arguments: {@code type}, {@code name}, a scope ({@code package_id} or its aliases),
+     * {@code stereotype}, {@code recursive} (default true), {@code view}, {@code limit} and {@code offset}
+     *
+     * @return {@code view}, the counts, paging fields, the {@code filters} used and the page of {@code
+     *     elements}
+     * @throws ToolException INVALID_PARAMS for an unknown type filter or bad paging values, NOT_FOUND for a
+     *     missing
+     * scope
+     *
+     * @throws Exception any failure while handing the work to the EDT
      */
     static JsonObject queryElements(Args a) throws Exception {
         String typeFilter = a.optTrim("type");
@@ -180,14 +227,25 @@ final class QueryService {
         });
     }
 
-    /** Copies plain-JSON paging fields into a tree response. */
+    /**
+     * Copies plain-JSON paging fields into a tree response.
+     *
+     * @param target the response to add to
+     * @param values field name to plain JSON value, as made by {@link ModelText#page}
+     */
     static void merge(JsonObject target, Map<String, Object> values) {
         for (Map.Entry<String, Object> e : values.entrySet()) {
             target.add(e.getKey(), Gs.toElement(e.getValue()));
         }
     }
 
-    /** The metaclass for a type filter ("Class", "use case", "property"), trying a few spellings; null if unknown. */
+    /**
+     * The metaclass for a type filter ("Class", "use case", "property"), trying a few spellings; null if
+     * unknown.
+     *
+     * @param typeInput the filter text; must not be empty
+     * @return the metaclass interface, for example the UML Class interface for "Class", or null
+     */
     static Class<?> resolveMetaclass(String typeInput) {
         String[] candidates = {ModelText.normalizeTypeName(typeInput), typeInput,
                 typeInput.substring(0, 1).toUpperCase() + typeInput.substring(1)};
@@ -206,7 +264,16 @@ final class QueryService {
 
     // ------------------------------------------------------------------ containment
 
-    // cameo_get_containment_tree: nested owned elements down to the given depth (1-10).
+    /**
+     * Implements cameo_get_containment_tree: nested owned elements down to the given depth.
+     *
+     * @param a the tool arguments: {@code root_id} (or parent_id), {@code depth} (clamped to 1 to 10) and
+     * {@code view}
+     *
+     * @return {@code rootId}, {@code depth}, {@code view} and the nested {@code tree}
+     * @throws ToolException NOT_FOUND for a missing root, INVALID_PARAMS for a bad view
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject containmentTree(Args a) throws Exception {
         String rootId = alias(a, "root_id", "parent_id");
         Long d = a.lng("depth");
@@ -224,7 +291,15 @@ final class QueryService {
         });
     }
 
-    // One tree node; at the depth limit only childCount is reported, so agents know where to drill in.
+    /**
+     * Builds one tree node. At the depth limit only childCount is reported, so agents know where to drill in.
+     *
+     * @param element the element for this node
+     * @param maxDepth the deepest level to expand
+     * @param depth this node's level, 0 for the root
+     * @param full true to include each element's full JSON
+     * @return the node with id, type, name, stereotypes and children
+     */
     private static JsonObject treeNode(Element element, int maxDepth, int depth, boolean full) {
         JsonObject node = new JsonObject();
         node.addProperty("id", element.getID());
@@ -252,7 +327,18 @@ final class QueryService {
         return node;
     }
 
-    // cameo_list_containment_children: one level of owned elements, filtered and paged.
+    /**
+     * Implements cameo_list_containment_children: one level of owned elements, filtered and paged. The name
+     * filter is a substring match ignoring case.
+     *
+     * @param a the tool arguments: {@code root_id} (or parent_id), {@code type}, {@code name}, {@code
+     *     stereotype},
+     * {@code limit} (1 to 500), {@code offset} and {@code view}
+     *
+     * @return the root, counts, paging fields, {@code filters} and the page of {@code children}
+     * @throws ToolException INVALID_PARAMS for bad paging values, NOT_FOUND for a missing root
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject listChildren(Args a) throws Exception {
         String rootId = alias(a, "root_id", "parent_id");
         String typeFilter = a.optTrim("type");
@@ -319,10 +405,16 @@ final class QueryService {
 
     // ------------------------------------------------------------------ relationships
 
-    /*
-     * cameo_get_relationships: everything that touches an element. Directed relationships and
-     * activity edges are split into outgoing and incoming; associations and connectors are listed
-     * as undirected. Each source is read in its own try block so one failing API doesn't hide the rest.
+    /**
+     * Implements cameo_get_relationships: everything that touches an element. Directed relationships and
+     * activity edges are split into outgoing and incoming; associations and connectors are listed as
+     * undirected. Each source is read in its own try block so one failing API does not hide the rest.
+     *
+     * @param a the tool arguments: {@code element_id} and {@code direction} (both, incoming or outgoing)
+     * @return {@code outgoing}, {@code incoming}, {@code undirected} (only when non-empty) and {@code
+     *     totalCount}
+     * @throws ToolException NOT_FOUND for a missing element, INVALID_PARAMS for a bad direction
+     * @throws Exception any failure while handing the work to the EDT
      */
     static JsonObject relationships(Args a) throws Exception {
         String elementId = a.reqStr("element_id");
@@ -425,14 +517,24 @@ final class QueryService {
         });
     }
 
-    // type and humanType of a relationship.
+    /**
+     * Adds the type and humanType of a relationship.
+     *
+     * @param json the object to add to
+     * @param rel the relationship
+     */
     private static void typeFields(JsonObject json, Element rel) {
         String type = ModelSupport.typeName(rel);
         json.addProperty("type", type.isEmpty() ? rel.getHumanType() : type);
         json.addProperty("humanType", rel.getHumanType());
     }
 
-    // Name, owner and stereotypes, when present.
+    /**
+     * Adds the name, owner and stereotypes of a relationship, when present.
+     *
+     * @param json the object to add to
+     * @param rel the relationship
+     */
     private static void metadata(JsonObject json, Element rel) {
         String name = ModelSupport.name(rel);
         if (!name.isEmpty()) {
@@ -456,7 +558,13 @@ final class QueryService {
         }
     }
 
-    // One directed relationship (Dependency, Satisfy, Generalization, ...) with its sources and targets.
+    /**
+     * One directed relationship (Dependency, Satisfy, Generalization and so on) with its sources and targets.
+     *
+     * @param rel the relationship
+     * @param direction "outgoing" or "incoming", as seen from the queried element
+     * @return the relationship JSON, with information-flow details when it is one
+     */
     private static JsonObject directed(DirectedRelationship rel, String direction) {
         JsonObject json = new JsonObject();
         json.addProperty("relationshipId", rel.getID());
@@ -471,7 +579,13 @@ final class QueryService {
         return json;
     }
 
-    // One control or object flow; activity edges are not DirectedRelationships in Cameo's API.
+    /**
+     * One control or object flow. Activity edges are not DirectedRelationships in Cameo's API.
+     *
+     * @param edge the edge
+     * @param direction "outgoing" or "incoming"
+     * @return the edge JSON with one source and one target
+     */
     private static JsonObject activityEdge(ActivityEdge edge, String direction) {
         JsonObject json = new JsonObject();
         json.addProperty("relationshipId", edge.getID());
@@ -491,7 +605,13 @@ final class QueryService {
         return json;
     }
 
-    // One undirected relationship (e.g. Association), listing the other related elements.
+    /**
+     * One undirected relationship, such as an Association, listing the other related elements.
+     *
+     * @param rel the relationship
+     * @param selfId the queried element's id, left out of the related elements
+     * @return the relationship JSON
+     */
     private static JsonObject undirectedRel(Relationship rel, String selfId) {
         JsonObject json = new JsonObject();
         json.addProperty("relationshipId", rel.getID());
@@ -511,7 +631,14 @@ final class QueryService {
         return json;
     }
 
-    // One connector: every end, which ends attach to the queried element, and the information flows it realizes.
+    /**
+     * One connector: every end, which ends attach to the queried element, and the information flows it
+     * realizes. The realizing-flow getter is called by reflection because its name differs between releases.
+     *
+     * @param connector the connector
+     * @param selfId the queried element's id, or null when there is none (as for realizing-connector details)
+     * @return the connector JSON
+     */
     private static JsonObject connector(Connector connector, String selfId) {
         JsonObject json = new JsonObject();
         json.addProperty("relationshipId", connector.getID());
@@ -564,7 +691,13 @@ final class QueryService {
         return json;
     }
 
-    // Conveyed items, realizing connectors and ItemFlow item property of an information flow.
+    /**
+     * Adds the sources, targets, conveyed items, realizing connectors and ItemFlow item property of an
+     * information flow. Failures are ignored.
+     *
+     * @param json the object to add to
+     * @param flow the information flow
+     */
     private static void informationFlow(JsonObject json, InformationFlow flow) {
         try {
             json.add("informationSources", refs(flow.getInformationSource()));
@@ -594,7 +727,12 @@ final class QueryService {
         }
     }
 
-    // Reference JSON for each element; empty when the collection can't be read.
+    /**
+     * Reference JSON for each element; empty when the collection cannot be read.
+     *
+     * @param elements the elements, may be null
+     * @return the references
+     */
     private static JsonArray refs(Collection<? extends Element> elements) {
         try {
             return elements == null ? new JsonArray() : ElementJson.toJsonReferenceArray(elements);
@@ -603,7 +741,14 @@ final class QueryService {
         }
     }
 
-    // Adds a reference once, skipping the queried element itself.
+    /**
+     * Adds a reference once, skipping the queried element itself.
+     *
+     * @param related the array to add to
+     * @param seen ids already added
+     * @param e the element, may be null
+     * @param selfId the queried element's id, or null
+     */
     private static void addRelated(JsonArray related, Set<String> seen, Element e, String selfId) {
         if (e == null || (selfId != null && selfId.equals(e.getID())) || !seen.add(e.getID())) {
             return;
@@ -611,11 +756,25 @@ final class QueryService {
         related.add(ElementJson.toJsonReference(e));
     }
 
+    /**
+     * True when the element is the queried element.
+     *
+     * @param selfId the queried element's id, or null
+     * @param e the element, may be null
+     * @return true when both are non-null and the ids match
+     */
     private static boolean matches(String selfId, Element e) {
         return selfId != null && e != null && selfId.equals(e.getID());
     }
 
-    // Calls the first of the named collection getters that exists; getter names differ across releases.
+    /**
+     * Calls the first of the named collection getters that exists. Getter names differ across releases, so
+     * the calls are reflective.
+     *
+     * @param target the object to call on
+     * @param methods zero-argument getter names to try in order
+     * @return the first collection returned, or an empty list
+     */
     @SuppressWarnings("unchecked")
     private static Collection<? extends Element> elementCollection(Object target, String... methods) {
         for (String m : methods) {

@@ -19,12 +19,21 @@ import java.util.Map;
 /** cameo_create_snapshot / list / get / delete / diff. */
 public final class Snapshots {
 
+    /** Not instantiable; all members are static. */
     private Snapshots() {
     }
 
     /**
      * cameo_create_snapshot: captures a JSON payload for a project, element, diagram, Relation Map or
      * UI target and stores it in the in-memory SnapshotStore for later cameo_diff_snapshots calls.
+     *
+     * @param p the tool arguments: {@code target_type}, {@code target_id}, {@code name} and the include flags
+     * @return the stored snapshot, with its snapshotId and createdAt
+     * @throws ToolException INVALID_PARAMS for an unknown target type or a missing target id, NOT_FOUND for a
+     *     missing
+     * target
+     *
+     * @throws Exception when no project is open or the hand-off to the EDT fails
      */
     public static JsonObject create(JsonObject p) throws Exception {
         String targetType = Gs.reqStr(p, "target_type").trim();
@@ -66,7 +75,13 @@ public final class Snapshots {
         });
     }
 
-    /** Canonical target name for a case-insensitive input, ignoring "_" and "-"; invalid-params otherwise. */
+    /**
+     * Canonical target name for a case-insensitive input, ignoring "_" and "-"; invalid-params otherwise.
+     *
+     * @param targetType the target type the agent sent
+     * @return project, element, diagram, relationMap or ui
+     * @throws ToolException INVALID_PARAMS for anything else
+     */
     static String canonicalTarget(String targetType) {
         for (String t : new String[]{"project", "element", "diagram", "relationMap", "ui"}) {
             if (t.equalsIgnoreCase(targetType) || t.equalsIgnoreCase(targetType.replace("_", "").replace("-", ""))) {
@@ -161,7 +176,11 @@ public final class Snapshots {
         }
     }
 
-    /** cameo_list_snapshots: summaries of every stored snapshot, oldest first. */
+    /**
+     * cameo_list_snapshots: summaries of every stored snapshot, oldest first.
+     *
+     * @return {@code count} and {@code snapshots}
+     */
     public static JsonObject list() {
         JsonArray snapshots = new JsonArray();
         for (JsonObject s : SnapshotStore.list()) {
@@ -173,7 +192,13 @@ public final class Snapshots {
         return response;
     }
 
-    /** cameo_get_snapshot: the full stored snapshot, or NOT_FOUND (snapshots do not survive a restart). */
+    /**
+     * cameo_get_snapshot: the full stored snapshot, or NOT_FOUND (snapshots do not survive a restart).
+     *
+     * @param p the tool arguments: {@code snapshot_id}
+     * @return a deep copy of the snapshot
+     * @throws ToolException NOT_FOUND when the id is unknown
+     */
     public static JsonObject get(JsonObject p) {
         String id = Gs.reqStr(p, "snapshot_id").trim();
         JsonObject s = SnapshotStore.get(id);
@@ -184,7 +209,12 @@ public final class Snapshots {
         return s;
     }
 
-    /** cameo_delete_snapshot: removes one snapshot; "deleted" is false when the id was unknown. */
+    /**
+     * cameo_delete_snapshot: removes one snapshot; "deleted" is false when the id was unknown.
+     *
+     * @param p the tool arguments: {@code snapshot_id}
+     * @return {@code deleted} and {@code snapshotId}
+     */
     public static JsonObject delete(JsonObject p) {
         String id = Gs.reqStr(p, "snapshot_id").trim();
         JsonObject response = new JsonObject();
@@ -196,6 +226,13 @@ public final class Snapshots {
     /**
      * cameo_diff_snapshots: structural JSON diff of the two payloads (not the metadata such as ids
      * and timestamps), honoring ignore_paths and capped at max_changes.
+     *
+     * @param p the tool arguments: {@code before_snapshot_id}, {@code after_snapshot_id}, {@code
+     *     ignore_paths},
+     * {@code max_changes} and {@code include_details}
+     *
+     * @return the two ids and the diff from {@link JsonDiff#diff}
+     * @throws ToolException NOT_FOUND naming each missing snapshot
      */
     public static JsonObject diff(JsonObject p) {
         String beforeId = Gs.reqStr(p, "before_snapshot_id").trim();

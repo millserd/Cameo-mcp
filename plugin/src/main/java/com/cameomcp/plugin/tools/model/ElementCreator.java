@@ -41,33 +41,64 @@ import java.util.List;
  */
 final class ElementCreator {
 
+    /** Not instantiable; all members are static. */
     private ElementCreator() {
     }
 
     /** Parameters of one element creation, read from snake_case (or camelCase) arguments. */
     static final class Request {
         // type is what the agent sent; kind is its canonical form from ModelText.elementKind.
+        /** Element type exactly as the agent sent it, used in error messages. */
         String type;
+        /**
+         * Canonical lower-case kind from {@link ModelText#elementKind}, for example "block" or
+         * "statemachine".
+         */
         String kind;
+        /** Name for the new element; required, may be empty. */
         String name;
+        /** Id of the owning element; required. */
         String parentId;
+        /** Extra stereotype to apply by name, on top of the kind's default one, or null. */
         String stereotype;
+        /** Documentation comment body, or null to leave it unset. */
         String documentation;
+        /** Behavior a CallBehaviorAction should call, or null. */
         String behaviorId;
+        /** Element an ActivityPartition represents, or null. */
         String representsId;
+        /** Type of a typed element (Property, Port, pin), or null. */
         String typeId;
+        /** Lower multiplicity bound, or null to leave it unset. */
         Integer lower;
+        /** Upper multiplicity bound, -1 for unlimited, or null to leave it unset. */
         Integer upper;
+        /** Multiplicity isOrdered flag, or null to leave it unchanged. */
         Boolean isOrdered;
+        /** Multiplicity isUnique flag, or null to leave it unchanged. */
         Boolean isUnique;
+        /** Property aggregation: none, shared or composite; null leaves the default. */
         String aggregation;
+        /** Port isBehavior flag, or null. */
         Boolean isBehavior;
+        /** Port isConjugated flag, or null. */
         Boolean isConjugated;
+        /** Port isService flag, or null. */
         Boolean isService;
+        /** FlowProperty direction (in, out, inout), or null. */
         String direction;
+        /** UML metaclass names a new Stereotype extends, or null for none. */
         List<String> metaclasses;
 
-        /** Reads and validates the arguments; nothing touches the model yet, so bad input fails before any session opens. */
+        /**
+         * Reads and validates the arguments; nothing touches the model yet, so bad input fails before any
+         * session opens.
+         *
+         * @param a the tool arguments
+         * @return the parsed request
+         * @throws ToolException INVALID_PARAMS when type is unsupported, name or parent_id is missing, or a
+         *     value is malformed
+         */
         static Request from(Args a) {
             Request r = new Request();
             r.type = a.reqStr("type");
@@ -103,6 +134,17 @@ final class ElementCreator {
      * Creates the element under its parent, applies default and explicit stereotypes, then sets the
      * optional semantics (type, multiplicity, aggregation, port flags, flow direction) and documentation.
      * Any exception aborts the caller's session, so a half-configured element is never kept.
+     *
+     * <p>Threading: must be called inside a write session on the EDT (see {@code Edt.write}).
+     *
+     * @param project the open project
+     * @param r the parsed request
+     * @return the new element, already owned by its parent
+     * @throws ToolException when the parent is missing or read-only, an option does not fit the element kind,
+     *     or a
+     * stereotype or metaclass cannot be found
+     *
+     * @throws Exception any Cameo API failure, which rolls the caller's session back
      */
     static Element create(Project project, Request r) throws Exception {
         Element parent = ModelSupport.element(project, r.parentId, "parent_id");
@@ -178,7 +220,15 @@ final class ElementCreator {
         return created;
     }
 
-    /** A new, unowned UML element for a canonical kind. SysML kinds share the UML metaclass their stereotype extends. */
+    /**
+     * A new, unowned UML element for a canonical kind. SysML kinds share the UML metaclass their stereotype
+     * extends.
+     *
+     * @param ef the project's elements factory
+     * @param kind a canonical kind from {@link ModelText#elementKind}
+     * @return the new element, not yet added to any owner
+     * @throws ToolException INVALID_PARAMS for a kind this method does not know
+     */
     static Element instantiate(ElementsFactory ef, String kind) {
         switch (kind) {
             case "package":
@@ -254,7 +304,15 @@ final class ElementCreator {
         }
     }
 
-    /** Region that should own a new State/Pseudostate under the given parent. */
+    /**
+     * Region that should own a new State/Pseudostate under the given parent.
+     *
+     * @param ef the project's elements factory, used if a region has to be created
+     * @param parent the element the agent named as parent
+     * @param type the element type as the agent sent it, for the error message
+     * @return the region to put the new vertex in
+     * @throws ToolException INVALID_PARAMS when the parent is not a Region, StateMachine or State
+     */
     static Region stateRegion(ElementsFactory ef, Element parent, String type) {
         if (parent instanceof Region) {
             return (Region) parent;
@@ -269,7 +327,13 @@ final class ElementCreator {
                 + ModelSupport.describe(parent) + ".");
     }
 
-    /** The state machine's first region, creating one if it has none. */
+    /**
+     * The state machine's first region, creating one if it has none.
+     *
+     * @param ef the project's elements factory
+     * @param sm the state machine
+     * @return its first region, possibly new
+     */
     static Region ensureRegion(ElementsFactory ef, StateMachine sm) {
         Collection<Region> regions = sm.getRegion();
         if (regions != null && !regions.isEmpty()) {
@@ -280,7 +344,13 @@ final class ElementCreator {
         return region;
     }
 
-    /** The composite state's first region, creating one if it has none. */
+    /**
+     * The composite state's first region, creating one if it has none.
+     *
+     * @param ef the project's elements factory
+     * @param state the state, which becomes composite if a region is added
+     * @return its first region, possibly new
+     */
     static Region ensureRegion(ElementsFactory ef, State state) {
         Collection<Region> regions = state.getRegion();
         if (regions != null && !regions.isEmpty()) {
@@ -291,7 +361,14 @@ final class ElementCreator {
         return region;
     }
 
-    // The UML metaclasses named for a new stereotype; an unknown name is an error.
+    /**
+     * Looks up the UML metaclasses named for a new stereotype.
+     *
+     * @param project the open project, whose UML metamodel is searched
+     * @param names metaclass names such as Class or Property, or null
+     * @return the metaclasses in the given order; empty when names is null
+     * @throws ToolException INVALID_PARAMS when a name is not a known metaclass
+     */
     private static Collection<com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Class> resolveMetaclasses(
             Project project, List<String> names) {
         List<com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Class> out = new ArrayList<>();
@@ -309,7 +386,16 @@ final class ElementCreator {
         return out;
     }
 
-    // Optional settings that only some element kinds support; each one checks the kind and explains a mismatch.
+    /**
+     * Applies the optional settings that only some element kinds support: type, multiplicity, aggregation,
+     * port flags and flow direction. Each one checks the element kind first and explains a mismatch.
+     *
+     * @param project the open project
+     * @param ef the project's elements factory, for new multiplicity literals
+     * @param created the new element
+     * @param r the request holding the optional settings
+     * @throws ToolException INVALID_PARAMS when a setting does not apply to the element kind
+     */
     private static void applySemantics(Project project, ElementsFactory ef, Element created, Request r) {
         if (r.typeId != null) {
             if (!(created instanceof TypedElement)) {
@@ -375,7 +461,13 @@ final class ElementCreator {
         }
     }
 
-    /** Sets the lower bound, reusing the existing literal if there is one. */
+    /**
+     * Sets the lower bound, reusing the existing literal if there is one.
+     *
+     * @param ef the project's elements factory, used when no literal exists yet
+     * @param me the element to change
+     * @param lower the new lower bound
+     */
     static void setLower(ElementsFactory ef, MultiplicityElement me, int lower) {
         ValueSpecification existing = me.getLowerValue();
         if (existing instanceof LiteralInteger) {
@@ -387,7 +479,13 @@ final class ElementCreator {
         me.setLowerValue(v);
     }
 
-    /** Sets the upper bound; -1 means unlimited ("*"), which UML stores as a LiteralUnlimitedNatural. */
+    /**
+     * Sets the upper bound; -1 means unlimited ("*"), which UML stores as a LiteralUnlimitedNatural.
+     *
+     * @param ef the project's elements factory, used when no literal exists yet
+     * @param me the element to change
+     * @param upper the new upper bound; any negative value means unlimited
+     */
     static void setUpper(ElementsFactory ef, MultiplicityElement me, int upper) {
         int value = upper < 0 ? -1 : upper;
         ValueSpecification existing = me.getUpperValue();
@@ -400,7 +498,13 @@ final class ElementCreator {
         me.setUpperValue(v);
     }
 
-    /** none, shared or composite (by name or literal), as Cameo's AggregationKind. */
+    /**
+     * none, shared or composite (by name or literal), as Cameo's AggregationKind.
+     *
+     * @param text the aggregation text, matched without case
+     * @return the matching aggregation kind
+     * @throws ToolException INVALID_PARAMS for any other value
+     */
     static AggregationKind aggregation(String text) {
         String t = text.trim().toLowerCase();
         AggregationKind resolved = AggregationKindEnum.getByName(t);

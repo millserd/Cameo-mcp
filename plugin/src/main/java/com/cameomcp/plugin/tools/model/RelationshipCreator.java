@@ -42,24 +42,47 @@ import java.util.List;
 /** Creates one relationship from cameo_create_relationship parameters; runs inside a model session. */
 final class RelationshipCreator {
 
+    /** Not instantiable; all members are static. */
     private RelationshipCreator() {
     }
 
     /** Parameters of one relationship creation; validated before any session opens. */
     static final class Request {
+        /** Relationship type exactly as the agent sent it, used in messages and results. */
         String type;
+        /** Canonical lower-case kind from {@link ModelText#relationshipKind}, for example "satisfy". */
         String kind;
+        /** Id of the source end (client, specific classifier, including use case and so on); required. */
         String sourceId;
+        /** Id of the target end (supplier, general classifier, addition and so on); required. */
         String targetId;
+        /** Name for the new relationship, or null to leave it unnamed. */
         String name;
+        /** Guard text for control flows, object flows and transitions, or null. */
         String guard;
+        /** Explicit owner id, or null to use the default owner for the kind. Required for connectors. */
         String ownerId;
+        /** Part through which the connector's source port is reached, or null. */
         String sourcePartWithPortId;
+        /** Part through which the connector's target port is reached, or null. */
         String targetPartWithPortId;
+        /** Connector that realizes an information flow, or null. */
         String realizingConnectorId;
+        /** Classifiers an information flow conveys, or null. */
         List<String> conveyedIds;
+        /**
+         * Property an ItemFlow carries (its itemProperty tag), or null. Giving it also applies the ItemFlow
+         * stereotype.
+         */
         String itemPropertyId;
 
+        /**
+         * Reads and validates the arguments without touching the model.
+         *
+         * @param a the tool arguments
+         * @return the parsed request
+         * @throws ToolException INVALID_PARAMS for an unsupported type or a missing source_id or target_id
+         */
         static Request from(Args a) {
             Request r = new Request();
             r.type = a.reqStr("type");
@@ -86,6 +109,18 @@ final class RelationshipCreator {
      * ends have the metaclass the kind requires. Each kind is owned where UML (and Cameo's
      * containment tree) expects it: generalizations under the specific classifier, dependencies
      * and abstractions in a package, flows in the activity, transitions in the region.
+     *
+     * <p>Threading: must be called inside a write session on the EDT.
+     *
+     * @param project the open project
+     * @param r the parsed request
+     * @return the new relationship
+     * @throws ToolException INVALID_PARAMS when an end has the wrong kind or the owner does not fit,
+     *     NOT_FOUND for a
+     * missing end, owner or referenced element, PRECONDITION_FAILED or CONFLICT for a missing or ambiguous
+     * SysML stereotype
+     *
+     * @throws Exception any Cameo failure, which rolls the caller's session back
      */
     static Element create(Project project, Request r) throws Exception {
         Element source = ModelSupport.element(project, r.sourceId, "source_id");
@@ -151,13 +186,30 @@ final class RelationshipCreator {
         return rel;
     }
 
-    // INVALID_PARAMS naming both ends, so the agent sees which one has the wrong kind.
+    /**
+     * Builds the INVALID_PARAMS error naming both ends, so the agent sees which one has the wrong kind.
+     *
+     * @param what the rule that was broken
+     * @param source the source element
+     * @param target the target element
+     * @return the exception to throw
+     */
     private static ToolException wrongEnds(String what, Element source, Element target) {
         return ToolException.invalid(what + ". Got source=" + ModelSupport.describe(source) + ", target="
                 + ModelSupport.describe(target) + ".");
     }
 
-    // source is the specific classifier, target the general one; owned by the source.
+    /**
+     * Creates a generalization: source is the specific classifier, target the general one. Owned by the
+     * source.
+     *
+     * @param ef the elements factory
+     * @param source the specific classifier
+     * @param target the general classifier
+     * @return the new generalization
+     * @throws ToolException INVALID_PARAMS when either end is not a Classifier
+     * @throws Exception any Cameo failure while adding it
+     */
     private static Generalization generalization(ElementsFactory ef, Element source, Element target) throws Exception {
         if (!(source instanceof Classifier) || !(target instanceof Classifier)) {
             throw wrongEnds("Generalization requires Classifier source (specific) and target (general)", source, target);
@@ -169,7 +221,16 @@ final class RelationshipCreator {
         return g;
     }
 
-    // source includes target; owned by the including use case.
+    /**
+     * Creates an include: source includes target. Owned by the including use case.
+     *
+     * @param ef the elements factory
+     * @param source the including use case
+     * @param target the included use case
+     * @return the new include
+     * @throws ToolException INVALID_PARAMS when either end is not a UseCase
+     * @throws Exception any Cameo failure while adding it
+     */
     private static Include include(ElementsFactory ef, Element source, Element target) throws Exception {
         if (!(source instanceof UseCase) || !(target instanceof UseCase)) {
             throw wrongEnds("Include requires UseCase source (including) and target (addition)", source, target);
@@ -181,7 +242,16 @@ final class RelationshipCreator {
         return inc;
     }
 
-    // source extends target; owned by the extending use case.
+    /**
+     * Creates an extend: source extends target. Owned by the extending use case.
+     *
+     * @param ef the elements factory
+     * @param source the extending use case
+     * @param target the extended use case
+     * @return the new extend
+     * @throws ToolException INVALID_PARAMS when either end is not a UseCase
+     * @throws Exception any Cameo failure while adding it
+     */
     private static Extend extend(ElementsFactory ef, Element source, Element target) throws Exception {
         if (!(source instanceof UseCase) || !(target instanceof UseCase)) {
             throw wrongEnds("Extend requires UseCase source (extension) and target (extended case)", source, target);
@@ -193,7 +263,19 @@ final class RelationshipCreator {
         return ext;
     }
 
-    // source (client) depends on target (supplier); owned by a package.
+    /**
+     * Creates a dependency: source (client) depends on target (supplier). Owned by a package, see
+     * {@link #packagedOwner}.
+     *
+     * @param ef the elements factory
+     * @param project the open project
+     * @param source the client
+     * @param target the supplier
+     * @param ownerId explicit owner package id, or null
+     * @return the new dependency
+     * @throws ToolException INVALID_PARAMS when an end is not a NamedElement or the owner is not a package
+     * @throws Exception any Cameo failure while adding it
+     */
     private static Dependency dependency(ElementsFactory ef, Project project, Element source, Element target,
                                          String ownerId) throws Exception {
         if (!(source instanceof NamedElement) || !(target instanceof NamedElement)) {
@@ -206,10 +288,23 @@ final class RelationshipCreator {
         return dep;
     }
 
-    /*
-     * An association typed by source and target. Ends: index 0 is typed by the source, index 1 by
-     * the target. Composition makes the source end composite (the whole); "directed" makes the
-     * target end association-owned, so only the source can navigate to it.
+    /**
+     * Creates an association typed by source and target. Of the two owned ends, index 0 is typed by the
+     * source and index 1 by the target. Composition makes the source end composite (the whole). Directed
+     * makes the target end association-owned, so only the source can navigate to it. The association is owned
+     * by the source's owner.
+     *
+     * @param ef the elements factory
+     * @param source the source type
+     * @param target the target type
+     * @param directed true for a directed association or composition
+     * @param composition true for a composition
+     * @return the new association
+     * @throws ToolException INVALID_PARAMS when an end is not a Type or the source has no owner, TOOL_FAILED
+     *     when
+     * Cameo did not create the two ends
+     *
+     * @throws Exception any Cameo failure while adding it
      */
     private static Association association(ElementsFactory ef, Element source, Element target, boolean directed,
                                            boolean composition) throws Exception {
@@ -240,7 +335,22 @@ final class RelationshipCreator {
         return assoc;
     }
 
-    // A control or object flow, owned by the activity that contains the source node unless owner_id says otherwise.
+    /**
+     * Sets up a control or object flow, owned by the activity that contains the source node unless owner_id
+     * says otherwise. If neither gives an owner, the edge is left unowned.
+     *
+     * @param ef the elements factory, for the guard literal
+     * @param project the open project
+     * @param edge the new, empty edge
+     * @param source the source node
+     * @param target the target node
+     * @param guard guard text, or null or empty for none
+     * @param ownerId explicit owner id, or null
+     * @param what "ControlFlow" or "ObjectFlow", for error messages
+     * @return the edge
+     * @throws ToolException INVALID_PARAMS when an end is not an ActivityNode, NOT_FOUND for a missing owner
+     * @throws Exception any Cameo failure while adding it
+     */
     private static ActivityEdge activityFlow(ElementsFactory ef, Project project, ActivityEdge edge, Element source,
                                              Element target, String guard, String ownerId, String what)
             throws Exception {
@@ -267,7 +377,18 @@ final class RelationshipCreator {
         return edge;
     }
 
-    // A transition inside the shared region of its two vertices; the guard becomes a Constraint with a text spec.
+    /**
+     * Creates a transition inside the shared region of its two vertices. The guard becomes a Constraint named
+     * "guard" with a text specification.
+     *
+     * @param ef the elements factory
+     * @param source the source vertex
+     * @param target the target vertex
+     * @param guard guard text, or null or empty for none
+     * @return the new transition
+     * @throws ToolException INVALID_PARAMS when an end is not a Vertex, is not in a region, or the regions
+     *     differ
+     */
     private static Transition transition(ElementsFactory ef, Element source, Element target, String guard) {
         if (!(source instanceof Vertex) || !(target instanceof Vertex)) {
             throw wrongEnds("Transition requires Vertex source and target (states, pseudostates)", source, target);
@@ -297,7 +418,24 @@ final class RelationshipCreator {
         return t;
     }
 
-    // An information flow in a package, optionally conveying classifiers; ItemFlow adds the SysML stereotype and item property.
+    /**
+     * Creates an information flow in a package, optionally conveying classifiers and realized by a connector.
+     * An ItemFlow (or any flow given item_property_id) also gets the SysML ItemFlow stereotype and its item
+     * property.
+     *
+     * @param ef the elements factory
+     * @param project the open project
+     * @param source the information source
+     * @param target the information target
+     * @param r the request, for owner, conveyed items, realizing connector and item property
+     * @param itemFlow true to apply the ItemFlow stereotype
+     * @return the new flow
+     * @throws ToolException INVALID_PARAMS when an end is not a NamedElement or a referenced element has the
+     *     wrong
+     * kind, NOT_FOUND for a missing reference, PRECONDITION_FAILED or CONFLICT for the ItemFlow stereotype
+     *
+     * @throws Exception any Cameo failure while adding it
+     */
     private static InformationFlow informationFlow(ElementsFactory ef, Project project, Element source, Element target,
                                                    Request r, boolean itemFlow) throws Exception {
         if (!(source instanceof NamedElement) || !(target instanceof NamedElement)) {
@@ -332,9 +470,19 @@ final class RelationshipCreator {
         return flow;
     }
 
-    /*
-     * A connector inside the owning block (the IBD context). Each end's role is the part or port;
-     * part_with_port names the part through which a nested port is reached.
+    /**
+     * Creates a connector inside the owning block (the IBD context). Each end's role is the part or port; the
+     * part-with-port names the part through which a nested port is reached.
+     *
+     * @param ef the elements factory
+     * @param project the open project
+     * @param source the source role
+     * @param target the target role
+     * @param r the request, for owner_id and the part-with-port ids
+     * @return the new connector
+     * @throws ToolException INVALID_PARAMS when an end is not connectable, owner_id is missing, or a
+     *     referenced
+     * element has the wrong kind; NOT_FOUND for a missing reference
      */
     private static Connector connector(ElementsFactory ef, Project project, Element source, Element target, Request r) {
         if (!(source instanceof ConnectableElement) || !(target instanceof ConnectableElement)) {
@@ -372,7 +520,15 @@ final class RelationshipCreator {
         return connector;
     }
 
-    // The optional part-with-port for a connector end, or null.
+    /**
+     * Looks up the optional part-with-port for a connector end.
+     *
+     * @param project the open project
+     * @param id the part's id, or null
+     * @param param the parameter name, for error messages
+     * @return the part property, or null when no id was given
+     * @throws ToolException INVALID_PARAMS when the id is not a Property, NOT_FOUND when it does not resolve
+     */
     private static Property partWithPort(Project project, String id, String param) {
         if (id == null) {
             return null;
@@ -380,7 +536,22 @@ final class RelationshipCreator {
         return ModelSupport.typed(project, id, param, Property.class, "a part Property");
     }
 
-    // A SysML stereotyped Abstraction (Satisfy, Verify, Allocate, DeriveReqt, Refine, Trace), owned by a package.
+    /**
+     * Creates a SysML stereotyped Abstraction (Satisfy, Verify, Allocate, DeriveReqt, Refine or Trace), owned
+     * by a package, see {@link #packagedOwner}.
+     *
+     * @param ef the elements factory
+     * @param project the open project
+     * @param source the client
+     * @param target the supplier
+     * @param ownerId explicit owner package id, or null
+     * @param stereotypeName the SysML stereotype to apply
+     * @return the new abstraction
+     * @throws ToolException INVALID_PARAMS when an end is not a NamedElement or the owner is not a package,
+     * PRECONDITION_FAILED or CONFLICT for a missing or ambiguous stereotype
+     *
+     * @throws Exception any Cameo failure while adding it
+     */
     private static Abstraction abstraction(ElementsFactory ef, Project project, Element source, Element target,
                                            String ownerId, String stereotypeName) throws Exception {
         if (!(source instanceof NamedElement) || !(target instanceof NamedElement)) {
@@ -395,7 +566,16 @@ final class RelationshipCreator {
         return a;
     }
 
-    /** Explicit package owner, else the nearest package above the source, else the primary model. */
+    /**
+     * Explicit package owner, else the nearest package above the source, else the primary model.
+     *
+     * @param project the open project
+     * @param ownerId explicit owner id, or null
+     * @param source the relationship's source; its owners are searched (not the source itself)
+     * @param what the relationship kind, for the error message
+     * @return the owner package
+     * @throws ToolException INVALID_PARAMS when owner_id is not a package, NOT_FOUND when it does not resolve
+     */
     static Package packagedOwner(Project project, String ownerId, Element source, String what) {
         if (ownerId != null) {
             Element owner = ModelSupport.element(project, ownerId, "owner_id");
@@ -415,7 +595,16 @@ final class RelationshipCreator {
         return com.cameomcp.plugin.cameo.ProjectKind.primaryModel(project);
     }
 
-    /** Nearest package at or above the context element (owner_id or the source). */
+    /**
+     * Nearest package at or above the context element (owner_id or the source).
+     *
+     * @param project the open project
+     * @param ownerId context element id, or null to use the fallback
+     * @param fallback the element to start from when ownerId is null
+     * @param what the relationship kind; currently unused
+     * @return the nearest package, or the primary model when none is found
+     * @throws ToolException NOT_FOUND when ownerId does not resolve
+     */
     static Package packageFromContext(Project project, String ownerId, Element fallback, String what) {
         Element context = ownerId != null ? ModelSupport.element(project, ownerId, "owner_id") : fallback;
         while (context != null) {

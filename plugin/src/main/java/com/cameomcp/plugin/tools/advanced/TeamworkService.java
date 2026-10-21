@@ -13,15 +13,19 @@ import java.lang.reflect.Method;
 /** Teamwork Cloud / Magic Collaboration Studio read-only probes (reference TeamworkHandler). */
 final class TeamworkService {
 
-    // Teamwork APIs live in the optional ESI plugin, so EsiUtils is always reached by reflection.
+    /** Teamwork APIs live in the optional ESI plugin, so EsiUtils is always reached by reflection. */
     private static final String ESI_UTILS = "com.nomagic.magicdraw.esi.EsiUtils";
 
+    /** Not instantiable; all members are static. */
     private TeamworkService() {
     }
 
-    /*
-     * cameo_get_teamwork_capabilities: reports whether the ESI classes are loadable and which read routes exist.
-     * Writes stay disabled; the other handlers build on this response so every answer carries the same probe.
+    /**
+     * Implements cameo_get_teamwork_capabilities: reports whether the ESI classes load and which read routes
+     * exist. Writes stay disabled. The other handlers build on this answer, so every answer carries the same
+     * probe.
+     *
+     * @return the capability answer
      */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("teamwork", "native-readonly");
@@ -45,7 +49,13 @@ final class TeamworkService {
         return response;
     }
 
-    // cameo_get_teamwork_project: local vs remote mode plus whatever the project's descriptor exposes.
+    /**
+     * Implements cameo_get_teamwork_project: local or remote mode plus whatever the project's descriptor
+     * exposes.
+     *
+     * @return the capabilities plus {@code projectMode}, descriptor details and ESI diagnostics
+     * @throws Exception when no project is open or the hand-off to the EDT fails
+     */
     static JsonObject project() throws Exception {
         return Edt.read(project -> {
             JsonObject response = capabilities();
@@ -76,9 +86,13 @@ final class TeamworkService {
         });
     }
 
-    /*
-     * cameo_list_teamwork_descriptors: lists server projects via EsiUtils.getRemoteProjectDescriptors().
-     * This needs a logged-in server session, so any failure is reported as auth-or-server-unavailable.
+    /**
+     * Implements cameo_list_teamwork_descriptors: lists server projects through
+     * EsiUtils.getRemoteProjectDescriptors(). This needs a logged-in server session, so any failure is
+     * reported as auth-or-server-unavailable.
+     *
+     * @return the capabilities plus the descriptors or the failure reason
+     * @throws Exception when no project is open or the hand-off to the EDT fails
      */
     static JsonObject descriptors() throws Exception {
         return Edt.read(project -> {
@@ -101,9 +115,13 @@ final class TeamworkService {
         });
     }
 
-    /*
-     * Shared answer for branches/history/locks: no typed serialization is claimed until it has been
-     * verified against a live server, so this only reports project mode and a probe-required status.
+    /**
+     * Shared answer for the branches, history and locks tools. No typed serialization is claimed until it has
+     * been checked against a live server, so this only reports the project mode and a probe-required status.
+     *
+     * @param target branches, history or locks
+     * @return the capabilities plus {@code target}, {@code projectMode} and the status
+     * @throws Exception when no project is open or the hand-off to the EDT fails
      */
     static JsonObject placeholder(String target) throws Exception {
         return Edt.read(project -> {
@@ -121,7 +139,14 @@ final class TeamworkService {
         });
     }
 
-    // cameo_preview_teamwork_commit / _update: echoes the request; never issues an approval token or writes.
+    /**
+     * Implements cameo_preview_teamwork_commit and cameo_preview_teamwork_update: echoes the request. Never
+     * issues an approval token or writes.
+     *
+     * @param p the tool arguments to echo
+     * @param operation commit or update
+     * @return a preview-accepted answer
+     */
     static JsonObject preview(JsonObject p, String operation) {
         JsonObject response = Support.previewAccepted("teamwork", Support.request(p),
                 "Teamwork " + operation + " preview recorded. No server write was performed.");
@@ -135,7 +160,11 @@ final class TeamworkService {
         return response;
     }
 
-    // Best-effort logged-in user and server info; each getter fails independently when not connected.
+    /**
+     * Best-effort logged-in user and server info. Each getter fails on its own when not connected.
+     *
+     * @return the values read, with an error entry for each getter that failed
+     */
     private static JsonObject esiDiagnostics() {
         JsonObject diagnostics = new JsonObject();
         try {

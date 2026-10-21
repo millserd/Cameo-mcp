@@ -33,21 +33,40 @@ final class RequirementsCodec {
     static final List<String> EXPORT_COLUMNS = Collections.unmodifiableList(Arrays.asList(
             "id", "name", "requirementId", "text", "documentation", "qualifiedName", "ownerId", "stereotypes", "type"));
 
-    // Column aliases, compared after value() lowercases headers and drops underscores and spaces
-    // (so "Requirement ID", "requirement_id" and "requirementId" all match "requirementid").
+    /**
+     * Column aliases for the requirement name. All alias lists are compared after {@link #value} lowercases
+     * headers and drops underscores and spaces, so "Requirement ID", "requirement_id" and "requirementId" all
+     * match "requirementid".
+     */
     private static final List<String> NAME_KEYS = Arrays.asList("name", "title", "requirementname");
-    // Note "id" is the last external-id alias: a bare id column is treated as the external requirement id.
+    /**
+     * Column aliases for the external requirement id, in priority order. "id" comes last: a bare id column is
+     * treated as the external requirement id.
+     */
     private static final List<String> EXTERNAL_ID_KEYS = Arrays.asList(
             "externalid", "requirementid", "reqid", "key", "id");
+    /** Column aliases for the requirement text. */
     private static final List<String> TEXT_KEYS = Arrays.asList("text", "requirementtext", "description");
+    /** Column alias for the element documentation. */
     private static final List<String> DOC_KEYS = Collections.singletonList("documentation");
 
+    /** Static helpers only. */
     private RequirementsCodec() {
     }
 
     // ------------------------------------------------------------------ CSV reading
 
-    /** Parse CSV text with a header row into rows keyed by header. Quoted fields may span lines. */
+    /**
+     * Parse CSV text with a header row into rows keyed by header. Quoted fields may span lines.
+     *
+     * <p>A leading byte-order mark is removed, and the delimiter is detected from the header line. The first
+     * non-blank record is the header; blank records are skipped, cells beyond the header width are dropped
+     * and columns with an empty header are ignored.
+     *
+     * @param text CSV text, or null
+     * @return one map per data row, keyed by trimmed header, in file order; empty for null text
+     * @throws ToolException INVALID_PARAMS for an unterminated quoted field
+     */
     static List<Map<String, String>> parseCsv(String text) {
         List<Map<String, String>> rows = new ArrayList<>();
         if (text == null) {
@@ -81,7 +100,12 @@ final class RequirementsCodec {
         return rows;
     }
 
-    /** Comma by default; semicolon or tab when the header line uses those and no commas. */
+    /**
+     * Comma by default; semicolon or tab when the header line uses those and no commas.
+     *
+     * @param text CSV text; only the first line is inspected
+     * @return ',', ';' or '\t'
+     */
     static char detectDelimiter(String text) {
         int end = text.indexOf('\n');
         String header = end < 0 ? text : text.substring(0, end);
@@ -97,9 +121,15 @@ final class RequirementsCodec {
         return ',';
     }
 
-    /*
-     * Minimal RFC 4180-style tokenizer: quoted fields may contain the delimiter, doubled quotes and line breaks;
-     * CRLF, LF and lone CR all end a record. An unterminated quote is a user error, not silently accepted.
+    /**
+     * Minimal RFC 4180-style tokenizer. Quoted fields may contain the delimiter, doubled quotes and line
+     * breaks. CRLF, LF and lone CR all end a record. Quotes are recognized anywhere in a cell, not only at
+     * its start. An unterminated quote is a user error, not silently accepted.
+     *
+     * @param text CSV text
+     * @param delimiter cell separator
+     * @return records as lists of raw (untrimmed) cells
+     * @throws ToolException INVALID_PARAMS for an unterminated quoted field
      */
     static List<List<String>> parseRecords(String text, char delimiter) {
         List<List<String>> records = new ArrayList<>();
@@ -147,6 +177,12 @@ final class RequirementsCodec {
         return records;
     }
 
+    /**
+     * True for a record with no content.
+     *
+     * @param cells one record
+     * @return true when every cell is null or whitespace
+     */
     private static boolean isBlank(List<String> cells) {
         for (String c : cells) {
             if (c != null && !c.trim().isEmpty()) {
@@ -158,7 +194,14 @@ final class RequirementsCodec {
 
     // ------------------------------------------------------------------ JSON reading
 
-    /** Rows from an array of objects; scalar values are kept as strings, nested values ignored. */
+    /**
+     * Rows from an array of objects; scalar values are kept as strings, nested values ignored.
+     *
+     * @param array array of row objects, or null
+     * @param what member name for error messages
+     * @return one row per entry; empty for null
+     * @throws ToolException INVALID_PARAMS when an entry is not an object
+     */
     static List<Map<String, String>> rowsFromJsonArray(JsonArray array, String what) {
         List<Map<String, String>> rows = new ArrayList<>();
         if (array == null) {
@@ -175,7 +218,13 @@ final class RequirementsCodec {
         return rows;
     }
 
-    // Primitive values become strings (numbers and booleans included); arrays/objects/nulls are dropped.
+    /**
+     * Converts one JSON object to a row. Primitive values become strings (numbers and booleans included);
+     * arrays, objects and nulls are dropped.
+     *
+     * @param object a row object
+     * @return the row, in member order
+     */
     static Map<String, String> rowFromObject(JsonObject object) {
         Map<String, String> row = new LinkedHashMap<>();
         for (String key : object.keySet()) {
@@ -187,7 +236,15 @@ final class RequirementsCodec {
         return row;
     }
 
-    /** JSON document: an array of rows, or an object with a "requirements" or "rows" array. */
+    /**
+     * JSON document: an array of rows, or an object with a "requirements" or "rows" array.
+     *
+     * <p>The "sourceRows" key is accepted too.
+     *
+     * @param text JSON text, or null
+     * @return the rows
+     * @throws ToolException INVALID_PARAMS for invalid JSON or an unexpected shape
+     */
     static List<Map<String, String>> parseJsonText(String text) {
         JsonElement root;
         try {
@@ -212,7 +269,18 @@ final class RequirementsCodec {
 
     // ------------------------------------------------------------------ files
 
-    /** Read requirement rows from a .csv/.tsv/.txt or .json file (format sniffed when the extension is unknown). */
+    /**
+     * Read requirement rows from a .csv/.tsv/.txt or .json file (format sniffed when the extension is
+     * unknown).
+     *
+     * <p>The file is read as UTF-8. With an unknown extension, text starting with '[' or '{' is parsed as
+     * JSON, anything else as CSV.
+     *
+     * @param path absolute file path
+     * @return the rows
+     * @throws ToolException INVALID_PARAMS or NOT_FOUND from {@link #checkInputPath}, TOOL_FAILED when the
+     *     file cannot be read, or a parse error
+     */
     static List<Map<String, String>> readSourceFile(String path) {
         File file = checkInputPath(path);
         String text;
@@ -235,7 +303,15 @@ final class RequirementsCodec {
         return parseCsv(text);
     }
 
-    // Source files must be absolute, existing regular files no larger than MAX_SOURCE_BYTES.
+    /**
+     * Checks an import source path: it must be an absolute, existing regular file no larger than {@link
+     * #MAX_SOURCE_BYTES}.
+     *
+     * @param path the source_path argument
+     * @return the file
+     * @throws ToolException INVALID_PARAMS for an empty, relative, non-file or oversize path, NOT_FOUND when
+     *     it does not exist
+     */
     static File checkInputPath(String path) {
         if (path == null || path.trim().isEmpty()) {
             throw ToolException.invalid("source_path is empty.");
@@ -257,7 +333,12 @@ final class RequirementsCodec {
         return file;
     }
 
-    /** Non-throwing description of an output path, for previews. */
+    /**
+     * Non-throwing description of an output path, for previews.
+     *
+     * @param path the output path argument, or null
+     * @return outputPath, absolute, exists, isDirectory, parentExists, ok, and a problem or overwrite warning
+     */
     static JsonObject describeOutputPath(String path) {
         JsonObject o = new JsonObject();
         o.addProperty("outputPath", path);
@@ -290,6 +371,13 @@ final class RequirementsCodec {
     /**
      * Validate an output file path. Refuses relative paths, directories and existing files unless
      * {@code overwrite} is true; creates the parent folder when missing.
+     *
+     * @param path the output_path argument
+     * @param overwrite whether an existing file may be replaced
+     * @param flagName the overwrite argument's name, used in the error message
+     * @return the file
+     * @throws ToolException INVALID_PARAMS for an empty, relative or directory path, CONFLICT for an existing
+     *     file without overwrite, TOOL_FAILED when the parent folder cannot be created
      */
     static File checkOutputPath(String path, boolean overwrite, String flagName) {
         if (path == null || path.trim().isEmpty()) {
@@ -315,7 +403,14 @@ final class RequirementsCodec {
 
     // ------------------------------------------------------------------ normalization
 
-    // First non-blank value for any alias key; header names are normalized (case, underscores, spaces) before lookup.
+    /**
+     * First non-blank value for any alias key. Header names are normalized (lower case, no underscores or
+     * spaces) before lookup; when two headers normalize the same, the first wins.
+     *
+     * @param row one row
+     * @param keys normalized alias keys in priority order
+     * @return the value, or null when no alias has a non-blank value
+     */
     static String value(Map<String, String> row, List<String> keys) {
         Map<String, String> lower = new HashMap<>();
         for (Map.Entry<String, String> e : row.entrySet()) {
@@ -333,27 +428,55 @@ final class RequirementsCodec {
         return null;
     }
 
-    // External requirement id from any EXTERNAL_ID_KEYS column, or null.
+    /**
+     * External requirement id from any {@link #EXTERNAL_ID_KEYS} column.
+     *
+     * @param row one row
+     * @return the id, or null
+     */
     static String externalId(Map<String, String> row) {
         return value(row, EXTERNAL_ID_KEYS);
     }
 
-    /** Element name: the name column, else the external id (reference precedence name, id, externalId, key). */
+    /**
+     * Element name: the name column (name, title or requirementName), else the external id from
+     * {@link #EXTERNAL_ID_KEYS}.
+     *
+     * @param row one row
+     * @return the name, or null when the row has neither
+     */
     static String name(Map<String, String> row) {
         String n = value(row, NAME_KEYS);
         return n != null ? n : externalId(row);
     }
 
-    // Requirement text from text/requirementText/description columns, or null.
+    /**
+     * Requirement text from text, requirementText or description columns.
+     *
+     * @param row one row
+     * @return the text, or null
+     */
     static String text(Map<String, String> row) {
         return value(row, TEXT_KEYS);
     }
 
+    /**
+     * Element documentation from the documentation column.
+     *
+     * @param row one row
+     * @return the documentation, or null
+     */
     static String documentation(Map<String, String> row) {
         return value(row, DOC_KEYS);
     }
 
-    /** One normalized row: name, externalId, text, documentation, plus the row index and raw values. */
+    /**
+     * One normalized row: name, externalId, text, documentation, plus the row index and raw values.
+     *
+     * @param row one row
+     * @param index zero-based row index
+     * @return the normalized row; absent fields are omitted
+     */
     static JsonObject normalize(Map<String, String> row, int index) {
         JsonObject o = new JsonObject();
         o.addProperty("row", index);
@@ -369,13 +492,28 @@ final class RequirementsCodec {
         return o;
     }
 
+    /**
+     * Adds a string member only when the value is not null.
+     *
+     * @param o target object
+     * @param key member name
+     * @param value value, or null
+     */
     private static void addIfNotNull(JsonObject o, String key, String value) {
         if (value != null) {
             o.addProperty(key, value);
         }
     }
 
-    /** Row-level checks: missing name/id (error), duplicate external ids and names (warning). */
+    /**
+     * Row-level checks: missing name/id (error), duplicate external ids and names (warning).
+     *
+     * <p>Rows without text or documentation get an "info" issue. Row numbers are zero-based; duplicate names
+     * are compared case-insensitively.
+     *
+     * @param rows rows to check
+     * @return rowCount, errorCount, warningCount, issues, and valid (no errors and at least one row)
+     */
     static JsonObject validate(List<Map<String, String>> rows) {
         JsonArray issues = new JsonArray();
         Map<String, Integer> seenIds = new HashMap<>();
@@ -417,6 +555,15 @@ final class RequirementsCodec {
         return o;
     }
 
+    /**
+     * Builds one validation issue.
+     *
+     * @param row zero-based row index
+     * @param severity "error", "warning" or "info"
+     * @param code machine-readable issue code
+     * @param message human-readable explanation
+     * @return the issue object
+     */
     private static JsonObject issue(int row, String severity, String code, String message) {
         JsonObject o = new JsonObject();
         o.addProperty("row", row);
@@ -428,7 +575,14 @@ final class RequirementsCodec {
 
     // ------------------------------------------------------------------ export
 
-    /** Flatten an element JSON (ElementJson.toJson shape) into an export row. */
+    /**
+     * Flatten an element JSON (ElementJson.toJson shape) into an export row.
+     *
+     * <p>The SysML Requirement's Id and Text tagged values become requirementId and text.
+     *
+     * @param element element JSON
+     * @return a row keyed by {@link #EXPORT_COLUMNS}
+     */
     static Map<String, String> exportRow(JsonObject element) {
         Map<String, String> row = new LinkedHashMap<>();
         row.put("id", str(element, "id"));
@@ -445,11 +599,24 @@ final class RequirementsCodec {
         return row;
     }
 
+    /**
+     * One member of an element JSON, flattened with {@link #flat}.
+     *
+     * @param o object to read
+     * @param key member name
+     * @return the flattened member, or "" when missing or null
+     */
     private static String str(JsonObject o, String key) {
         return o.has(key) && !o.get(key).isJsonNull() ? flat(o.get(key)) : "";
     }
 
-    // Flattens an exported JSON value to one CSV-friendly string: arrays joined with "; ", objects by their value/name/id.
+    /**
+     * Flattens an exported JSON value to one CSV-friendly string. Arrays are joined with "; " (empty items
+     * skipped); objects give their value, name, id or string member, else their JSON text.
+     *
+     * @param e value, or null
+     * @return the flat string; "" for null
+     */
     static String flat(JsonElement e) {
         if (e == null || e.isJsonNull()) {
             return "";
@@ -479,7 +646,13 @@ final class RequirementsCodec {
         return o.toString();
     }
 
-    // CSV with a header row and CRLF line endings; missing columns become empty cells.
+    /**
+     * CSV with a header row and CRLF line endings; missing columns become empty cells.
+     *
+     * @param columns column names, in order
+     * @param rows rows keyed by column name
+     * @return the CSV text
+     */
     static String toCsv(List<String> columns, List<Map<String, String>> rows) {
         StringBuilder sb = new StringBuilder();
         appendCsvLine(sb, columns);
@@ -494,6 +667,12 @@ final class RequirementsCodec {
         return sb.toString();
     }
 
+    /**
+     * Appends one comma-separated, CRLF-terminated line.
+     *
+     * @param sb target
+     * @param cells cell values
+     */
     private static void appendCsvLine(StringBuilder sb, List<String> cells) {
         for (int i = 0; i < cells.size(); i++) {
             if (i > 0) {
@@ -504,7 +683,13 @@ final class RequirementsCodec {
         sb.append("\r\n");
     }
 
-    // Quotes only when needed: delimiter, quote, line break, or leading/trailing whitespace that would otherwise be lost.
+    /**
+     * Quotes a CSV cell only when needed: a comma, quote or line break, or leading or trailing whitespace
+     * that would otherwise be lost. Quotes inside are doubled.
+     *
+     * @param value cell value, or null
+     * @return the encoded cell; "" for null
+     */
     static String csvCell(String value) {
         if (value == null) {
             return "";

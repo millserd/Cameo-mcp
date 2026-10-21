@@ -18,23 +18,39 @@ import static com.cameomcp.plugin.tools.diagrams.CompartmentAliasResolver.normal
  */
 public final class PresentationPresets {
 
+    /** Not instantiable; all members are static. */
     private PresentationPresets() {
     }
 
     /** A boolean request matched against presentation property names. */
     public static final class Selection {
+        /** The boolean value requested. */
         public final boolean value;
+        /** Property names that match exactly, compared after {@link CompartmentAliasResolver#normalizeKey}. */
         public final List<String> exactNames;
+        /** Normalized tokens that match when a property name contains them. */
         public final List<String> containsTokens;
 
+        /**
+         * Creates a selection.
+         *
+         * @param value the boolean value requested
+         * @param exactNames property names that match exactly
+         * @param containsTokens normalized tokens that match by containment
+         */
         public Selection(boolean value, List<String> exactNames, List<String> containsTokens) {
             this.value = value;
             this.exactNames = exactNames;
             this.containsTokens = containsTokens;
         }
 
-        // True when the property name equals one of the exact names or contains one of the tokens, both
-        // compared after normalizeKey (lower-case alphanumerics).
+        /**
+         * Whether a property name is one this selection controls: equal to one of the exact names, or
+         * containing one of the tokens, both compared after normalizeKey (lower-case alphanumerics).
+         *
+         * @param propertyName the native property name
+         * @return true on a match
+         */
         public boolean matches(String propertyName) {
             String normalized = normalizeKey(propertyName);
             for (String exact : exactNames) {
@@ -50,24 +66,47 @@ public final class PresentationPresets {
             return false;
         }
 
-        /** Value to store: "Suppress X" properties are inverted. */
+        /**
+         * Value to store: "Suppress X" properties are inverted.
+         *
+         * @param propertyName the native property name
+         * @return the requested value, inverted for "Suppress" properties
+         */
         public boolean valueFor(String propertyName) {
             return normalizeKey(propertyName).startsWith("suppress") ? !value : value;
         }
     }
 
+    /**
+     * Shorthand for {@code new Selection(...)}.
+     *
+     * @param value the boolean value requested
+     * @param exact property names that match exactly
+     * @param contains normalized tokens that match by containment
+     * @return the selection
+     */
     public static Selection sel(boolean value, List<String> exact, List<String> contains) {
         return new Selection(value, exact, contains);
     }
 
+    /**
+     * Shorthand for an unmodifiable list.
+     *
+     * @param v the items
+     * @return the list
+     */
     private static List<String> l(String... v) {
         return Collections.unmodifiableList(Arrays.asList(v));
     }
 
-    /*
-     * Selection for one canonical intent key (e.g. "showTriggers"). Each lists the native names plus
-     * looser contains-tokens, because property names vary by shape type and Cameo version (Trigger vs
-     * Event, Guard vs Condition). Unknown keys match their own name.
+    /**
+     * Selection for one canonical intent key, for example "showTriggers". Each lists the native names plus
+     * looser contains-tokens, because property names vary by shape type and Cameo version (Trigger or Event,
+     * Guard or Condition). Unknown keys match their own name.
+     *
+     * @param canonicalKey the intent key, in any case or spelling
+     * @param value the boolean value requested
+     * @return the selection
      */
     public static Selection forCanonicalKey(String canonicalKey, boolean value) {
         String n = normalizeKey(canonicalKey);
@@ -138,7 +177,13 @@ public final class PresentationPresets {
         }
     }
 
-    // One Selection per canonical key, all requesting the same boolean value (used by the repair tools).
+    /**
+     * One Selection per canonical key, all requesting the same boolean value. Used by the repair tools.
+     *
+     * @param value the boolean value requested
+     * @param canonicalKeys the intent keys
+     * @return key to selection, in the given order
+     */
     public static Map<String, Selection> selectionMap(boolean value, List<String> canonicalKeys) {
         Map<String, Selection> m = new LinkedHashMap<>();
         for (String k : canonicalKeys) {
@@ -149,7 +194,15 @@ public final class PresentationPresets {
 
     // ------------------------------------------------------------------ presets of the label tools
 
-    // cameo_set_transition_label_presentation: which transition label parts to show.
+    /**
+     * Selections for cameo_set_transition_label_presentation: which transition label parts to show.
+     *
+     * @param showName show the transition name
+     * @param showTriggers show the triggers
+     * @param showGuard show the guard
+     * @param showEffect show the effect
+     * @return intent key to selection
+     */
     public static Map<String, Selection> transitionLabels(boolean showName, boolean showTriggers, boolean showGuard,
                                                           boolean showEffect) {
         Map<String, Selection> m = new LinkedHashMap<>();
@@ -160,7 +213,16 @@ public final class PresentationPresets {
         return m;
     }
 
-    // cameo_set_item_flow_label_presentation: which item-flow label parts to show.
+    /**
+     * Selections for cameo_set_item_flow_label_presentation: which item-flow label parts to show.
+     *
+     * @param showName show the flow name
+     * @param showConveyed show the conveyed items
+     * @param showItemProperty show the item property
+     * @param showDirection show the direction
+     * @param showStereotype show the stereotype
+     * @return intent key to selection
+     */
     public static Map<String, Selection> itemFlowLabels(boolean showName, boolean showConveyed,
                                                         boolean showItemProperty, boolean showDirection,
                                                         boolean showStereotype) {
@@ -173,7 +235,17 @@ public final class PresentationPresets {
         return m;
     }
 
-    // cameo_set_allocation_compartment_presentation: allocated-element, element-property and port compartments.
+    /**
+     * Selections for cameo_set_allocation_compartment_presentation: allocated-element, element-property and
+     * port compartments, plus the SysML 1.7 allocation compartment naming option.
+     *
+     * @param showAllocatedElements show the allocated elements compartment
+     * @param showElementProperties show the element properties compartment
+     * @param showPorts show ports
+     * @param showFullPorts show full ports
+     * @param applyAllocationNaming use the SysML 1.7 allocation compartment naming
+     * @return intent key to selection
+     */
     public static Map<String, Selection> allocationCompartments(boolean showAllocatedElements,
                                                                 boolean showElementProperties, boolean showPorts,
                                                                 boolean showFullPorts, boolean applyAllocationNaming) {
@@ -189,7 +261,12 @@ public final class PresentationPresets {
         return m;
     }
 
-    /** True when a property name hints that a shape supports allocation compartments. */
+    /**
+     * True when a property name hints that a shape supports allocation compartments.
+     *
+     * @param propertyName the native property name
+     * @return true for the allocation-related property names
+     */
     public static boolean isAllocationProperty(String propertyName) {
         String n = normalizeKey(propertyName);
         return n.contains("allocatedelements") || n.contains("allocatedfrom")
@@ -197,7 +274,12 @@ public final class PresentationPresets {
                 || n.contains("showfullports") || n.contains("suppressfullports");
     }
 
-    /** Short canonical key for well-known compartment properties (get_shape_properties' "compartments"). */
+    /**
+     * Short canonical key for well-known compartment properties (get_shape_properties' "compartments").
+     *
+     * @param propertyName the native property name, may be null
+     * @return the short key, such as "properties", or null when the property is not a known compartment
+     */
     public static String canonicalCompartmentKey(String propertyName) {
         if (propertyName == null) {
             return null;
@@ -231,15 +313,35 @@ public final class PresentationPresets {
 
     /** Diagram-type-aware keys used by the repair tools. */
     public static final class RepairDefaults {
+        /** The diagram type as given. */
         public final String diagramType;
+        /** The diagram type after {@link CompartmentAliasResolver#normalizeKey}. */
         public final String normalizedDiagramType;
+        /** Union of the shape and path label keys. */
         public final List<String> hiddenLabelKeys;
+        /** Label keys reset on shapes. */
         public final List<String> shapeLabelKeys;
+        /** Label keys reset on paths. */
         public final List<String> pathLabelKeys;
+        /** Conveyed-item label keys for item flows. */
         public final List<String> conveyedItemKeys;
+        /** Compartment keys touched on shapes; empty for most diagram types. */
         public final List<String> compartmentKeys;
+        /** Whether path labels are reset unless the agent says otherwise. */
         public final boolean resetPathLabelsByDefault;
 
+        /**
+         * Creates the defaults.
+         *
+         * @param diagramType the diagram type as given
+         * @param normalized the normalized diagram type
+         * @param hidden the union of shape and path label keys
+         * @param shape the shape label keys
+         * @param path the path label keys
+         * @param conveyed the conveyed-item label keys
+         * @param compartments the compartment keys
+         * @param reset whether path labels are reset by default
+         */
         RepairDefaults(String diagramType, String normalized, List<String> hidden, List<String> shape,
                        List<String> path, List<String> conveyed, List<String> compartments, boolean reset) {
             this.diagramType = diagramType;
@@ -252,6 +354,11 @@ public final class PresentationPresets {
             this.resetPathLabelsByDefault = reset;
         }
 
+        /**
+         * The defaults as JSON, for tool results.
+         *
+         * @return every field, with lists as string arrays
+         */
         public JsonObject toJson() {
             JsonObject json = new JsonObject();
             json.addProperty("diagramType", diagramType);
@@ -266,10 +373,13 @@ public final class PresentationPresets {
         }
     }
 
-    /*
+    /**
      * Which label and compartment keys the repair tools touch for a diagram type, chosen by substring
      * on the normalized type name; the general defaults cover unrecognized types. hiddenLabelKeys is the
      * union of the shape and path label keys.
+     *
+     * @param diagramType the diagram type, may be null
+     * @return the defaults
      */
     public static RepairDefaults repairDefaults(String diagramType) {
         String n = normalizeKey(diagramType);

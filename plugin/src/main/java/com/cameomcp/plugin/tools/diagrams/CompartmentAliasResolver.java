@@ -12,9 +12,11 @@ import java.util.Map;
  */
 public final class CompartmentAliasResolver {
 
-    // Keyed by the normalized compartment name with any show/suppress prefix removed. Values list the
-    // native property names to look for in priority order; both polarities are listed because which
-    // one a shape exposes depends on the shape type (e.g. "Suppress Ports" vs "Show Ports").
+    /**
+     * Compartment aliases, keyed by the normalized compartment name with any show or suppress prefix removed.
+     * Values list the native property names to look for in priority order. Both polarities are listed because
+     * which one a shape exposes depends on the shape type (for example "Suppress Ports" versus "Show Ports").
+     */
     private static final Map<String, String[]> ALIASES = new LinkedHashMap<>();
 
     static {
@@ -39,14 +41,17 @@ public final class CompartmentAliasResolver {
         ALIASES.put("type", new String[]{"Show Type"});
     }
 
+    /** Not instantiable; all members are static. */
     private CompartmentAliasResolver() {
     }
 
-    /*
-     * Native property names that may control the compartment named by requestedKey, in lookup order.
-     * The show/suppress prefix is dropped first so "showPorts", "suppressPorts" and "ports" resolve
-     * alike; DiagramService.resolveCompartmentProperty uses this only after an exact normalized match fails.
-     * Returns an empty list for unknown keys.
+    /**
+     * Native property names that may control the compartment named by requestedKey, in lookup order. The show
+     * or suppress prefix is dropped first so "showPorts", "suppressPorts" and "ports" resolve alike.
+     * DiagramService.resolveCompartmentProperty uses this only after an exact normalized match fails.
+     *
+     * @param requestedKey the compartment key the agent sent, may be null
+     * @return an unmodifiable list of candidate names; empty for unknown keys
      */
     public static List<String> candidatePropertyNames(String requestedKey) {
         String normalized = normalizeKey(requestedKey);
@@ -63,7 +68,12 @@ public final class CompartmentAliasResolver {
         return Collections.unmodifiableList(Arrays.asList(candidates));
     }
 
-    /** Lower-case alphanumerics only: "Show Tagged Values" -> "showtaggedvalues". */
+    /**
+     * Lower-case alphanumerics only: "Show Tagged Values" -> "showtaggedvalues".
+     *
+     * @param value the text, may be null
+     * @return the key; "" for null
+     */
     public static String normalizeKey(String value) {
         return value == null ? "" : value.replaceAll("[^A-Za-z0-9]", "").toLowerCase(java.util.Locale.ROOT);
     }

@@ -35,22 +35,32 @@ import java.util.Map;
 /** Requirements CSV/JSON import/export plus the ReqIF probe (reference ImportExportHandler). */
 final class RequirementsService {
 
+    /** Native ReqIF utility class; only probed. */
     private static final String REQIF_UTILS = "com.nomagic.requirements.reqif.ReqIFUtils";
+    /** Native ReqIF mapping manager class; only probed. */
     private static final String REQIF_MAPPING_MANAGER = "com.nomagic.requirements.reqif.mapping.ReqIFMappingManager";
     /** Upper bound on elements visited while scanning for requirements. */
     private static final int SCAN_LIMIT = 250_000;
 
+    /** Static helpers only. */
     private RequirementsService() {
     }
 
-    // cameo_get_requirements_capabilities: the generic FeatureProbes answer for the ReqIF product classes.
+    /**
+     * cameo_get_requirements_capabilities: the generic {@link FeatureProbes} answer for the ReqIF product
+     * classes.
+     *
+     * @return the capability object
+     */
     static JsonObject requirementsCapabilities() {
         return FeatureProbes.capability("requirements");
     }
 
-    /*
-     * cameo_get_import_export_capabilities: CSV/JSON import/export is implemented here and always available;
-     * native ReqIF is only probed, never driven.
+    /**
+     * cameo_get_import_export_capabilities. CSV and JSON import and export are implemented here and always
+     * available; native ReqIF is only probed, never driven.
+     *
+     * @return the capability object, including the ReqIF class probe and supported import sources
      */
     static JsonObject capabilities() {
         JsonObject response = Support.baseCapabilities("importExport", "bridge-owned-plus-native-probe");
@@ -123,9 +133,13 @@ final class RequirementsService {
         return out;
     }
 
-    /*
-     * SysML requirement detection without depending on the SysML profile API: the element's class name or any
-     * applied stereotype name containing "requirement" (so also matches e.g. extendedRequirement or custom profiles).
+    /**
+     * SysML requirement detection without depending on the SysML profile API: true when the element's class
+     * name or any applied stereotype name contains "requirement". This also matches, for example,
+     * extendedRequirement or stereotypes from custom profiles. Stereotype lookup failures are ignored.
+     *
+     * @param element element to test
+     * @return true for requirement-like elements
      */
     static boolean isRequirementLike(Element element) {
         String className = element.getClass().getSimpleName();
@@ -148,7 +162,13 @@ final class RequirementsService {
         return false;
     }
 
-    // scope_ids plus root_id (or legacy package_id) placed first, so the first root reported is the one named.
+    /**
+     * Scope IDs for export: scope_ids plus root_id (or the legacy package_id) placed first, so the first root
+     * reported is the one named.
+     *
+     * @param p tool arguments
+     * @return trimmed, de-duplicated IDs; empty means the primary model
+     */
     private static List<String> scopeIds(JsonObject p) {
         List<String> ids = new ArrayList<>(Gs.strList(p, "scope_ids"));
         String rootId = Gs.str(p, "root_id");
@@ -161,9 +181,17 @@ final class RequirementsService {
         return ids;
     }
 
-    /*
-     * cameo_export_requirements: collects requirements under the scope (default primary model) and returns them as JSON
-     * or CSV, optionally written to output_path. "reqif" is accepted but only returns JSON and writes no file.
+    /**
+     * cameo_export_requirements. Collects requirements under the scope (default primary model) and returns
+     * them as JSON or CSV, optionally written to output_path. "reqif" is accepted but only returns JSON and
+     * writes no file. limit is clamped to 1..5000, default 1000. The output path is checked before and again
+     * after the model read.
+     *
+     * @param p tool arguments
+     * @return the requirements, count, truncated flag, and csvText or file details
+     * @throws ToolException INVALID_PARAMS for a bad format or output path, CONFLICT for an existing file
+     *     without overwrite, NOT_FOUND for a bad scope ID, TOOL_FAILED when the file cannot be written
+     * @throws Exception NO_PROJECT from the model read, or any read failure
      */
     static JsonObject exportRequirements(JsonObject p) throws Exception {
         String format = Gs.str(p, "format", "json").trim().toLowerCase(Locale.ROOT);
@@ -233,7 +261,14 @@ final class RequirementsService {
         return response;
     }
 
-    // cameo_export_requirements_preview: count plus five sample CSV rows, scoped like cameo_export_requirements.
+    /**
+     * cameo_export_requirements_preview. A guarded-action envelope plus, when a project is open, the
+     * requirement count and five sample CSV rows, scoped like cameo_export_requirements. Nothing is written.
+     *
+     * @param p tool arguments
+     * @return the preview envelope
+     * @throws Exception NOT_FOUND for a bad scope ID, or any read failure
+     */
     static JsonObject exportRequirementsPreview(JsonObject p) throws Exception {
         String format = Gs.str(p, "format", "csv").trim().toLowerCase(Locale.ROOT);
         JsonObject response = FeatureProbes.guardedAction("requirements", "cameo_export_requirements_preview", Support.request(p));
@@ -261,7 +296,17 @@ final class RequirementsService {
 
     // ------------------------------------------------------------------ import
 
-    /** Rows from every supported source in the request: patch_plan rows, requirements/rows/source_rows, csv_text, source_path. */
+    /**
+     * Rows from every supported source in the request: patch_plan rows, requirements/rows/source_rows,
+     * csv_text, source_path.
+     *
+     * <p>Explicit sources are additive. The rows of a patch_plan (unwrapped from their "raw" member) are used
+     * only when no explicit source is given.
+     *
+     * @param p tool arguments
+     * @return all rows, possibly empty
+     * @throws ToolException INVALID_PARAMS for a malformed source, or errors from reading source_path
+     */
     static List<Map<String, String>> rows(JsonObject p) {
         List<Map<String, String>> rows = new ArrayList<>();
         boolean explicit = false;
@@ -307,7 +352,13 @@ final class RequirementsService {
         return rows;
     }
 
-    // target_package_id, else the targetPackageId recorded in a patch_plan from a previous preview.
+    /**
+     * Import target: target_package_id, else the targetPackageId recorded in a patch_plan from a previous
+     * preview.
+     *
+     * @param p tool arguments
+     * @return the trimmed ID, or null
+     */
     private static String targetPackageId(JsonObject p) {
         String id = Gs.str(p, "target_package_id");
         if (id == null) {
@@ -317,9 +368,16 @@ final class RequirementsService {
         return id == null || id.trim().isEmpty() ? null : id.trim();
     }
 
-    /*
-     * Shared body of cameo_preview_requirements_import and the dry-run path of cameo_apply_requirements_import:
-     * normalizes and validates rows and returns a patch plan that can be fed back as patch_plan.
+    /**
+     * Shared body of cameo_preview_requirements_import and the dry-run path of
+     * cameo_apply_requirements_import. Normalizes and validates rows and returns a patch plan that can be fed
+     * back as patch_plan. When a target is given and a project is open, each row is also matched against
+     * existing requirements under it.
+     *
+     * @param p tool arguments
+     * @param message preview message
+     * @return the preview envelope with rowCount, validation, optional target and patchPlan
+     * @throws Exception row-source errors, or any model read failure
      */
     static JsonObject importPreview(JsonObject p, String message) throws Exception {
         JsonObject request = Support.request(p);
@@ -407,7 +465,14 @@ final class RequirementsService {
         return info;
     }
 
-    // cameo_import_requirements_preview: guarded-action envelope plus the import preview's key fields.
+    /**
+     * cameo_import_requirements_preview. A guarded-action envelope plus the import preview's rowCount,
+     * validation, target and patchPlan.
+     *
+     * @param p tool arguments
+     * @return the preview envelope
+     * @throws Exception row-source errors, or any model read failure
+     */
     static JsonObject importRequirementsPreview(JsonObject p) throws Exception {
         JsonObject response = FeatureProbes.guardedAction("requirements", "cameo_import_requirements_preview", Support.request(p));
         JsonObject preview = importPreview(p, "Requirements import preview accepted. No model write was performed.");
@@ -419,9 +484,18 @@ final class RequirementsService {
         return response;
     }
 
-    /*
-     * cameo_apply_requirements_import: dry_run defaults to true, so a real write needs dry_run=false AND allow_write=true.
-     * Rows are validated before the write session so a bad row imports nothing; all creations are one undoable session.
+    /**
+     * cameo_apply_requirements_import. dry_run defaults to true, so a real write needs dry_run=false and
+     * allow_write=true. Rows are validated before the write session so a bad row imports nothing. Each row
+     * becomes a Class with the SysML Requirement stereotype (when found), Id and Text tags and a comment, all
+     * in one undoable session with a 120 s limit. Rows are never matched against existing elements, so
+     * repeated imports create duplicates.
+     *
+     * @param p tool arguments
+     * @return the dry-run preview, or the created elements and warnings
+     * @throws ToolException UNSUPPORTED for format reqif, PRECONDITION_FAILED without allow_write,
+     *     INVALID_PARAMS for a bad format, a missing or non-Package target, no rows or a row without a name
+     * @throws Exception NO_PROJECT, TIMEOUT or other failures from the write session
      */
     static JsonObject apply(JsonObject p) throws Exception {
         String format = Gs.str(p, "format", "json");
@@ -531,7 +605,16 @@ final class RequirementsService {
         }, 120);
     }
 
-    // Sets a stereotype tag only if the stereotype defines it; returns whether the value was stored.
+    /**
+     * Sets a stereotype tag only if the stereotype defines it. Failures are recorded as warnings, not thrown.
+     *
+     * @param element element with the stereotype applied
+     * @param stereotype the applied stereotype
+     * @param tag tag (attribute) name
+     * @param value value to store
+     * @param warnings receives a message when setting fails
+     * @return true when the value was stored
+     */
     private static boolean setTag(Element element, Stereotype stereotype, String tag, String value, JsonArray warnings) {
         try {
             boolean hasTag = false;
@@ -552,9 +635,14 @@ final class RequirementsService {
         }
     }
 
-    /*
-     * Finds a stereotype by name, preferring one owned (at any depth) by a SysML/Requirements profile, since
-     * other loaded profiles can define a stereotype with the same name.
+    /**
+     * Finds a stereotype by name (case-insensitive), preferring one owned at any depth by a "SysML", "SysML
+     * Profile" or "Requirements" package, since other loaded profiles can define a stereotype with the same
+     * name.
+     *
+     * @param project the open project
+     * @param stereotypeName name to look for
+     * @return the best match, or null if none
      */
     private static Stereotype findStereotype(Project project, String stereotypeName) {
         Collection<Stereotype> all = StereotypesHelper.getAllStereotypes(project);
@@ -577,7 +665,13 @@ final class RequirementsService {
         return matches.isEmpty() ? null : matches.get(0);
     }
 
-    // True if the element or any owner up the chain has the given name (case-insensitive).
+    /**
+     * True if the element or any owner up the chain has the given name (case-insensitive).
+     *
+     * @param element starting element
+     * @param ownerName name to look for
+     * @return whether the name occurs in the owner chain
+     */
     private static boolean ownerChainContains(Element element, String ownerName) {
         Element current = element;
         while (current != null) {
@@ -592,6 +686,12 @@ final class RequirementsService {
         return false;
     }
 
+    /**
+     * First non-blank string.
+     *
+     * @param values candidates, may contain nulls
+     * @return the first non-blank value, trimmed, or null
+     */
     private static String firstNonBlank(String... values) {
         for (String v : values) {
             if (v != null && !v.trim().isEmpty()) {

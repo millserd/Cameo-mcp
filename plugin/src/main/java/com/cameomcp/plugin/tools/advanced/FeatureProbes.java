@@ -16,11 +16,23 @@ final class FeatureProbes {
 
     /** One optional product: its probe mode label, the classes that must load and plugin-folder name hints. */
     static final class Feature {
+        /** Feature name, such as "validation" or "reports". */
         final String name;
+        /** Probe mode label reported to agents, such as "native" or "optional-native". */
         final String mode;
+        /** Classes that must all load for the feature to count as available. */
         final List<String> classNames;
+        /** Plugin folder name fragments, one of which must exist; empty for features in core Cameo. */
         final List<String> pluginHints;
 
+        /**
+         * Creates a feature.
+         *
+         * @param name the feature name
+         * @param mode the probe mode label
+         * @param classNames the required classes
+         * @param pluginHints the plugin folder hints
+         */
         Feature(String name, String mode, List<String> classNames, List<String> pluginHints) {
             this.name = name;
             this.mode = mode;
@@ -29,7 +41,10 @@ final class FeatureProbes {
         }
     }
 
-    // Probe table. An empty pluginHints list means the feature ships with core Cameo (validation), so no folder is required.
+    /**
+     * The probe table. An empty pluginHints list means the feature ships with core Cameo (validation), so no
+     * folder is required.
+     */
     static final List<Feature> FEATURES = Collections.unmodifiableList(Arrays.asList(
             new Feature("validation", "native",
                     Arrays.asList("com.nomagic.magicdraw.validation.ValidationHelper",
@@ -62,10 +77,17 @@ final class FeatureProbes {
                             "com.nomagic.magicdraw.cyber.CyberPlugin"),
                     Arrays.asList("safety", "cyber"))));
 
+    /** Not instantiable; all members are static. */
     private FeatureProbes() {
     }
 
-    // Looks up a FEATURES entry by name; an unknown name is a programming error, not a user error.
+    /**
+     * Looks up a {@link #FEATURES} entry by name.
+     *
+     * @param name the feature name
+     * @return the feature
+     * @throws IllegalArgumentException for an unknown name, which is a programming error, not a user error
+     */
     static Feature feature(String name) {
         for (Feature f : FEATURES) {
             if (f.name.equals(name)) {
@@ -75,7 +97,13 @@ final class FeatureProbes {
         throw new IllegalArgumentException("Unknown feature " + name);
     }
 
-    // "path" names the MCP route this answer belongs to.
+    /**
+     * Starts an answer for a feature; "path" names the MCP tool this answer belongs to.
+     *
+     * @param feature the feature
+     * @param operation the tool name
+     * @return {@code feature} and {@code path}
+     */
     private static JsonObject base(Feature feature, String operation) {
         JsonObject response = new JsonObject();
         response.addProperty("feature", feature.name);
@@ -83,9 +111,13 @@ final class FeatureProbes {
         return response;
     }
 
-    /*
-     * Capability answer for one feature: available only when every class loads and (if hints exist) a matching
-     * plugin folder is present. Licensing cannot be checked without touching the product API, hence "unknown".
+    /**
+     * Capability answer for one feature: available only when every class loads and, if hints exist, a
+     * matching plugin folder is present. Licensing cannot be checked without touching the product API, so it
+     * is reported as unknown.
+     *
+     * @param featureName the feature name
+     * @return the classes found and missing, the plugin folders found, and the availability verdict
      */
     static JsonObject capability(String featureName) {
         Feature feature = feature(featureName);
@@ -125,7 +157,14 @@ final class FeatureProbes {
         return response;
     }
 
-    /** Guarded action placeholder: echoes the request, never executes. */
+    /**
+     * Guarded action placeholder: echoes the request, never executes.
+     *
+     * @param featureName the feature name
+     * @param operation the tool name
+     * @param request the tool arguments to echo
+     * @return the echo, the capability probe, {@code dryRun: true} and {@code executed: false}
+     */
     static JsonObject guardedAction(String featureName, String operation, JsonObject request) {
         Feature feature = feature(featureName);
         JsonObject response = base(feature, operation);

@@ -33,25 +33,45 @@ import java.util.concurrent.ConcurrentHashMap;
 final class Sysml2Service {
 
     // Fully qualified names of the 2026x SysML v2 plugin API. They are only ever loaded by name, never imported.
+    /** Project feature class whose static methods list the KerML root namespaces of a project. */
     static final String KERML_FEATURE = "com.dassault_systemes.modeler.kerml.esi.feature.KerMLProjectFeature";
+    /** Project type that the SysML v2 API takes in place of a Cameo Project. */
     static final String MODEL_ELEMENT_PROJECT = "com.dassault_systemes.modeler.foundation.project.ModelElementProject";
+    /** Base interface of SysML v2 model elements, used by the reflective removeElement overload. */
     static final String MODEL_ELEMENT = "com.dassault_systemes.modeler.foundation.model.ModelElement";
+    /** Builder that generates SysML v2 textual notation from a root namespace. */
     static final String TEXT_GENERATOR = "com.dassault_systemes.modeler.sysml.textual.textgenerator.SysMLTextGeneratorBuilder";
+    /** Builder that parses SysML v2 text into a transient model without touching the project. */
     static final String TRANSIENT_BUILDER = "com.dassault_systemes.modeler.sysml.textual.project.SysMLTransientModelBuilder";
+    /** Helper whose textualModelIntoProject imports a transient model into the project. */
     static final String TEXTUAL_MODEL_HELPER = "com.dassault_systemes.modeler.magic.sysml.core.TextualModelHelper";
+    /** Progress status that does nothing, passed where the import API wants a progress monitor. */
     static final String EMPTY_PROGRESS = "com.nomagic.task.EmptyProgressStatus";
+    /** Progress status interface, the parameter type of the import API. */
     static final String PROGRESS = "com.nomagic.task.ProgressStatus";
 
-    // Class lookups are cached, including misses (ABSENT), so status checks on 2024x do not retry loading each call.
+    /**
+     * Cache of class lookups by name, including misses, so status checks on 2024x do not retry loading on
+     * each call.
+     */
     private static final Map<String, Object> CLASSES = new ConcurrentHashMap<>();
+    /** Marker value in {@link #CLASSES} for a class that does not exist in this Cameo. */
     private static final Object ABSENT = new Object();
 
+    /** Not instantiable; all members are static. */
     private Sysml2Service() {
     }
 
     // ------------------------------------------------------------------ classes
 
-    /** The class, or null when this Cameo does not have it. */
+    /**
+     * The class, or null when this Cameo does not have it.
+     *
+     * <p>Results, including misses, are cached in {@link #CLASSES}.
+     *
+     * @param name the fully qualified class name
+     * @return the class, or null
+     */
     static Class<?> optionalClass(String name) {
         Object c = CLASSES.get(name);
         if (c == null) {
@@ -65,7 +85,13 @@ final class Sysml2Service {
         return c == ABSENT ? null : (Class<?>) c;
     }
 
-    // Like optionalClass, but a missing class means this Cameo cannot do SysML v2 at all: UNSUPPORTED.
+    /**
+     * Like {@link #optionalClass}, but a missing class means this Cameo cannot do SysML v2 at all.
+     *
+     * @param name the fully qualified class name
+     * @return the class
+     * @throws ToolException UNSUPPORTED when the class is missing
+     */
     static Class<?> requireClass(String name) {
         Class<?> c = optionalClass(name);
         if (c == null) {
@@ -74,12 +100,24 @@ final class Sysml2Service {
         return c;
     }
 
+    /**
+     * The error for an installation without SysML v2 support (before 2026x, or the plugin disabled).
+     *
+     * @return an UNSUPPORTED exception to throw
+     */
     static ToolException unsupported() {
         return new ToolException("UNSUPPORTED", "SysML v2 needs Cameo 2026x or later with the SysML v2 plugin "
                 + "enabled; this installation does not provide it.");
     }
 
-    // Two different failures: no SysML v2 support in this Cameo (UNSUPPORTED) vs a UML project open (NOT_SYSML2_PROJECT).
+    /**
+     * Checks that SysML v2 can be used. There are two different failures: no SysML v2 support in this Cameo
+     * (UNSUPPORTED) and a UML project open (NOT_SYSML2_PROJECT).
+     *
+     * @param project the active project
+     * @return the same project
+     * @throws ToolException UNSUPPORTED or NOT_SYSML2_PROJECT
+     */
     private static Project requireSysml2Project(Project project) {
         requireClass(Sysml2Model.KERML_ELEMENT);
         if (!ProjectKind.isSysml2(project)) {
@@ -91,7 +129,16 @@ final class Sysml2Service {
 
     // ------------------------------------------------------------------ roots and lookup
 
-    /** Root namespaces of the project itself, or of the project and every used library. */
+    /**
+     * Root namespaces of the project itself, or of the project and every used library.
+     *
+     * <p>Threading: call on the EDT. Uses the static KerMLProjectFeature methods by reflection.
+     *
+     * @param project the active SysML v2 project
+     * @param includeLibraries true to add the roots of used standard libraries
+     * @return the root namespaces
+     * @throws ToolException UNSUPPORTED when the API is missing, TOOL_FAILED when the call fails
+     */
     static List<Object> roots(Project project, boolean includeLibraries) {
         Class<?> feature = requireClass(KERML_FEATURE);
         Class<?> mep = requireClass(MODEL_ELEMENT_PROJECT);
@@ -122,9 +169,18 @@ final class Sysml2Service {
         }
     }
 
-    /*
-     * Resolves an id the agent sent: first Project.getElementByID, then a walk under the project's own roots that
-     * also matches the KerML elementId. A UML element id is reported as such instead of a plain not-found.
+    /**
+     * Resolves an id the agent sent: first Project.getElementByID, then a walk under the project's own roots
+     * that also matches the KerML elementId. A UML element id is reported as such instead of a plain
+     * not-found.
+     *
+     * @param project the active SysML v2 project
+     * @param id the id, trimmed before use
+     * @param param the parameter name, for error messages
+     * @return the KerML element
+     * @throws ToolException INVALID_PARAMS when the id is blank, NOT_FOUND or a UML-element error when it
+     *     does not
+     * resolve to a KerML element
      */
     static Object element(Project project, String id, String param) {
         if (id == null || id.trim().isEmpty()) {
@@ -149,9 +205,14 @@ final class Sysml2Service {
 
     // ------------------------------------------------------------------ read tools
 
-    /*
-     * cameo_sysml2_status: which SysML v2 operations this installation supports (each needs specific plugin classes),
-     * plus the open project's kind. Never throws for a missing plugin, so it is safe to call first on any version.
+    /**
+     * Implements cameo_sysml2_status: which SysML v2 operations this installation supports (each needs
+     * specific plugin classes), plus the open project's kind. Never throws for a missing plugin, so it is
+     * safe to call first on any version. Does not use the EDT.
+     *
+     * @return {@code available}, the {@code operations} flags, {@code projectOpen}, the project name, kind
+     *     and
+     * {@code rootCount} (or {@code rootsError}), and a {@code hint} when SysML v2 cannot be used
      */
     static JsonObject status() {
         JsonObject json = new JsonObject();
@@ -189,7 +250,17 @@ final class Sysml2Service {
         return json;
     }
 
-    // cameo_sysml2_list_roots: root namespaces, each with up to members_limit direct members. Runs on the EDT.
+    /**
+     * Implements cameo_sysml2_list_roots: root namespaces, each with up to membersLimit direct members. Runs
+     * on the EDT.
+     *
+     * @param includeLibraries true to include standard-library roots
+     * @param membersLimit the most members to list per root
+     * @return {@code count} and {@code roots}, each with {@code members} and {@code membersTruncated} when
+     *     cut
+     * @throws ToolException UNSUPPORTED, NOT_SYSML2_PROJECT or NO_PROJECT
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject listRoots(boolean includeLibraries, int membersLimit) throws Exception {
         return Edt.onEdt("List SysML v2 roots", project -> {
             requireSysml2Project(project);
@@ -214,7 +285,20 @@ final class Sysml2Service {
         });
     }
 
-    // cameo_sysml2_list_children: one page of an element's owned elements.
+    /**
+     * Implements cameo_sysml2_list_children: one page of an element's owned elements.
+     *
+     * @param id the parent element id
+     * @param limit the page size
+     * @param offset children to skip
+     * @return the {@code parent}, {@code total}, {@code offset}, {@code count}, {@code hasMore}, {@code
+     *     nextOffset}
+     * when there is more, and the {@code children} page
+     *
+     * @throws ToolException NOT_FOUND for a missing element, or the project errors of {@link
+     *     #requireSysml2Project}
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject listChildren(String id, int limit, int offset) throws Exception {
         return Edt.onEdt("List SysML v2 children", project -> {
             requireSysml2Project(project);
@@ -239,7 +323,18 @@ final class Sysml2Service {
         });
     }
 
-    // cameo_sysml2_get_element: detail view; include_text adds the element's textual notation (the call allows 120 s).
+    /**
+     * Implements cameo_sysml2_get_element: detail view. include_text adds the element's textual notation; the
+     * call is allowed 120 seconds for that.
+     *
+     * @param id the element id
+     * @param includeText true to add {@code text} (and {@code textWarning} when generation had a problem)
+     * @param membersLimit the most owned elements to list
+     * @return the detail from {@code Sysml2Model.detail}, plus the text fields when asked
+     * @throws ToolException NOT_FOUND for a missing element, or the project errors of {@link
+     *     #requireSysml2Project}
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject getElement(String id, boolean includeText, int membersLimit) throws Exception {
         return Edt.onEdt("Get SysML v2 element", project -> {
             requireSysml2Project(project);
@@ -256,7 +351,22 @@ final class Sysml2Service {
         }, 120);
     }
 
-    // cameo_sysml2_query: name/type search under scope_id or the roots; see Sysml2Model.query for paging rules.
+    /**
+     * Implements cameo_sysml2_query: name and type search under scope_id or the roots. See {@code
+     * Sysml2Model.query}
+     * for the matching and paging rules.
+     *
+     * @param name name substring, or null
+     * @param type metaclass name, or null
+     * @param scopeId the element to search under, or null for the roots
+     * @param includeLibraries true to include standard-library roots and elements
+     * @param limit the page size
+     * @param offset matches to skip
+     * @return the result of {@code Sysml2Model.query}
+     * @throws ToolException NOT_FOUND for a missing scope, or the project errors of {@link
+     *     #requireSysml2Project}
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject query(String name, String type, String scopeId, boolean includeLibraries, int limit,
                             int offset) throws Exception {
         return Edt.onEdt("Query SysML v2 model", project -> {
@@ -268,9 +378,20 @@ final class Sysml2Service {
         }, 120);
     }
 
-    /*
-     * cameo_sysml2_get_text: textual notation for one element, or for every project root when element_id is omitted.
-     * Per-element generator problems become warnings; the combined text is cut at max_chars.
+    /**
+     * Implements cameo_sysml2_get_text: textual notation for one element, or for every project root when
+     * element_id is omitted. Per-element generator problems become warnings; the combined text is cut at
+     * maxChars.
+     *
+     * @param id the element id, or null or blank for all roots
+     * @param maxChars the most characters to return
+     * @return {@code elementCount}, {@code length}, {@code text}, {@code truncated} and {@code warnings} when
+     *     present
+     * @throws ToolException UNSUPPORTED when the text generator is missing, NOT_FOUND for a missing element,
+     *     or the
+     * project errors of {@link #requireSysml2Project}
+     *
+     * @throws Exception any failure while handing the work to the EDT
      */
     static JsonObject getText(String id, int maxChars) throws Exception {
         return Edt.onEdt("Export SysML v2 text", project -> {
@@ -308,10 +429,20 @@ final class Sysml2Service {
 
     /** Generated text plus a problem description when the generator timed out or reported an error. */
     static final class GeneratedText {
+        /** The generated text; "" when nothing was produced. */
         final String text;
+        /** What went wrong (timeout or generator error), or null on success. */
         final String problem;
+        /** The generator's raw result object, kept so the element ranges can be read for nested elements. */
         final Object result;
 
+        /**
+         * Creates the result.
+         *
+         * @param text the generated text
+         * @param problem the problem description, or null
+         * @param result the generator's result object, may be null
+         */
         GeneratedText(String text, String problem, Object result) {
             this.text = text;
             this.problem = problem;
@@ -319,13 +450,23 @@ final class Sysml2Service {
         }
     }
 
-    // Enum type for the kind of range requested from the generator; FULL is the element's complete declaration.
+    /**
+     * Fully qualified name of the generator's range-type enum. Its FULL constant asks for an element's
+     * complete declaration.
+     */
     static final String RANGE_TYPE = "com.dassault_systemes.modeler.sysml.textual.core.ElementsRanges$RangeType";
 
     /**
      * Text for any element. Cameo 2026x generates text only from a root namespace (for a nested
      * element it reports the element as untransformed), so a nested element's text is cut out of
      * its root namespace's text using the element range the generator records.
+     *
+     * <p>Threading: call on the EDT.
+     *
+     * @param project the active SysML v2 project
+     * @param element the element
+     * @return the text, with a problem description when the generator or the range lookup failed
+     * @throws ToolException UNSUPPORTED when the generator is missing
      */
     static GeneratedText textOf(Project project, Object element) {
         // Climb to the outermost KerML owner: the root namespace the generator can work from.
@@ -364,9 +505,15 @@ final class Sysml2Service {
         return new GeneratedText(whole.text, problem, whole.result);
     }
 
-    /*
-     * Runs SysMLTextGeneratorBuilder for one root element. Timeouts and generator errors are reported as a problem
-     * string alongside whatever text was produced, rather than failing the tool.
+    /**
+     * Runs SysMLTextGeneratorBuilder for one root element. Timeouts and generator errors are reported as a
+     * problem string alongside whatever text was produced, rather than failing the tool.
+     *
+     * @param project the active SysML v2 project
+     * @param element a root namespace
+     * @return the text and any problem
+     * @throws ToolException UNSUPPORTED when the generator classes are missing, TOOL_FAILED for an unexpected
+     * reflection failure
      */
     static GeneratedText generate(Project project, Object element) {
         Class<?> builderType = requireClass(TEXT_GENERATOR);
@@ -397,11 +544,18 @@ final class Sysml2Service {
         }
     }
 
-    // Context factory found once per Cameo session (the search may scan the plugin jar).
+    /** Context factory, found once per Cameo session because the search may scan the plugin jar. */
     private static volatile Method contextFactory;
+    /** Whether {@link #contextFactory} has been searched for; set even when the search found nothing. */
     private static volatile boolean contextFactorySearched;
 
-    // setContext's parameter type is the context class, which is not otherwise reachable by a stable name.
+    /**
+     * Finds the generator's setContext method by name. Its parameter type is the context class, which has no
+     * stable name to look up otherwise.
+     *
+     * @param builderType the generator builder class
+     * @return the one-argument setContext method, or null
+     */
     private static Method contextSetter(Class<?> builderType) {
         for (Method m : builderType.getMethods()) {
             if ("setContext".equals(m.getName()) && m.getParameterCount() == 1) {
@@ -416,6 +570,11 @@ final class Sysml2Service {
      * Cameo builds it with a static factory taking the project, in an obfuscated class whose name may
      * change between releases, so the factory is found by signature: first in the class 2026x HF2
      * uses, then anywhere in the context type's package.
+     *
+     * <p>The search runs once; later calls return the cached result. Thread-safe.
+     *
+     * @param contextType the parameter type of setContext
+     * @return the static factory, or null when none is found
      */
     static Method contextFactory(Class<?> contextType) {
         if (contextFactorySearched) {
@@ -447,7 +606,16 @@ final class Sysml2Service {
         return contextFactory;
     }
 
-    // A static method in className with signature (ModelElementProject) -> contextType, made accessible; null if none.
+    /**
+     * Finds a static method in className with the signature (ModelElementProject) to contextType and makes it
+     * accessible.
+     *
+     * @param className the class to search
+     * @param cl the class loader to load it with
+     * @param contextType the required return type
+     * @param mep the required parameter type
+     * @return the method, or null when the class is missing or has no such method
+     */
     private static Method factoryIn(String className, ClassLoader cl, Class<?> contextType, Class<?> mep) {
         try {
             Class<?> c = Class.forName(className, false, cl);
@@ -464,7 +632,14 @@ final class Sysml2Service {
         return null;
     }
 
-    // Top-level class names in pkg, read from the jar that holds member; empty when it was not loaded from a jar.
+    /**
+     * Lists the top-level class names in a package, read from the jar that holds member.
+     *
+     * @param member a class from the jar to read
+     * @param pkg the package name
+     * @return the fully qualified names; empty when member was not loaded from a jar or the jar cannot be
+     *     read
+     */
     private static List<String> classesInPackage(Class<?> member, String pkg) {
         List<String> out = new ArrayList<>();
         try {
@@ -491,22 +666,38 @@ final class Sysml2Service {
 
     // ------------------------------------------------------------------ text compile and import
 
-    /** A parsed text: Cameo's transient model plus its diagnostics. */
-    // diagnostics/errors/warnings are filled in by compile().
+    /** A parsed text: Cameo's transient model plus its diagnostics, which {@code compile} fills in. */
     static final class Compiled {
+        /** The parsed transient root namespace, or null when the compiler produced no model. */
         final Object transientRoot;
+        /** One object per diagnostic: severity, line, column, size and message. */
         final JsonArray diagnostics = new JsonArray();
+        /** Number of ERROR diagnostics. */
         int errors;
+        /** Number of WARNING diagnostics. */
         int warnings;
 
+        /**
+         * Creates an empty result for a parsed root.
+         *
+         * @param transientRoot the parsed root, may be null
+         */
         Compiled(Object transientRoot) {
             this.transientRoot = transientRoot;
         }
     }
 
-    /*
-     * Parses text with SysMLTransientModelBuilder into a transient (not yet in the project) model. All roots,
-     * libraries included, are passed in so references to standard-library and existing project elements resolve.
+    /**
+     * Parses text with SysMLTransientModelBuilder into a transient model that is not yet in the project. All
+     * roots, libraries included, are passed in so references to standard-library and existing project
+     * elements resolve.
+     *
+     * @param project the active SysML v2 project
+     * @param text the SysML v2 text
+     * @return the transient model with its diagnostics and counts filled in
+     * @throws ToolException UNSUPPORTED when the builder classes are missing or have changed, TOOL_FAILED
+     *     when the
+     * parse fails unexpectedly
      */
     static Compiled compile(Project project, String text) {
         Class<?> builderType = requireClass(TRANSIENT_BUILDER);
@@ -544,11 +735,26 @@ final class Sysml2Service {
         }
     }
 
+    /**
+     * Converts a diagnostic number to JSON.
+     *
+     * @param v the value, may be null
+     * @return the number, or JSON null when v is not a Number
+     */
     private static com.cameomcp.json.tree.JsonElement num(Object v) {
         return v instanceof Number ? new com.cameomcp.json.tree.JsonPrimitive((Number) v) : com.cameomcp.json.tree.JsonNull.INSTANCE;
     }
 
-    // cameo_sysml2_validate_text: compiles without touching the project; "declares" lists the top-level declarations.
+    /**
+     * Implements cameo_sysml2_validate_text: compiles without touching the project. The "declares" field
+     * lists the top-level declarations the text would create.
+     *
+     * @param text the SysML v2 text
+     * @return {@code valid}, {@code errorCount}, {@code warningCount}, {@code diagnostics} and {@code
+     *     declares}
+     * @throws ToolException UNSUPPORTED, NOT_SYSML2_PROJECT or NO_PROJECT
+     * @throws Exception any failure while handing the work to the EDT
+     */
     static JsonObject validateText(String text) throws Exception {
         return Edt.onEdt("Validate SysML v2 text", project -> {
             requireSysml2Project(project);
@@ -573,10 +779,23 @@ final class Sysml2Service {
         }, 180);
     }
 
-    /*
-     * cameo_sysml2_create_from_text: compiles first and refuses to import anything on errors (or warnings, when not
-     * allowed). The import uses TextualModelHelper.textualModelIntoProject, which manages its own transaction, so it
-     * runs via Edt.exclusive (serialized with other writes, no extra MCP session) rather than Edt.write.
+    /**
+     * Implements cameo_sysml2_create_from_text: compiles first and refuses to import anything on errors (or
+     * on warnings, unless allowed). The import uses TextualModelHelper.textualModelIntoProject, which manages
+     * its own transaction, so it runs through Edt.exclusive (serialized with other writes, with no extra
+     * session) rather than Edt.write. Allowed 300 seconds.
+     *
+     * @param text the SysML v2 text
+     * @param allowWarnings true to import despite warnings
+     * @return {@code created}, {@code rootId}, the new {@code roots} and {@code elements}, {@code
+     *     elementCount},
+     * {@code warningCount}, {@code diagnostics} and a {@code hint} when no root appeared
+     *
+     * @throws ToolException INVALID_PARAMS with the diagnostics when the text does not compile, UNSUPPORTED
+     *     or a
+     * project error otherwise
+     *
+     * @throws Exception any failure while handing the work to the EDT
      */
     static JsonObject createFromText(String text, boolean allowWarnings) throws Exception {
         return Edt.exclusive("Create SysML v2 from text", project -> {
@@ -641,6 +860,12 @@ final class Sysml2Service {
         }, 300);
     }
 
+    /**
+     * Describes the first compile error for an error message.
+     *
+     * @param c the compile result
+     * @return "First error at line L, column C: message", a no-model message, or ""
+     */
     private static String firstMessage(Compiled c) {
         for (int i = 0; i < c.diagnostics.size(); i++) {
             JsonObject d = c.diagnostics.get(i).getAsJsonObject();
@@ -654,7 +879,15 @@ final class Sysml2Service {
 
     // ------------------------------------------------------------------ edits
 
-    // cameo_sysml2_rename_element: sets the declared name in one undoable write session.
+    /**
+     * Implements cameo_sysml2_rename_element: sets the declared name in one undoable write session.
+     *
+     * @param id the element id
+     * @param name the new name; must not be blank
+     * @return the renamed element and its {@code previousName}
+     * @throws ToolException INVALID_PARAMS for a blank name, NOT_FOUND, READ_ONLY, or a project error
+     * @throws Exception any Cameo failure, after the session has been cancelled
+     */
     static JsonObject rename(String id, String name) throws Exception {
         if (name == null || name.trim().isEmpty()) {
             throw ToolException.invalid("name must not be empty.");
@@ -671,9 +904,15 @@ final class Sysml2Service {
         });
     }
 
-    /*
-     * cameo_sysml2_delete_element: removes the element and its owned subtree. KerML elements are not UML Elements,
-     * so the removeElement(ModelElement) overload is looked up reflectively; if it is missing the tool reports UNSUPPORTED.
+    /**
+     * Implements cameo_sysml2_delete_element: removes the element and its owned subtree. KerML elements are
+     * not UML Elements, so the removeElement(ModelElement) overload is looked up by reflection; if it is
+     * missing the tool reports UNSUPPORTED.
+     *
+     * @param id the element id
+     * @return the {@code deleted} element and the {@code elementCount} of its subtree
+     * @throws ToolException NOT_FOUND, READ_ONLY, UNSUPPORTED, or a project error
+     * @throws Exception any Cameo failure, after the session has been cancelled
      */
     static JsonObject delete(String id) throws Exception {
         return Edt.write("Delete SysML v2 element", project -> {
@@ -697,7 +936,13 @@ final class Sysml2Service {
         });
     }
 
-    // Library elements and elements Cameo marks non-editable (e.g. locked in Teamwork, or from a used project) are refused.
+    /**
+     * Refuses library elements and elements Cameo marks non-editable (for example locked in Teamwork Cloud,
+     * or from a used project).
+     *
+     * @param element the element to change
+     * @throws ToolException READ_ONLY when it cannot be changed
+     */
     private static void requireEditable(Object element) {
         if (Sysml2Model.isLibrary(element)) {
             throw new ToolException("READ_ONLY", "'" + Sysml2Model.name(element) + "' is a standard library element "
@@ -709,9 +954,14 @@ final class Sysml2Service {
         }
     }
 
-    /*
-     * Unwraps reflection wrappers; a ToolException thrown inside Cameo code is passed through as is, anything else
-     * is logged with its stack trace and reported as TOOL_FAILED with the underlying exception's type and message.
+    /**
+     * Unwraps reflection wrappers. A ToolException thrown inside Cameo code is passed through as is; anything
+     * else is logged with its stack trace and reported as TOOL_FAILED with the underlying exception's type
+     * and message.
+     *
+     * @param what the operation, for the log and message
+     * @param cause the caught exception
+     * @return the exception to throw
      */
     private static ToolException failure(String what, Throwable cause) {
         Throwable c = cause;

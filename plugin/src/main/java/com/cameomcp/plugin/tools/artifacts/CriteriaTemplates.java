@@ -16,19 +16,37 @@ public final class CriteriaTemplates {
 
     /** One template. */
     public static final class Template {
+        /** Template key, "relationship.direction", for example "refine.both". */
         public final String key;
         /** Raw expression for raw templates; null for DSL templates. */
         public final String expression;
+        /** Relationship type the template follows, for example "Refine". */
         public final String relationshipType;
+        /** Direction as reported to agents: sourceToTarget, targetToSource or both. */
         public final String direction;
-        // True when the template's effect was confirmed by diffing settings against one made in the Cameo UI.
+        /**
+         * True when the template's effect was confirmed by diffing settings against one made in the Cameo UI.
+         */
         public final boolean verifiedWithUiDiff;
         /** Stereotype for DSL templates; null for raw templates. */
         public final String stereotypeName;
         /** DIRECT, OPPOSITE or BOTH (native Direction enum constant) for DSL templates. */
         public final String dslDirection;
+        /** Human-readable name for DSL templates; null for raw templates. */
         public final String displayName;
 
+        /**
+         * Creates a template.
+         *
+         * @param key the template key
+         * @param expression the raw expression, or null for DSL templates
+         * @param relationshipType the relationship type
+         * @param direction the reported direction
+         * @param verified whether the template was checked against the Cameo UI
+         * @param stereotypeName the DSL stereotype, or null for raw templates
+         * @param dslDirection the native Direction constant, or null for raw templates
+         * @param displayName the display name, or null
+         */
         private Template(String key, String expression, String relationshipType, String direction, boolean verified,
                          String stereotypeName, String dslDirection, String displayName) {
             this.key = key;
@@ -41,11 +59,22 @@ public final class CriteriaTemplates {
             this.displayName = displayName;
         }
 
+        /**
+         * Whether this is a DSL template (built from a stereotype) rather than a raw expression.
+         *
+         * @return true for DSL templates
+         */
         public boolean isDsl() {
             return stereotypeName != null;
         }
 
-        // DSL templates have no stored expression, so "rawExpression" reports "Type:direction" for display only.
+        /**
+         * The template as JSON. DSL templates have no stored expression, so "rawExpression" reports
+         * "Type:direction" for
+         * display only.
+         *
+         * @return the template JSON
+         */
         public JsonObject toJson() {
             JsonObject json = new JsonObject();
             json.addProperty("key", key);
@@ -66,21 +95,37 @@ public final class CriteriaTemplates {
         }
     }
 
+    /** All templates by key, in listing order. */
     private static final Map<String, Template> TEMPLATES = build();
 
+    /** Not instantiable; all members are static. */
     private CriteriaTemplates() {
     }
 
-    /** Template by key (surrounding whitespace ignored), or null. */
+    /**
+     * Template by key (surrounding whitespace ignored), or null.
+     *
+     * @param key the template key, may be null
+     * @return the template, or null
+     */
     public static Template get(String key) {
         return key == null ? null : TEMPLATES.get(key.trim());
     }
 
+    /**
+     * Every template, in listing order.
+     *
+     * @return an unmodifiable view
+     */
     public static Collection<Template> all() {
         return Collections.unmodifiableCollection(TEMPLATES.values());
     }
 
-    /** The cameo_list_relation_map_criteria_templates result. */
+    /**
+     * The cameo_list_relation_map_criteria_templates result.
+     *
+     * @return {@code count} and {@code templates}
+     */
     public static JsonObject listing() {
         JsonArray templates = new JsonArray();
         for (Template t : TEMPLATES.values()) {
@@ -92,7 +137,12 @@ public final class CriteriaTemplates {
         return response;
     }
 
-    // Keys are "<relationship>.<direction>"; "allocatedTo" is an alias with the same settings as allocate.both.
+    /**
+     * Builds the template table. Keys are "relationship.direction"; "allocatedTo" is an alias with the same
+     * settings as allocate.both.
+     *
+     * @return key to template, in listing order
+     */
     private static Map<String, Template> build() {
         Map<String, Template> m = new LinkedHashMap<>();
         raw(m, "dependency.direct", "Dependency", "Dependency", "both", false);

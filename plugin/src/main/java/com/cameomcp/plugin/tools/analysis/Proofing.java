@@ -25,17 +25,24 @@ import static com.cameomcp.plugin.tools.analysis.J.truthy;
  */
 public final class Proofing {
 
-    // WORD finds words (apostrophes allowed); IDENTIFIER splits camel/Pascal-case and acronyms
-    // ("HTTPServerPort" -> HTTP, Server, Port); TRIPLE flags runs like "xxx" that are not real words.
+    /** A word: a letter followed by letters or apostrophes. */
     static final Pattern WORD = Pattern.compile("[A-Za-z][A-Za-z']*");
+    /** Splits camel and Pascal case identifiers and acronyms: "HTTPServerPort" gives HTTP, Server, Port. */
     static final Pattern IDENTIFIER = Pattern.compile("[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\\b)|[0-9]+");
+    /** Whitespace run (Unicode-aware). */
     static final Pattern MULTISPACE = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
+    /** Run of non-alphanumeric characters, used to split text for re-casing. */
     static final Pattern TOKEN_SPLIT = Pattern.compile("[^A-Za-z0-9]+");
+    /** Leading or trailing whitespace, punctuation or underscores. */
     static final Pattern LEADING_TRAILING_PUNCT = Pattern.compile("^[\\s\\W_]+|[\\s\\W_]+$", Pattern.UNICODE_CHARACTER_CLASS);
+    /** Placeholder markers: todo, fixme, tbd, placeholder or xxx, case-insensitive. */
     static final Pattern TODO = Pattern.compile("\\b(todo|fixme|tbd|placeholder|xxx)\\b", Pattern.CASE_INSENSITIVE);
+    /** A character repeated three times, such as "xxx"; such words are not spell checked. */
     static final Pattern TRIPLE = Pattern.compile("(.)\\1\\1");
 
-    // Acronyms and product names with a fixed spelling; applied by every casing helper.
+    /**
+     * Acronyms and product names with a fixed spelling, keyed by lower case; applied by every casing helper.
+     */
     static final Map<String, String> PREFERRED_CASE = new HashMap<>();
 
     static {
@@ -49,17 +56,21 @@ public final class Proofing {
         }
     }
 
-    // Short function words that are never flagged, whatever the lexicon contains.
+    /** Short function words that are never flagged, whatever the lexicon contains. */
     static final Set<String> ALWAYS_ALLOWED = new HashSet<>(Arrays.asList(
             "a", "an", "and", "be", "by", "for", "from", "in", "is", "of", "on", "or", "the", "to", "with"));
 
-    // Fields holding element names: proofed with title/Pascal case and patched by renaming the element.
+    /**
+     * Fields holding element names: proofed with title or Pascal case and patched by renaming the element.
+     */
     private static final Set<String> NAME_FIELDS = new HashSet<>(Arrays.asList("name", "label", "elementName", "title"));
 
-    // Lexicon is built lazily on first use (see lexicon()); the sorted copy feeds close-match suggestions.
+    /** Lexicon words, built lazily on first use by {@link #lexicon}; null until then. */
     private static volatile Set<String> lexiconSet;
+    /** Sorted copy of the lexicon, used for close-match suggestions. */
     private static volatile List<String> lexiconSorted;
 
+    /** Static methods only. */
     private Proofing() {
     }
 
@@ -67,18 +78,44 @@ public final class Proofing {
 
     /** One proofing finding; serialized with snake_case keys. */
     static final class Finding {
+        /** Finding category, such as "requirements" or "comments". */
         final String category;
+        /** "high" or "medium". */
         final String severity;
+        /** Kind of the proofed item, such as its element type. */
         final String artifactType;
+        /** ID of the proofed item. */
         final String artifactId;
+        /** Proofed field, such as "name" or "documentation". */
         final String field;
+        /** Human-readable reason. */
         final String message;
+        /** The text as found. */
         final String currentText;
+        /** The proposed replacement text. */
         final String suggestedText;
+        /** Spelling suggestions. */
         final List<String> suggestions;
+        /** Confidence, 0.0 to 1.0. */
         final double confidence;
+        /** Supporting data. */
         final Map<String, Object> evidence;
 
+        /**
+         * Creates a finding; see the fields for the meaning of each argument.
+         *
+         * @param category finding category
+         * @param severity "high" or "medium"
+         * @param artifactType kind of the proofed item
+         * @param artifactId ID of the proofed item
+         * @param field proofed field
+         * @param message human-readable reason
+         * @param currentText the text as found
+         * @param suggestedText the proposed replacement
+         * @param suggestions spelling suggestions
+         * @param confidence 0.0 to 1.0
+         * @param evidence supporting data, or null
+         */
         Finding(String category, String severity, String artifactType, String artifactId, String field, String message,
                 String currentText, String suggestedText, List<String> suggestions, double confidence,
                 Map<String, Object> evidence) {
@@ -95,6 +132,11 @@ public final class Proofing {
             this.evidence = evidence;
         }
 
+        /**
+         * Serializes the finding with snake_case keys.
+         *
+         * @return a new map
+         */
         Map<String, Object> toMap() {
             return obj(
                     "category", category,
@@ -110,7 +152,13 @@ public final class Proofing {
                     "evidence", Json(evidence));
         }
 
-        // Accepts both the camelCase and snake_case spellings so plans can round-trip through callers.
+        /**
+         * Reads a finding from a map. Accepts both the camelCase and snake_case spellings so plans can
+         * round-trip through callers. Missing fields get defaults (category "proofing", severity "medium").
+         *
+         * @param f finding map
+         * @return the finding
+         */
         static Finding fromMap(Map<String, Object> f) {
             Object raw = f.get("suggestions");
             List<String> suggestions = new ArrayList<>();
@@ -164,12 +212,22 @@ public final class Proofing {
 
     // ------------------------------------------------------------------ text utilities
 
-    /** Collapses whitespace to single spaces (Unicode-aware) and trims. */
+    /**
+     * Collapses whitespace to single spaces (Unicode-aware) and trims.
+     *
+     * @param value any value
+     * @return the normalized text
+     */
     static String normalizedText(Object value) {
         return MULTISPACE.matcher(J.text(value).trim()).replaceAll(" ");
     }
 
-    /** First non-empty identifier of a text item, or "". */
+    /**
+     * First non-empty identifier of a text item, or "".
+     *
+     * @param item text item
+     * @return the ID
+     */
     static String extractId(Map<String, Object> item) {
         for (String key : new String[]{"id", "elementId", "artifactId", "presentationId", "commentId"}) {
             Object v = item.get(key);
@@ -180,7 +238,13 @@ public final class Proofing {
         return "";
     }
 
-    /** First non-empty kind/type descriptor of a text item, or {@code fallback}. */
+    /**
+     * First non-empty kind/type descriptor of a text item, or {@code fallback}.
+     *
+     * @param item text item
+     * @param fallback value when no descriptor is set
+     * @return the descriptor
+     */
     static String extractKind(Map<String, Object> item, String fallback) {
         for (String key : new String[]{"artifactType", "kind", "type", "humanType", "elementType", "role"}) {
             Object v = item.get(key);
@@ -191,9 +255,14 @@ public final class Proofing {
         return fallback;
     }
 
-    /*
-     * The proofable (field, text) pairs of an item, keyed by role: requirement and comment bodies come
-     * first, names first for states and transitions. Falls back to a generic "text" field.
+    /**
+     * The proofable (field, text) pairs of an item. The field order depends on the role: requirement and
+     * comment bodies come first, names first for states and transitions. Only non-blank string fields are
+     * used; with none, a generic "text" field built from name, label, text or body is the fallback.
+     *
+     * @param item text item
+     * @param role requirement, comment, state, transition or diagram
+     * @return {field, normalized text} pairs
      */
     static List<String[]> extractTextFields(Map<String, Object> item, String role) {
         String roleKey = J.lower(role);
@@ -223,7 +292,13 @@ public final class Proofing {
         return out;
     }
 
-    // Element ID stands in for the requirement ID so the semantic baseline does not flag every item.
+    /**
+     * Copy of a requirement payload whose missing requirementId is filled from its element ID, so the
+     * semantic baseline does not flag every item.
+     *
+     * @param item requirement payload
+     * @return a new map
+     */
     static Map<String, Object> normalizeRequirementPayload(Map<String, Object> item) {
         Map<String, Object> payload = new LinkedHashMap<>(item);
         if (!truthy(payload.get("requirementId")) && truthy(payload.get("id"))) {
@@ -232,6 +307,12 @@ public final class Proofing {
         return payload;
     }
 
+    /**
+     * Whether a string has an upper-case character.
+     *
+     * @param s a string
+     * @return whether s has an upper-case character
+     */
     static boolean hasUpper(String s) {
         for (int i = 0; i < s.length(); i++) {
             if (Character.isUpperCase(s.charAt(i))) {
@@ -241,6 +322,12 @@ public final class Proofing {
         return false;
     }
 
+    /**
+     * Whether a string has a lower-case character.
+     *
+     * @param s a string
+     * @return whether s has a lower-case character
+     */
     static boolean hasLower(String s) {
         for (int i = 0; i < s.length(); i++) {
             if (Character.isLowerCase(s.charAt(i))) {
@@ -250,7 +337,12 @@ public final class Proofing {
         return false;
     }
 
-    /** Python {@code str.isupper()}: has cased characters and none of them are lower case. */
+    /**
+     * Python {@code str.isupper()}: has cased characters and none of them are lower case.
+     *
+     * @param s a string
+     * @return the Python isupper() result
+     */
     static boolean isUpper(String s) {
         boolean cased = false;
         for (int i = 0; i < s.length(); i++) {
@@ -265,6 +357,13 @@ public final class Proofing {
         return cased;
     }
 
+    /**
+     * All matches of a pattern.
+     *
+     * @param p the pattern
+     * @param text text to search
+     * @return the matched substrings, in order
+     */
     static List<String> findAll(Pattern p, String text) {
         List<String> out = new ArrayList<>();
         Matcher m = p.matcher(text);
@@ -274,7 +373,13 @@ public final class Proofing {
         return out;
     }
 
-    // Mixed-case identifiers ("BrakeController") are split into their parts before spell checking.
+    /**
+     * Words of a text for spell checking. Mixed-case identifiers ("BrakeController") are split into their
+     * parts.
+     *
+     * @param text text to split
+     * @return the words
+     */
     static List<String> iterWords(String text) {
         List<String> words = new ArrayList<>();
         for (String part : findAll(WORD, text)) {
@@ -291,7 +396,13 @@ public final class Proofing {
         return words;
     }
 
-    // Double-checked locking over volatile fields: the lexicon is built once per JVM.
+    /**
+     * The spell-check lexicon: {@link ProofLexicon} words of three or more letters, plus {@link
+     * #ALWAYS_ALLOWED} and the {@link #PREFERRED_CASE} keys. Built once per JVM with double-checked locking
+     * over volatile fields.
+     *
+     * @return the unmodifiable lower-case word set
+     */
     static Set<String> lexicon() {
         Set<String> set = lexiconSet;
         if (set == null) {
@@ -313,9 +424,12 @@ public final class Proofing {
         return set;
     }
 
-    /*
+    /**
      * Casing for one token: known acronyms from PREFERRED_CASE, short all-caps tokens and tokens with
      * inner capitals are kept as written, anything else is capitalized.
+     *
+     * @param token one word
+     * @return the re-cased token
      */
     static String preferredCase(String token) {
         String lowered = J.lower(token);
@@ -332,7 +446,12 @@ public final class Proofing {
                 + token.substring(1).toLowerCase(java.util.Locale.ROOT);
     }
 
-    /** Splits text on non-alphanumerics and camel-case boundaries for re-casing. */
+    /**
+     * Splits text on non-alphanumerics and camel-case boundaries for re-casing.
+     *
+     * @param text text to split
+     * @return the chunks
+     */
     static List<String> splitForCasing(String text) {
         List<String> chunks = new ArrayList<>();
         for (String part : TOKEN_SPLIT.split(normalizedText(text))) {
@@ -349,7 +468,12 @@ public final class Proofing {
         return chunks;
     }
 
-    /** "brake controller" -> "Brake Controller", with acronyms fixed. */
+    /**
+     * "brake controller" -> "Brake Controller", with acronyms fixed.
+     *
+     * @param text text to re-case
+     * @return the title-cased text
+     */
     static String titleCase(String text) {
         List<String> pieces = new ArrayList<>();
         for (String w : splitForCasing(text)) {
@@ -360,7 +484,13 @@ public final class Proofing {
         return String.join(" ", pieces);
     }
 
-    /** First word capitalized, the rest lower-cased (acronyms excepted), with a trailing period added if missing. */
+    /**
+     * First word capitalized, the rest lower-cased (acronyms excepted), with a trailing period added if
+     * missing.
+     *
+     * @param text text to re-case
+     * @return the sentence, or "" for blank text
+     */
     static String sentenceCase(String text) {
         String normalized = normalizedText(text);
         if (normalized.isEmpty()) {
@@ -387,7 +517,12 @@ public final class Proofing {
         return sentence;
     }
 
-    /** "start engine" -> "StartEngine" (used for transition names), with acronyms fixed. */
+    /**
+     * "start engine" -> "StartEngine" (used for transition names), with acronyms fixed.
+     *
+     * @param text text to re-case
+     * @return the Pascal-case text, or "" for blank text
+     */
     static String pascalCase(String text) {
         String normalized = normalizedText(text);
         if (normalized.isEmpty()) {
@@ -408,9 +543,12 @@ public final class Proofing {
         return sb.toString();
     }
 
-    /*
+    /**
      * Close lexicon matches for words not in the lexicon. Short all-caps tokens (acronyms) and words
      * with a tripled letter are skipped; a cutoff of 0.88 keeps suggestions to near-misses.
+     *
+     * @param text text to check
+     * @return up to two suggestions per unknown word, de-duplicated, in preferred casing
      */
     static List<String> spellingSuggestions(String text) {
         Set<String> lex = lexicon();
@@ -441,7 +579,12 @@ public final class Proofing {
         return suggestions;
     }
 
-    /** Expected casing style per role: sentence for prose, Pascal for transitions, title for other names. */
+    /**
+     * Expected casing style per role: sentence for prose, Pascal for transitions, title for other names.
+     *
+     * @param role requirement, comment, state, transition or diagram
+     * @return "sentence", "pascal" or "title"
+     */
     static String roleStyle(String role) {
         String r = J.lower(role);
         if (r.equals("requirement") || r.equals("comment")) {
@@ -453,7 +596,14 @@ public final class Proofing {
         return "title";
     }
 
-    /** The text re-cased in the role's style: name fields get title/Pascal case, prose gets sentence case. */
+    /**
+     * The text re-cased in the role's style: name fields get title/Pascal case, prose gets sentence case.
+     *
+     * @param text current text
+     * @param role item role
+     * @param field proofed field
+     * @return the suggested text, or "" for blank text
+     */
     static String suggestText(String text, String role, String field) {
         String normalized = normalizedText(text);
         if (normalized.isEmpty()) {
@@ -465,7 +615,16 @@ public final class Proofing {
         return sentenceCase(normalized);
     }
 
-    /** Human-readable reason for a finding, combining spelling and casing problems. */
+    /**
+     * Human-readable reason for a finding, combining spelling and casing problems.
+     *
+     * @param role item role
+     * @param field proofed field
+     * @param current current text
+     * @param suggested suggested text
+     * @param spelling spelling suggestions
+     * @return the message
+     */
     static String issueMessage(String role, String field, String current, String suggested, List<String> spelling) {
         List<String> parts = new ArrayList<>();
         if (!spelling.isEmpty()) {
@@ -481,6 +640,13 @@ public final class Proofing {
         return parts.isEmpty() ? "proofing adjustment recommended" : String.join("; ", parts);
     }
 
+    /**
+     * One-line summary of a section's findings.
+     *
+     * @param role item role
+     * @param findings the section's findings
+     * @return the summary
+     */
     static String summaryFor(String role, List<Finding> findings) {
         if (findings.isEmpty()) {
             return "No " + role + " proofing issues detected.";
@@ -494,9 +660,13 @@ public final class Proofing {
 
     // ------------------------------------------------------------------ patch plans
 
-    /*
+    /**
      * One preview operation per (artifact type, artifact ID, field) with a suggested text; the first
      * finding wins. Name fields become rename_element, everything else replace_text.
+     *
+     * @param findings findings, in order
+     * @param autoApply recorded on the plan; the plan itself is always preview-only
+     * @return mode, previewOnly, operationCount and operations
      */
     static Map<String, Object> buildPatchPlanFromFindings(List<Finding> findings, boolean autoApply) {
         List<Object> operations = new ArrayList<>();
@@ -527,7 +697,13 @@ public final class Proofing {
                 "operations", operations);
     }
 
-    /** Patch plan from finding objects in either snake_case or camelCase form. */
+    /**
+     * Patch plan from finding objects in either snake_case or camelCase form.
+     *
+     * @param findings finding maps
+     * @param autoApply recorded on the plan
+     * @return the patch plan
+     */
     public static Map<String, Object> buildPatchPlan(List<Map<String, Object>> findings, boolean autoApply) {
         List<Finding> normalized = new ArrayList<>();
         for (Map<String, Object> f : findings) {
@@ -538,19 +714,30 @@ public final class Proofing {
 
     // ------------------------------------------------------------------ analyzers
 
-    // Result of analyzing one role's items: the report plus parts needed to merge sections.
+    /** Result of analyzing one role's items: the report plus the parts needed to merge sections. */
     private static final class Collected {
+        /** The section report. */
         Map<String, Object> report;
+        /** The section's findings. */
         List<Finding> findings;
+        /** True when there are no findings. */
         boolean ok;
+        /** The section's checks. */
         List<Object> checks;
+        /** The section's metrics. */
         Map<String, Object> metrics;
     }
 
-    /*
+    /**
      * Proofs every text field of every item for one role. Placeholder text (TODO, TBD ...) gets its own
      * finding and skips other checks for that field; otherwise a finding is emitted when the re-cased
      * text differs or spelling suggestions exist.
+     *
+     * @param items text items, or null
+     * @param role requirement, comment, state, transition or diagram
+     * @param category category recorded on findings
+     * @param autoApply recorded on the patch plan
+     * @return the report and its parts
      */
     static Collected analyzeCollection(List<Map<String, Object>> items, String role, String category, boolean autoApply) {
         List<Map<String, Object>> records = items == null ? new ArrayList<>() : items;
@@ -614,11 +801,27 @@ public final class Proofing {
         return c;
     }
 
+    /**
+     * Increments an integer metric.
+     *
+     * @param metrics metrics map whose value under key is an Integer
+     * @param key metric name
+     */
     private static void inc(Map<String, Object> metrics, String key) {
         metrics.put(key, ((Integer) metrics.get(key)) + 1);
     }
 
-    /** Requirement proofing plus the requirement-quality heuristics from {@link Verification} as a semantic baseline. */
+    /**
+     * Requirement proofing plus the requirement-quality heuristics from {@link Verification} as a semantic
+     * baseline.
+     *
+     * <p>The baseline uses requireId and requireMeasurement on with a 20-character minimum, and the section
+     * is ok only when the baseline passes too.
+     *
+     * @param requirements requirement payloads, or null
+     * @param autoApply recorded on the patch plan
+     * @return the requirement section report
+     */
     public static Map<String, Object> proofRequirements(List<Map<String, Object>> requirements, boolean autoApply) {
         List<Map<String, Object>> list = new ArrayList<>();
         if (requirements != null) {
@@ -641,17 +844,36 @@ public final class Proofing {
         return report;
     }
 
-    /** Comment bodies, proofed in sentence case. */
+    /**
+     * Comment bodies, proofed in sentence case.
+     *
+     * @param comments comment payloads, or null
+     * @param autoApply recorded on the patch plan
+     * @return the comment section report
+     */
     public static Map<String, Object> proofComments(List<Map<String, Object>> comments, boolean autoApply) {
         return analyzeCollection(comments, "comment", "comments", autoApply).report;
     }
 
-    /** Diagram shape labels, proofed as title-case names. */
+    /**
+     * Diagram shape labels, proofed as title-case names.
+     *
+     * @param diagramText label items, or null
+     * @param autoApply recorded on the patch plan
+     * @return the diagram text section report
+     */
     public static Map<String, Object> proofDiagramText(List<Map<String, Object>> diagramText, boolean autoApply) {
         return analyzeCollection(diagramText, "diagram", "diagram-text", autoApply).report;
     }
 
-    /** States (title case) and transitions (Pascal case) as one combined section. */
+    /**
+     * States (title case) and transitions (Pascal case) as one combined section.
+     *
+     * @param states state payloads, or null
+     * @param transitions transition payloads, or null
+     * @param autoApply recorded on the patch plan
+     * @return the combined report with both sections
+     */
     public static Map<String, Object> proofStateTransitionNames(List<Map<String, Object>> states,
                                                                 List<Map<String, Object>> transitions,
                                                                 boolean autoApply) {
@@ -670,7 +892,17 @@ public final class Proofing {
                 obj("states", s.report, "transitions", t.report));
     }
 
-    /** All sections combined into one report with a merged, de-duplicated patch plan. */
+    /**
+     * All sections combined into one report with a merged, de-duplicated patch plan.
+     *
+     * @param requirements requirement payloads, or null
+     * @param comments comment payloads, or null
+     * @param states state payloads, or null
+     * @param transitions transition payloads, or null
+     * @param diagramText label items, or null
+     * @param autoApply recorded on the patch plan
+     * @return the combined report; ok only when every section is ok
+     */
     public static Map<String, Object> proofTexts(List<Map<String, Object>> requirements,
                                                  List<Map<String, Object>> comments,
                                                  List<Map<String, Object>> states,
@@ -709,7 +941,12 @@ public final class Proofing {
 
     // ------------------------------------------------------------------ live collection
 
-    /** All type/kind/stereotype descriptors of an item joined into one string for classification. */
+    /**
+     * All type/kind/stereotype descriptors of an item joined into one string for classification.
+     *
+     * @param item element payload
+     * @return the descriptors, space separated
+     */
     static String typeDescriptor(Map<String, Object> item) {
         List<Object> values = new ArrayList<>(Arrays.asList(item.get("artifactType"), item.get("kind"), item.get("type"),
                 item.get("humanType"), item.get("elementType")));
@@ -729,29 +966,57 @@ public final class Proofing {
         return String.join(" ", parts);
     }
 
-    // Classification by substring of the type descriptor (types and stereotypes), used when no explicit IDs are given.
+    /**
+     * True when the type descriptor mentions a requirement. Classification is by substring of the descriptor
+     * (types and stereotypes) and is used when no explicit IDs are given.
+     *
+     * @param item element payload
+     * @return whether the item is a requirement
+     */
     static boolean isRequirement(Map<String, Object> item) {
         return J.lower(normalizedText(typeDescriptor(item))).contains("requirement");
     }
 
+    /**
+     * True when the type descriptor mentions a comment, note or annotation.
+     *
+     * @param item element payload
+     * @return whether the item is a comment
+     */
     static boolean isComment(Map<String, Object> item) {
         String d = J.lower(normalizedText(typeDescriptor(item)));
         return d.contains("comment") || d.contains("note") || d.contains("annotation");
     }
 
+    /**
+     * True when the type descriptor mentions a transition.
+     *
+     * @param item element payload
+     * @return whether the item is a transition
+     */
     static boolean isTransition(Map<String, Object> item) {
         return J.lower(normalizedText(typeDescriptor(item))).contains("transition");
     }
 
+    /**
+     * True for states: the descriptor mentions "state" but not a transition or state machine.
+     *
+     * @param item element payload
+     * @return whether the item is a state
+     */
     static boolean isState(Map<String, Object> item) {
         String d = J.lower(normalizedText(typeDescriptor(item)));
         // "state" matches StateMachine and Transition descriptors too, so those are excluded.
         return d.contains("state") && !d.contains("transition") && !d.contains("state machine");
     }
 
-    /*
+    /**
      * Adds specification text to an element payload: documentation and constraints override, while
      * specification properties and stereotype tagged values only fill keys the element lacks.
+     *
+     * @param item element payload
+     * @param spec specification payload, or null
+     * @return a new merged map; the full specification is under "specification"
      */
     static Map<String, Object> mergeSpecification(Map<String, Object> item, Map<String, Object> spec) {
         Map<String, Object> merged = new LinkedHashMap<>(item);
@@ -787,7 +1052,12 @@ public final class Proofing {
         return merged;
     }
 
-    /** Trimmed, de-duplicated, non-blank IDs in first-seen order. */
+    /**
+     * Trimmed, de-duplicated, non-blank IDs in first-seen order.
+     *
+     * @param values IDs, possibly null or blank
+     * @return the unique trimmed IDs
+     */
     static List<String> uniqueIds(List<String> values) {
         Set<String> seen = new LinkedHashSet<>();
         for (String v : values) {
@@ -799,7 +1069,16 @@ public final class Proofing {
         return new ArrayList<>(seen);
     }
 
-    /** Up to {@code max} elements under a package (all pages of cameo_query_elements, full view). */
+    /**
+     * Up to {@code max} elements under a package (all pages of cameo_query_elements, full view).
+     *
+     * <p>Pages of 1000 are requested until hasMore is false or paging stops advancing; max is 5000.
+     *
+     * @param rootPackageId package to search recursively
+     * @param bridge model access
+     * @return copies of the element payloads
+     * @throws Exception from the bridge
+     */
     static List<Map<String, Object>> collectRootElements(String rootPackageId, Bridge bridge) throws Exception {
         List<Map<String, Object>> out = new ArrayList<>();
         int offset = 0;
@@ -823,9 +1102,16 @@ public final class Proofing {
         return out.size() > max ? out.subList(0, max) : out;
     }
 
-    /*
+    /**
      * Diagram label targets: the given diagram IDs, or else every diagram owned by the root package or
      * any element under it. Each labelled shape becomes one "label" item pointing at its model element.
+     *
+     * @param rootPackageId root package, or null
+     * @param diagramIds explicit diagram IDs, or null or empty to discover them
+     * @param packageElements elements under the root package
+     * @param bridge model access
+     * @return one label item per labelled shape
+     * @throws Exception from the bridge
      */
     static List<Map<String, Object>> collectDiagramTextTargets(String rootPackageId, List<String> diagramIds,
                                                                List<Map<String, Object>> packageElements,
@@ -879,7 +1165,22 @@ public final class Proofing {
         return targets;
     }
 
-    /** Collect proofable model text from a package or explicit element lists. */
+    /**
+     * Collect proofable model text from a package or explicit element lists.
+     *
+     * <p>Explicit IDs for a role replace type-based discovery for that role. Requirements and comments are
+     * merged with their specification.
+     *
+     * @param rootPackageId package whose elements are proofed, or null
+     * @param requirementIds explicit requirement IDs, or null
+     * @param commentIds explicit comment IDs, or null
+     * @param stateIds explicit state IDs, or null
+     * @param transitionIds explicit transition IDs, or null
+     * @param diagramIds explicit diagram IDs, or null
+     * @param bridge model access
+     * @return requirements, comments, states, transitions and diagramText item lists
+     * @throws Exception from the bridge
+     */
     public static Map<String, Object> collectProofingTargets(String rootPackageId, List<String> requirementIds,
                                                              List<String> commentIds, List<String> stateIds,
                                                              List<String> transitionIds, List<String> diagramIds,
@@ -981,7 +1282,17 @@ public final class Proofing {
         return out;
     }
 
-    /** Apply a (preview) patch plan to the live model where the tools support it. */
+    /**
+     * Apply a (preview) patch plan to the live model where the tools support it.
+     *
+     * <p>Name fields go through modify_element (for a diagram label this renames the underlying element),
+     * documentation likewise, and any other field is written with set_specification. Each operation is
+     * applied on its own; failures are recorded per receipt and do not stop the rest.
+     *
+     * @param patchPlan a plan from {@link #buildPatchPlan} or a proofing report, or null
+     * @param bridge model access
+     * @return ok, counts and one receipt per operation (applied, skipped or failed)
+     */
     public static Map<String, Object> applyPatchPlan(Map<String, Object> patchPlan, Bridge bridge) {
         List<Map<String, Object>> operations = new ArrayList<>();
         for (Map<String, Object> op : J.maps(patchPlan == null ? null : patchPlan.get("operations"))) {
@@ -1033,7 +1344,20 @@ public final class Proofing {
                 "receipts", receipts);
     }
 
-    /** Collect model text, analyze it, and optionally apply the suggested fixes. */
+    /**
+     * Collect model text, analyze it, and optionally apply the suggested fixes.
+     *
+     * @param rootPackageId package whose elements are proofed, or null
+     * @param requirementIds explicit requirement IDs, or null
+     * @param commentIds explicit comment IDs, or null
+     * @param stateIds explicit state IDs, or null
+     * @param transitionIds explicit transition IDs, or null
+     * @param diagramIds explicit diagram IDs, or null
+     * @param autoApply apply the resulting plan right away
+     * @param bridge model access
+     * @return the proofing report plus "collected" and, after auto-apply, applyReceipts
+     * @throws Exception from the bridge while collecting
+     */
     public static Map<String, Object> proofModelText(String rootPackageId, List<String> requirementIds,
                                                      List<String> commentIds, List<String> stateIds,
                                                      List<String> transitionIds, List<String> diagramIds,

@@ -25,15 +25,25 @@ public final class ArtifactBindings {
     /** A tool body taking canonicalized snake_case params and returning a JSON tree. */
     @FunctionalInterface
     private interface Impl {
+        /**
+         * Runs the tool.
+         *
+         * @param params the tool arguments, with keys in snake_case
+         * @return the result as a JSON object
+         * @throws Exception any failure, which the registry turns into a tool error
+         */
         JsonObject call(JsonObject params) throws Exception;
     }
 
+    /** Not instantiable; all members are static. */
     private ArtifactBindings() {
     }
 
     /**
      * Registers every artifacts-family tool. "local" tools run in this jar; "optional" tools are
      * forwarded by name to an operation of a service class in the optional jar.
+     *
+     * @param r the registry to add to; every name must already be declared in the catalog
      */
     public static void bind(ToolRegistry r) {
         // matrices
@@ -97,11 +107,15 @@ public final class ArtifactBindings {
     }
 
     /**
-     * Roots come from root_element_ids / context_element_id; with only relation_map_id the map's
-     * context element (read by the Relation Map module) is the root.
+     * Implements cameo_get_traceability_graph. Roots come from root_element_ids or context_element_id;
+     * with only relation_map_id the map's context element (read by the Relation Map module) is the root.
+     * Only that map-context case needs the Relation Map API, so plain graphs are built here and keep
+     * working when the optional Relation Map plugin is absent.
+     *
+     * @param p the canonicalized tool arguments
+     * @return the graph from {@link TraceabilityGraph#build}, or from the Relation Map module
+     * @throws Exception when no project is open, an id is missing, or the optional module fails
      */
-    // cameo_get_traceability_graph: only the map-context case needs the Relation Map API, so plain
-    // graphs are built here and keep working when the optional Relation Map plugin is absent.
     static JsonObject traceabilityGraph(JsonObject p) throws Exception {
         String relationMapId = ArtifactSupport.optStr(p, "relation_map_id");
         if (relationMapId != null && !TraceabilityGraph.hasExplicitRoots(p)) {

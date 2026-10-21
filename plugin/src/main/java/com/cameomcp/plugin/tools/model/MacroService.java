@@ -28,10 +28,15 @@ final class MacroService {
     /** Engines tried after the requested one, in order. */
     static final String[] FALLBACK_ENGINES = {"groovy", "Groovy", "javascript", "js", "nashorn", "graal.js"};
 
+    /** Not instantiable; all members are static. */
     private MacroService() {
     }
 
-    /** Script engine managers: this plugin's class loader first, then the thread context class loader. */
+    /**
+     * Script engine managers: this plugin's class loader first, then the thread context class loader.
+     *
+     * @return one or two managers; the second is present only when the context class loader differs
+     */
     static List<ScriptEngineManager> managers() {
         List<ScriptEngineManager> out = new ArrayList<>();
         ClassLoader own = MacroService.class.getClassLoader();
@@ -43,7 +48,12 @@ final class MacroService {
         return out;
     }
 
-    /** Ordered, de-duplicated engine names to try for a request. */
+    /**
+     * Ordered, de-duplicated engine names to try for a request.
+     *
+     * @param requested the engine name the agent asked for, or null or blank for none
+     * @return the requested name first (trimmed), then the {@link #FALLBACK_ENGINES} not already listed
+     */
     static List<String> candidates(String requested) {
         Set<String> names = new LinkedHashSet<>();
         if (requested != null && !requested.trim().isEmpty()) {
@@ -55,7 +65,14 @@ final class MacroService {
         return new ArrayList<>(names);
     }
 
-    // cameo_list_macro_engines: every javax.script engine visible to either class loader, deduplicated.
+    /**
+     * Implements cameo_list_macro_engines: every javax.script engine visible to either class loader,
+     * de-duplicated by engine name and version. Needs no project and does not touch the EDT.
+     *
+     * @return {@code count}, {@code engines} (name, version, language, aliases, source) and a {@code hint}
+     *     when none
+     * are found
+     */
     static JsonObject listEngines() {
         JsonArray engines = new JsonArray();
         Set<String> seen = new LinkedHashSet<>();
@@ -91,9 +108,24 @@ final class MacroService {
         return out;
     }
 
-    /*
-     * cameo_execute_macro: finds an engine (the requested one, then the fallbacks) and runs the script
-     * on the EDT. The script manages its own sessions, so this does not open one (see run()).
+    /**
+     * Implements cameo_execute_macro: finds an engine (the requested one, then the fallbacks) and runs the
+     * script on the EDT. The script manages its own sessions, so this method does not open one; see {@link
+     * #run}.
+     *
+     * <p>Macro scripts are off by default; {@code McpRuntime} refuses this call unless "Allow macro scripts"
+     * is on in Settings.
+     *
+     * @param a tool arguments: {@code script} (required), {@code engine} (default groovy) and {@code timeout}
+     *     in
+     * seconds (default 60, 5 to 600)
+     *
+     * @return the result object from {@link #run}
+     * @throws ToolException INVALID_PARAMS for an empty script, UNSUPPORTED when no engine is found, or a
+     *     timeout or
+     * no-project error from {@code Edt.onEdt}
+     *
+     * @throws Exception any other failure while handing the work to the EDT
      */
     static JsonObject execute(Args a) throws Exception {
         String script = a.str("script");
@@ -136,10 +168,21 @@ final class MacroService {
         return Edt.onEdt("Execute macro", project -> run(project, finalEngine, engineUsed, script), timeout);
     }
 
-    /*
-     * Runs the script with project, application, primaryModel, projectKind and ef (ElementsFactory)
-     * bound as variables, capturing stdout/stderr. Any session the script leaves open is closed on
-     * success or cancelled on failure, so the next tool call isn't blocked.
+    /**
+     * Runs the script with {@code project}, {@code application}, {@code primaryModel}, {@code projectKind}
+     * and {@code ef} (the ElementsFactory) bound as variables, capturing stdout and stderr. A session left
+     * open before the run is cancelled. A session the script leaves open is closed on success or cancelled on
+     * failure, so the next tool call is not blocked.
+     *
+     * <p>Threading: runs on the EDT. Script errors never escape; they are reported in the result.
+     *
+     * @param project the active project
+     * @param engine the engine to evaluate with
+     * @param engineUsed the engine name that matched, echoed in the result
+     * @param script the script source
+     * @return {@code success}, {@code result} or {@code error} and {@code stackTrace} (cut to 8000
+     *     characters),
+     * {@code output}, {@code errors}, {@code engine} and any {@code warnings}
      */
     private static JsonObject run(Project project, ScriptEngine engine, String engineUsed, String script) {
         JsonArray warnings = new JsonArray();

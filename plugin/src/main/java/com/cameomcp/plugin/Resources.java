@@ -9,12 +9,16 @@ import com.cameomcp.mcp.McpServer;
 /** MCP resources and prompts served by the plugin: agent guide, live status, tool reference, workflows. */
 final class Resources {
 
+    /** Static methods only. */
     private Resources() {
     }
 
     /**
      * Adds the resources (cameo://guide, cameo://tools, cameo://status) and the workflow prompts.
      * Each resource is read on demand, so the tool reference and status always reflect the live server.
+     *
+     * @param server the server to register with
+     * @param runtime the plugin runtime, read on every request for the live tool list and status
      */
     static void register(McpServer server, McpRuntime runtime) {
         server.addResource(new McpResource("cameo://guide", "Cameo MCP agent guide",

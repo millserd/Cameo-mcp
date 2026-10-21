@@ -48,17 +48,25 @@ import java.util.Map;
 /** Native Relation Maps through the Relation Map plugin API (GraphSettings and the map display). */
 public final class RelationMapService implements TreeService {
 
-    // Swing display class of an open Relation Map; only named for diagnostics in the "attempts" output,
-    // the display itself is reached through RelationMapManager by reflection.
+    /**
+     * Swing display class of an open Relation Map. It is only named for diagnostics in the "attempts" output;
+     * the display itself is reached through RelationMapManager by reflection.
+     */
     private static final String DISPLAY_CLASS =
             "com.nomagic.magicdraw.visualization.relationshipmap.ui.diagram.view.AbstractGraphDisplay";
 
     /** A GraphSettings boolean setter, so applyBool can take method references. */
     @FunctionalInterface
     private interface BooleanSetter {
+        /**
+         * Sets one boolean option.
+         *
+         * @param value the new value
+         */
         void set(boolean value);
     }
 
+    /** Created reflectively by OptionalModules the first time a Relation Map tool runs. */
     public RelationMapService() {
     }
 
@@ -231,7 +239,15 @@ public final class RelationMapService implements TreeService {
 
     // ------------------------------------------------------------------ serialization
 
-    /** cameo_get_relation_map (and the result of most other operations): diagram summary plus its GraphSettings. */
+    /**
+     * cameo_get_relation_map (and the result of most other operations): diagram summary plus its
+     * GraphSettings.
+     *
+     * @param project the open project
+     * @param id Relation Map diagram element ID
+     * @return the diagram summary plus its settings
+     * @throws ToolException NOT_FOUND when the ID is not a Relation Map
+     */
     static JsonObject serialize(Project project, String id) {
         Diagram diagram = ArtifactSupport.relationMap(project, id);
         DiagramPresentationElement dpe = project.getDiagram(diagram);
@@ -262,7 +278,12 @@ public final class RelationMapService implements TreeService {
         return response;
     }
 
-    /** GraphUtils.isGraphSettingValid, late-bound (its parameter type is undocumented). */
+    /**
+     * GraphUtils.isGraphSettingValid, late-bound (its parameter type is undocumented).
+     *
+     * @param settings the map's settings
+     * @return whether Cameo considers them valid; false when the check cannot run
+     */
     static boolean safeIsValid(GraphSettings settings) {
         try {
             return Boolean.TRUE.equals(Reflect.invokeStatic(GraphUtils.class, "isGraphSettingValid", settings));
@@ -271,13 +292,24 @@ public final class RelationMapService implements TreeService {
         }
     }
 
-    /** GraphSettings depth (int or Integer depending on the release), or null when unreadable. */
+    /**
+     * GraphSettings depth (int or Integer depending on the release), or null when unreadable.
+     *
+     * @param settings the map's settings
+     * @return the depth, or null
+     */
     static Object depth(GraphSettings settings) {
         Object v = Reflect.tryInvoke(settings, "getDepth");
         return v instanceof Number ? v : null;
     }
 
-    /** Sets depth by reflection (int vs Integer parameter differs by release); UNSUPPORTED when it cannot. */
+    /**
+     * Sets depth by reflection (int vs Integer parameter differs by release); UNSUPPORTED when it cannot.
+     *
+     * @param settings the map's settings
+     * @param depth the new depth
+     * @throws ToolException UNSUPPORTED when the setter cannot be called
+     */
     static void setDepth(GraphSettings settings, int depth) {
         try {
             Reflect.invoke(settings, "setDepth", Integer.valueOf(depth));
@@ -449,7 +481,12 @@ public final class RelationMapService implements TreeService {
         }, 600);
     }
 
-    /** "criteria" as an array; a JSON string holding an array or a single entry is accepted too. */
+    /**
+     * "criteria" as an array; a JSON string holding an array or a single entry is accepted too.
+     *
+     * @param p tool arguments
+     * @return the criteria entries; empty when absent
+     */
     static JsonArray criteriaArray(JsonObject p) {
         if (!Gs.has(p, "criteria")) {
             return new JsonArray();
@@ -478,7 +515,12 @@ public final class RelationMapService implements TreeService {
 
     /**
      * Turns request entries into criterion strings. A bare string that is a template key becomes the
-     * template's expression; any other string (or one containing "<", i.e. XML) is passed through as raw text.
+     * template's expression; any other string (or one containing {@code <}, i.e. XML) is passed through as raw text.
+     *
+     * @param project the open project
+     * @param requested criteria entries: strings or objects with rawExpression, template or relationshipType
+     * @return the criterion strings
+     * @throws ToolException INVALID_PARAMS for a malformed entry or an unknown template
      */
     static List<String> criteriaFromRequest(Project project, JsonArray requested) {
         List<String> out = new ArrayList<>();

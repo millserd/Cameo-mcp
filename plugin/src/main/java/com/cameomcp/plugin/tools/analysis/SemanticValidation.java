@@ -18,10 +18,19 @@ import static com.cameomcp.plugin.tools.analysis.J.truthy;
  */
 public final class SemanticValidation {
 
+    /** Static methods only. */
     private SemanticValidation() {
     }
 
-    /** Interface blocks and flow properties via the bridge, copied so callers can add fields safely. */
+    /**
+     * Interface blocks and flow properties via the bridge, copied so callers can add fields safely.
+     *
+     * @param ids interface block IDs
+     * @param bridge model access
+     * @return a mutable copy of the payload
+     * @throws IllegalStateException when the bridge returns null
+     * @throws Exception from the bridge
+     */
     static Map<String, Object> readInterfaceFlowProperties(List<String> ids, Bridge bridge) throws Exception {
         Map<String, Object> payload = bridge.getInterfaceFlowProperties(ids);
         if (payload == null) {
@@ -39,10 +48,13 @@ public final class SemanticValidation {
         return out;
     }
 
-    /*
+    /**
      * Identity key for a relationship as reported by cameo_get_relationships. The same relationship
      * appears in the responses of both its ends (outgoing for one, incoming for the other), so it
      * is keyed by ID, type and endpoints rather than by object identity.
+     *
+     * @param rel one relationship entry
+     * @return [relationshipId, type, source IDs, target IDs, related element IDs]
      */
     static List<Object> relationshipSignature(Map<String, Object> rel) {
         return Arrays.asList(
@@ -53,7 +65,12 @@ public final class SemanticValidation {
                 endpointIdList(rel.get("relatedElements")));
     }
 
-    /** Merges get_relationships responses for many elements into one list, first occurrence wins. */
+    /**
+     * Merges get_relationships responses for many elements into one list, first occurrence wins.
+     *
+     * @param responses get_relationships responses; null entries are skipped
+     * @return the unique relationships, in first-seen order
+     */
     static List<Map<String, Object>> flattenRelationshipResponses(List<Map<String, Object>> responses) {
         Map<List<Object>, Map<String, Object>> deduped = new LinkedHashMap<>();
         for (Map<String, Object> response : responses) {
@@ -69,7 +86,12 @@ public final class SemanticValidation {
         return new ArrayList<>(deduped.values());
     }
 
-    /** Sorted unique IDs of the model elements shown on a diagram (shapes without an element are skipped). */
+    /**
+     * Sorted unique IDs of the model elements shown on a diagram (shapes without an element are skipped).
+     *
+     * @param diagramShapes a cameo_list_diagram_shapes response
+     * @return the element IDs
+     */
     static List<String> shapeElementIds(Map<String, Object> diagramShapes) {
         Set<String> ids = new TreeSet<>();
         for (Map<String, Object> shape : J.maps(diagramShapes.get("shapes"))) {
@@ -80,7 +102,16 @@ public final class SemanticValidation {
         return new ArrayList<>(ids);
     }
 
-    /** Diagram shapes, the elements behind them and their relationships (deduplicated). */
+    /**
+     * Diagram shapes, the elements behind them and their relationships (deduplicated).
+     *
+     * <p>Calls get_element and get_relationships once per shown element.
+     *
+     * @param diagramId diagram element ID
+     * @param bridge model access
+     * @return diagramId, diagramShapes, elements and relationships
+     * @throws Exception from the bridge
+     */
     static Map<String, Object> gatherDiagramSnapshot(String diagramId, Bridge bridge) throws Exception {
         Map<String, Object> shapes = nonNull(bridge.listDiagramShapes(diagramId));
         List<String> ids = shapeElementIds(shapes);
@@ -99,15 +130,24 @@ public final class SemanticValidation {
                 "relationships", flattenRelationshipResponses(responses));
     }
 
-    /** Treats a null bridge response as an empty object. */
+    /**
+     * Treats a null bridge response as an empty object.
+     *
+     * @param m a bridge response, or null
+     * @return m, or a new empty map
+     */
     static Map<String, Object> nonNull(Map<String, Object> m) {
         return m == null ? new LinkedHashMap<>() : m;
     }
 
-    /*
+    /**
      * Combines get_element and get_specification for one requirement: the element JSON plus the full
      * specification under "specification", with the specification's richer fields (documentation,
      * properties, stereotypes, constraints) overriding the compact element fields.
+     *
+     * @param element get_element response
+     * @param spec get_specification response
+     * @return a new merged map
      */
     static Map<String, Object> mergeRequirementPayload(Map<String, Object> element, Map<String, Object> spec) {
         Map<String, Object> merged = J.copy(element);
@@ -121,7 +161,14 @@ public final class SemanticValidation {
         return merged;
     }
 
-    /** Sorted IDs of every element related to a requirement in any direction (the requirement itself excluded). */
+    /**
+     * Sorted IDs of every element related to a requirement in any direction (the requirement itself
+     * excluded).
+     *
+     * @param requirementId the requirement's ID
+     * @param response its get_relationships response, or null
+     * @return the related IDs; empty for null
+     */
     static List<String> relatedRequirementArchitectureIds(String requirementId, Map<String, Object> response) {
         Set<String> related = new TreeSet<>();
         if (response == null) {
@@ -152,7 +199,18 @@ public final class SemanticValidation {
 
     // ------------------------------------------------------------------ entry points
 
-    // cameo_verify_activity_flow_semantics: snapshots the activity diagram and checks flow/partition semantics.
+    /**
+     * cameo_verify_activity_flow_semantics: snapshots the activity diagram and checks flow and partition
+     * semantics.
+     *
+     * @param diagramId activity diagram ID
+     * @param maxPartitionDepth deepest allowed partition nesting
+     * @param allowStereotypePartitionLabels accept partition labels that look like stereotype notation, such as
+     *     «allocate»
+     * @param bridge model access
+     * @return the verification result plus the snapshot it was based on
+     * @throws Exception from the bridge
+     */
     public static Map<String, Object> activityFlowForDiagram(String diagramId, int maxPartitionDepth,
                                                              boolean allowStereotypePartitionLabels,
                                                              Bridge bridge) throws Exception {
@@ -171,7 +229,16 @@ public final class SemanticValidation {
         return result;
     }
 
-    // cameo_verify_port_boundary_consistency: checks flow-property names and directions across interface blocks.
+    /**
+     * cameo_verify_port_boundary_consistency: checks flow-property names and directions across interface
+     * blocks.
+     *
+     * @param interfaceBlockIds interface block IDs
+     * @param allowSharedFlowPropertyNames flow property names allowed on more than one block, or null
+     * @param bridge model access
+     * @return the verification result plus interfaceBlocks and flowProperties
+     * @throws Exception from the bridge
+     */
     public static Map<String, Object> portBoundaryForInterfaces(List<String> interfaceBlockIds,
                                                                 List<String> allowSharedFlowPropertyNames,
                                                                 Bridge bridge) throws Exception {
@@ -184,7 +251,18 @@ public final class SemanticValidation {
         return result;
     }
 
-    // cameo_verify_requirement_quality: loads each requirement's element and specification and grades its text.
+    /**
+     * cameo_verify_requirement_quality: loads each requirement's element and specification and grades its
+     * text.
+     *
+     * @param requirementIds requirement IDs
+     * @param requireId fail requirements without an ID
+     * @param requireMeasurement fail requirements that do not look directive (shall, must, will) and measurable
+     * @param minTextLength minimum requirement text length
+     * @param bridge model access
+     * @return the verification result plus the merged requirements
+     * @throws Exception from the bridge
+     */
     public static Map<String, Object> requirementQualityForIds(List<String> requirementIds, boolean requireId,
                                                                boolean requireMeasurement, int minTextLength,
                                                                Bridge bridge) throws Exception {
@@ -205,10 +283,19 @@ public final class SemanticValidation {
         return result;
     }
 
-    /*
+    /**
      * cameo_verify_cross_diagram_traceability: collects naming terms from the activity diagram, the
      * interface flow properties and the IBD, plus each requirement's related elements, then checks
      * that they line up. Every input is optional; omitted sources contribute empty term lists.
+     *
+     * @param activityDiagramId activity diagram ID, or null to skip
+     * @param interfaceBlockIds interface block IDs, or null or empty to skip
+     * @param ibdDiagramId internal block diagram ID, or null to skip
+     * @param requirementIds requirement IDs, or null or empty to skip
+     * @param architectureElementIds architecture element IDs the requirements should trace to
+     * @param bridge model access
+     * @return the verification result plus the collected terms and requirement links
+     * @throws Exception from the bridge
      */
     public static Map<String, Object> crossDiagramTraceability(String activityDiagramId,
                                                                List<String> interfaceBlockIds,
@@ -251,7 +338,12 @@ public final class SemanticValidation {
         return result;
     }
 
-    /** Sorted unique non-blank flow property names (trimmed). */
+    /**
+     * Sorted unique non-blank flow property names (trimmed).
+     *
+     * @param payload interface flow property payload
+     * @return the names
+     */
     static List<String> flowPropertyNames(Map<String, Object> payload) {
         Set<String> names = new TreeSet<>();
         for (Map<String, Object> fp : J.maps(payload.get("flowProperties"))) {

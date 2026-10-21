@@ -18,30 +18,54 @@ import java.util.zip.ZipOutputStream;
  */
 public final class PptxWriter {
 
-    // Slide size in EMUs (English Metric Units, 914400 per inch): 10in x 7.5in, the 4:3 "screen4x3" size.
+    /**
+     * Slide width in EMUs (English Metric Units, 914400 per inch): 10 in, part of the 4:3 "screen4x3" size.
+     */
     static final long SLIDE_CX = 9144000L;
+    /** Slide height in EMUs: 7.5 in. */
     static final long SLIDE_CY = 6858000L;
+    /** EMUs per inch. */
     static final long EMU_PER_INCH = 914400L;
 
+    /** DrawingML namespace. */
     private static final String NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    /** Office relationships namespace (r: prefix). */
     private static final String NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    /** PresentationML namespace. */
     private static final String NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
+    /** Prefix of every relationship type URI. */
     private static final String REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
+    /** Prefix of the PresentationML content types. */
     private static final String CT = "application/vnd.openxmlformats-officedocument.presentationml.";
+    /** XML declaration that starts every part. */
     private static final String XML_DECL = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+    /** Namespace declarations for the a:, r: and p: prefixes. */
     private static final String PNS = "xmlns:a=\"" + NS_A + "\" xmlns:r=\"" + NS_R + "\" xmlns:p=\"" + NS_P + "\"";
 
+    /** Static methods only. */
     private PptxWriter() {
     }
 
-    /** Writes the deck to {@code output}, replacing any existing file. */
+    /**
+     * Writes the deck to {@code output}, replacing any existing file.
+     *
+     * @param images images, one picture slide each
+     * @param output file to write
+     * @param title deck title for the title slide and document properties
+     * @throws IOException if encoding or writing fails
+     */
     public static void write(List<OfficeImages.Image> images, Path output, String title) throws IOException {
         Files.write(output, toBytes(images, title));
     }
 
-    /*
+    /**
      * Builds the .pptx zip in memory: package parts, presentation, one master/layout/theme, a title slide
      * and one picture slide per image. Unlike PdfWriter, an empty image list is allowed (title slide only).
+     *
+     * @param images images, one picture slide each; may be empty
+     * @param title deck title
+     * @return the .pptx bytes
+     * @throws IOException if PNG encoding fails
      */
     public static byte[] toBytes(List<OfficeImages.Image> images, String title) throws IOException {
         int slideCount = images.size() + 1;
@@ -130,13 +154,23 @@ public final class PptxWriter {
         return sb.append("</Types>").toString();
     }
 
+    /**
+     * Appends one content-type Override entry.
+     *
+     * @param sb target
+     * @param part part name, starting with "/"
+     * @param type content type
+     */
     private static void override(StringBuilder sb, String part, String type) {
         sb.append("<Override PartName=\"").append(part).append("\" ContentType=\"").append(type).append("\"/>");
     }
 
-    /*
+    /**
      * presentation.xml: slide IDs must be at least 256 (hence 255 + i) and master IDs at least 2^31.
      * Relationship rId1 is the master, rId2.. the slides, matching presentationRels().
+     *
+     * @param slideCount number of slides, title slide included
+     * @return the presentation.xml text
      */
     private static String presentation(int slideCount) {
         StringBuilder sb = new StringBuilder(XML_DECL);
@@ -153,7 +187,13 @@ public final class PptxWriter {
         return sb.append("</p:presentation>").toString();
     }
 
-    // Relationship IDs after the slides continue from slideCount + 2 so they never collide with slide rIds.
+    /**
+     * The presentation part's relationships. IDs after the slides continue from slideCount + 2 so they never
+     * collide with slide rIds.
+     *
+     * @param slideCount number of slides, title slide included
+     * @return the presentation.xml.rels text
+     */
     private static String presentationRels(int slideCount) {
         StringBuilder sb = new StringBuilder();
         sb.append(rel("rId1", "slideMaster", "slideMasters/slideMaster1.xml"));
@@ -168,11 +208,16 @@ public final class PptxWriter {
         return rels(sb.toString());
     }
 
-    // Group-shape header every spTree needs; callers append their shapes and close </p:spTree>.
+    /** Group-shape header every spTree needs; callers append their shapes and close {@code </p:spTree>}. */
     private static final String EMPTY_TREE = "<p:spTree><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/>"
             + "</p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/>"
             + "<a:chOff x=\"0\" y=\"0\"/><a:chExt cx=\"0\" cy=\"0\"/></a:xfrm></p:grpSpPr>";
 
+    /**
+     * The single slide master: white background and minimal text styles.
+     *
+     * @return the slideMaster1.xml text
+     */
     private static String slideMaster() {
         return XML_DECL + "<p:sldMaster " + PNS + "><p:cSld><p:bg><p:bgRef idx=\"1001\"><a:schemeClr val=\"bg1\"/>"
                 + "</p:bgRef></p:bg>" + EMPTY_TREE + "</p:spTree></p:cSld>"
@@ -186,11 +231,22 @@ public final class PptxWriter {
                 + "</p:sldMaster>";
     }
 
+    /**
+     * The single blank slide layout.
+     *
+     * @return the slideLayout1.xml text
+     */
     private static String slideLayout() {
         return XML_DECL + "<p:sldLayout " + PNS + " type=\"blank\" preserve=\"1\"><p:cSld name=\"Blank\">"
                 + EMPTY_TREE + "</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>";
     }
 
+    /**
+     * A slide with the given shapes.
+     *
+     * @param shapes shape XML to place in the shape tree
+     * @return the slide XML text
+     */
     private static String slide(String shapes) {
         return XML_DECL + "<p:sld " + PNS + "><p:cSld>" + EMPTY_TREE + shapes + "</p:spTree></p:cSld>"
                 + "<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>";
@@ -257,16 +313,35 @@ public final class PptxWriter {
 
     // ------------------------------------------------------------------ helpers
 
+    /**
+     * One relationship element.
+     *
+     * @param id relationship ID, such as "rId1"
+     * @param type relationship type suffix after {@link #REL}
+     * @param target target part path
+     * @return the Relationship XML
+     */
     private static String rel(String id, String type, String target) {
         return "<Relationship Id=\"" + id + "\" Type=\"" + REL + type + "\" Target=\"" + target + "\"/>";
     }
 
+    /**
+     * A complete relationships part.
+     *
+     * @param relationships Relationship elements
+     * @return the .rels XML text
+     */
     private static String rels(String... relationships) {
         return XML_DECL + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
                 + String.join("", relationships) + "</Relationships>";
     }
 
-    /** XML escape for text and attribute values; control characters invalid in XML 1.0 become spaces. */
+    /**
+     * XML escape for text and attribute values; control characters invalid in XML 1.0 become spaces.
+     *
+     * @param s text, or null
+     * @return the escaped text; "" for null
+     */
     static String esc(String s) {
         if (s == null) {
             return "";
@@ -291,10 +366,26 @@ public final class PptxWriter {
         return sb.toString();
     }
 
+    /**
+     * Adds a UTF-8 text entry to the zip.
+     *
+     * @param zip target zip
+     * @param name entry name
+     * @param content text content
+     * @throws IOException if writing fails
+     */
     private static void put(ZipOutputStream zip, String name, String content) throws IOException {
         put(zip, name, content.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Adds a binary entry to the zip.
+     *
+     * @param zip target zip
+     * @param name entry name
+     * @param content bytes
+     * @throws IOException if writing fails
+     */
     private static void put(ZipOutputStream zip, String name, byte[] content) throws IOException {
         zip.putNextEntry(new ZipEntry(name));
         zip.write(content);

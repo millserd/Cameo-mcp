@@ -14,10 +14,20 @@ import java.util.Map;
  */
 final class SequenceMatcher {
 
+    /** Static methods only. */
     private SequenceMatcher() {
     }
 
-    /** {@code SequenceMatcher(None, a, b).ratio()}. */
+    /**
+     * {@code SequenceMatcher(None, a, b).ratio()}.
+     *
+     * <p>Defined as 2*M/T, where M is the number of matching characters and T the total length of both
+     * strings.
+     *
+     * @param a first string
+     * @param b second string
+     * @return similarity from 0.0 to 1.0; 1.0 when both are empty
+     */
     static double ratio(String a, String b) {
         int la = a.length();
         int lb = b.length();
@@ -27,10 +37,14 @@ final class SequenceMatcher {
         return 2.0 * matches(a, b) / (la + lb);
     }
 
-    /*
+    /**
      * Total size of the matching blocks (difflib get_matching_blocks): find the longest common block,
      * then recurse on the unmatched regions to its left and right. A work queue replaces recursion;
      * processing order does not affect the total.
+     *
+     * @param a first string
+     * @param b second string
+     * @return number of matched characters
      */
     static int matches(String a, String b) {
         // b2j: character -> ascending positions in b, so longestMatch can scan candidate j values in order.
@@ -70,9 +84,18 @@ final class SequenceMatcher {
         return total;
     }
 
-    /*
-     * difflib find_longest_match without junk: dynamic programming over a[alo:ahi] where j2len[j]
-     * is the length of the match ending at a[i-1], b[j-1]. Ties keep the earliest block in a.
+    /**
+     * difflib find_longest_match without junk: dynamic programming over a[alo:ahi] where j2len[j] is the
+     * length of the match ending at a[i-1], b[j-1]. Ties keep the earliest block in a.
+     *
+     * @param a first string
+     * @param b second string
+     * @param b2j character to ascending positions in b
+     * @param alo start of the a range (inclusive)
+     * @param ahi end of the a range (exclusive)
+     * @param blo start of the b range (inclusive)
+     * @param bhi end of the b range (exclusive)
+     * @return {i, j, size} of the longest block; size 0 when there is none
      */
     private static int[] longestMatch(String a, String b, Map<Character, List<Integer>> b2j,
                                       int alo, int ahi, int blo, int bhi) {
@@ -134,7 +157,17 @@ final class SequenceMatcher {
         return t == 0 ? 1.0 : 2.0 * matches / t;
     }
 
-    /** {@code difflib.get_close_matches(word, possibilities, n, cutoff)}. */
+    /**
+     * {@code difflib.get_close_matches(word, possibilities, n, cutoff)}.
+     *
+     * <p>Candidates are filtered by cheap upper bounds before the full ratio is computed.
+     *
+     * @param word string to match
+     * @param possibilities candidates
+     * @param n maximum number of results
+     * @param cutoff minimum ratio, 0.0 to 1.0
+     * @return up to n candidates with ratio at or above cutoff, best first
+     */
     static List<String> closeMatches(String word, List<String> possibilities, int n, double cutoff) {
         List<Object[]> result = new ArrayList<>();
         for (String x : possibilities) {

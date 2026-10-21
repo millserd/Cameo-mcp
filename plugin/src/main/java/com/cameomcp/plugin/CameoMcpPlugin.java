@@ -14,7 +14,7 @@ import java.io.File;
  */
 public class CameoMcpPlugin extends Plugin {
 
-    // Set once in init(); read by the UI and by tools that locate bundled files.
+    /** Set once in init(); read by the UI and by tools that locate bundled files. */
     private static volatile File pluginDirectory;
 
     /**
@@ -61,14 +61,20 @@ public class CameoMcpPlugin extends Plugin {
         return true;
     }
 
-    /** The folder this plugin was installed in (holds the jars, stdio launcher, docs), or null. */
+    /**
+     * The folder this plugin was installed in (holds the jars, stdio launcher, docs), or null.
+     *
+     * @return the plugin folder, or null if it could not be determined or init() has not run
+     */
     public static File pluginDirectory() {
         return pluginDirectory;
     }
 
-    /*
+    /**
      * Asks Cameo's plugin descriptor for the install folder (reflectively, because the accessor is
      * not part of the public Plugin API in every release), else uses the folder of this jar.
+     *
+     * @return the plugin folder, or null
      */
     private File resolvePluginDirectory() {
         try {

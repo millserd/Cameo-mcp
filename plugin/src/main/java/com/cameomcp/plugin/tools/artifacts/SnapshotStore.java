@@ -16,15 +16,26 @@ import java.util.UUID;
  */
 public final class SnapshotStore {
 
+    /** Most snapshots kept; older ones are evicted first. */
     public static final int MAX_SNAPSHOTS = 200;
-    // LinkedHashMap in insertion order, so iterating keys from the start visits the oldest first.
+    /**
+     * Stored snapshots by id. A LinkedHashMap in insertion order, so iterating keys from the start visits the
+     * oldest first. Guarded by the class lock.
+     */
     private static final Map<String, JsonObject> SNAPSHOTS = new LinkedHashMap<>();
 
+    /** Not instantiable; all members are static. */
     private SnapshotStore() {
     }
 
-    /** Store the snapshot, stamping snapshotId and createdAt; returns a copy. */
-    // Note: the caller's object itself is stored (and stamped), so callers must not mutate it afterwards.
+    /**
+     * Store the snapshot, stamping snapshotId and createdAt; returns a copy. The caller's object itself is
+     * stored (and stamped), so callers must not change it afterwards. The oldest snapshots are evicted when
+     * the store holds more than {@link #MAX_SNAPSHOTS}.
+     *
+     * @param snapshot the payload to store; gains snapshotId and createdAt fields
+     * @return a deep copy of the stored snapshot
+     */
     public static synchronized JsonObject create(JsonObject snapshot) {
         String id = UUID.randomUUID().toString();
         snapshot.addProperty("snapshotId", id);
@@ -40,7 +51,11 @@ public final class SnapshotStore {
         return snapshot.deepCopy();
     }
 
-    /** Summaries (snapshotId, createdAt, name, target, summary) in creation order. */
+    /**
+     * Summaries (snapshotId, createdAt, name, target, summary) in creation order.
+     *
+     * @return one summary object per snapshot
+     */
     public static synchronized List<JsonObject> list() {
         List<JsonObject> out = new ArrayList<>();
         for (JsonObject snapshot : SNAPSHOTS.values()) {
@@ -55,13 +70,23 @@ public final class SnapshotStore {
         return out;
     }
 
-    /** Deep copy of the stored snapshot, or null when the id is unknown or was evicted. */
+    /**
+     * Deep copy of the stored snapshot, or null when the id is unknown or was evicted.
+     *
+     * @param id the snapshot id
+     * @return the copy, or null
+     */
     public static synchronized JsonObject get(String id) {
         JsonObject s = SNAPSHOTS.get(id);
         return s != null ? s.deepCopy() : null;
     }
 
-    /** Removes a snapshot; false when the id was not present. */
+    /**
+     * Removes a snapshot; false when the id was not present.
+     *
+     * @param id the snapshot id
+     * @return true when a snapshot was removed
+     */
     public static synchronized boolean delete(String id) {
         return SNAPSHOTS.remove(id) != null;
     }
@@ -71,6 +96,13 @@ public final class SnapshotStore {
         SNAPSHOTS.clear();
     }
 
+    /**
+     * Copies one field when the source has it.
+     *
+     * @param source the object to read
+     * @param target the object to write
+     * @param key the field name
+     */
     private static void copyIfPresent(JsonObject source, JsonObject target, String key) {
         if (source.has(key)) {
             target.add(key, source.get(key).deepCopy());

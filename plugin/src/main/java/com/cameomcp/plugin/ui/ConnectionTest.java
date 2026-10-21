@@ -23,11 +23,23 @@ public final class ConnectionTest {
 
     /** One step of the test. */
     public static final class Step {
+        /** Step label shown in the report. */
         public final String name;
+        /** Whether the step passed. */
         public final boolean ok;
+        /** How long the step took, in milliseconds. */
         public final long millis;
+        /** What was observed (status code, counts) or why it failed; may be null. */
         public final String detail;
 
+        /**
+         * Creates a step result.
+         *
+         * @param name step label
+         * @param ok whether it passed
+         * @param millis duration
+         * @param detail observation or failure reason
+         */
         Step(String name, boolean ok, long millis, String detail) {
             this.name = name;
             this.ok = ok;
@@ -41,12 +53,16 @@ public final class ConnectionTest {
         }
     }
 
+    /** Static methods only. */
     private ConnectionTest() {
     }
 
     /**
      * Runs every step in order against the live endpoint and returns their results. Steps after a
      * failure still run, so the report shows everything that is wrong at once. Blocks; call off the EDT.
+     *
+     * @param rt the runtime whose endpoint and token are tested
+     * @return one entry per step; a single failed step when the server is not running
      */
     public static List<Step> run(McpRuntime rt) {
         List<Step> steps = new ArrayList<>();
@@ -110,24 +126,49 @@ public final class ConnectionTest {
 
     // ------------------------------------------------------------------ helpers
 
-    // A step body: returns a detail string on success, or throws Failure via fail(...).
+    /** A step body: returns a detail string on success, or throws Failure via fail(...). */
     private interface Check {
+        /**
+         * Runs the check.
+         *
+         * @return the detail text for a passing step
+         * @throws Exception a {@link Failure} for an expected failure, anything else for an unexpected one
+         */
         String run() throws Exception;
     }
 
-    // An expected failure with a readable message (as opposed to an unexpected exception).
+    /** An expected failure with a readable message (as opposed to an unexpected exception). */
     private static final class Failure extends Exception {
+        /**
+         * Creates the failure.
+         *
+         * <p>Creates the failure.
+         *
+         * @param m the message shown in the report
+         */
         Failure(String m) {
             super(m);
         }
     }
 
-    // Declared to return String so a check can write "return fail(...)".
+    /**
+     * Fails the current check. Declared to return String so a check can write "return fail(...)".
+     *
+     * @param message why the check failed
+     * @return never returns
+     * @throws Failure always
+     */
     private static String fail(String message) throws Failure {
         throw new Failure(message);
     }
 
-    // Times one check and turns its outcome into a Step.
+    /**
+     * Times one check and turns its outcome into a Step.
+     *
+     * @param name step label
+     * @param check the check
+     * @return the step result; exceptions become failed steps
+     */
     private static Step step(String name, Check check) {
         long t0 = System.nanoTime();
         try {
@@ -140,13 +181,28 @@ public final class ConnectionTest {
         }
     }
 
+    /** Status, body and Mcp-Session-Id header of one HTTP exchange. */
     private static final class Response {
+        /** HTTP status code. */
         int code;
+        /** Response body (error stream for 4xx/5xx); empty when there is none. */
         String body;
+        /** Mcp-Session-Id response header, or null. */
         String sessionId;
     }
 
-    // Plain HttpURLConnection with no proxy, exactly what a local MCP client would send.
+    /**
+     * Plain HttpURLConnection with no proxy, exactly what a local MCP client would send. Timeouts:
+     * 3 s to connect, 15 s to read.
+     *
+     * @param method HTTP method
+     * @param url target URL
+     * @param body JSON body, or null for none
+     * @param token bearer token, or null/empty for none
+     * @param sessionId Mcp-Session-Id to send, or null
+     * @return the status, body and session header
+     * @throws Exception on connection or I/O failure
+     */
     private static Response http(String method, String url, String body, String token, String sessionId) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection(Proxy.NO_PROXY);
         c.setRequestMethod(method);

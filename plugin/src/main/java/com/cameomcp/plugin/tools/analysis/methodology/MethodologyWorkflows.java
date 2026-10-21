@@ -31,15 +31,24 @@ import static com.cameomcp.plugin.tools.analysis.J.obj;
  */
 public final class MethodologyWorkflows {
 
-    // Separators ignored when comparing kinds, so "Activity Diagram", "activity_diagram" and "ActivityDiagram" match.
+    /**
+     * Separators ignored when comparing kinds, so "Activity Diagram", "activity_diagram" and
+     * "ActivityDiagram" match.
+     */
     private static final Pattern KIND_SEPARATORS = Pattern.compile("[\\s_-]+");
 
+    /** Static methods only. */
     private MethodologyWorkflows() {
     }
 
     // ------------------------------------------------------------------ helpers
 
-    /** Trimmed string form, or null when the value is null or blank. */
+    /**
+     * Trimmed string form, or null when the value is null or blank.
+     *
+     * @param value any value
+     * @return the stripped text, or null
+     */
     static String optionalStr(Object value) {
         if (value == null) {
             return null;
@@ -48,16 +57,32 @@ public final class MethodologyWorkflows {
         return text.isEmpty() ? null : text;
     }
 
+    /**
+     * Whitespace-normalized text.
+     *
+     * @param value any value
+     * @return the normalized text
+     */
     static String normalizeText(Object value) {
         return J.normalizedText(value);
     }
 
-    /** Lower-case kind with spaces, underscores and hyphens removed. */
+    /**
+     * Lower-case kind with spaces, underscores and hyphens removed.
+     *
+     * @param value a kind name
+     * @return the comparison key
+     */
     static String normalizeKind(Object value) {
         return KIND_SEPARATORS.matcher(normalizeText(value)).replaceAll("").toLowerCase(Locale.ROOT);
     }
 
-    /** File-name-safe slug of a name ("Mission Context" -> "mission-context"); "artifact" when empty. */
+    /**
+     * File-name-safe slug of a name ("Mission Context" -> "mission-context"); "artifact" when empty.
+     *
+     * @param value a name
+     * @return the slug
+     */
     static String slugify(Object value) {
         String text = normalizeText(value).toLowerCase(Locale.ROOT);
         text = text.replaceAll("[^a-z0-9]+", "-").replaceAll("-+", "-");
@@ -65,13 +90,24 @@ public final class MethodologyWorkflows {
         return text.isEmpty() ? "artifact" : text;
     }
 
-    /** Diagram kinds: anything containing "diagram" plus the SysML abbreviations BDD and IBD. */
+    /**
+     * Diagram kinds: anything containing "diagram" plus the SysML abbreviations BDD and IBD.
+     *
+     * @param kind a kind name
+     * @return whether it is a diagram kind
+     */
     static boolean isDiagramKind(Object kind) {
         String normalized = normalizeKind(kind);
         return normalized.equals("bdd") || normalized.equals("ibd") || normalized.contains("diagram");
     }
 
-    /** The artifact's comparison key: explicit key first, else its element ID. */
+    /**
+     * The artifact's comparison key: explicit key first, else its element ID.
+     *
+     * @param payload artifact map
+     * @return the key, stripped
+     * @throws ToolException INVALID_PARAMS when no key or ID is set
+     */
     static String artifactKey(Map<String, Object> payload) {
         for (String key : new String[]{"key", "artifactKey", "element_id", "elementId", "id"}) {
             Object value = payload.get(key);
@@ -83,7 +119,15 @@ public final class MethodologyWorkflows {
                 + J.repr(payload));
     }
 
-    /** Normalizes a caller-supplied artifact (camelCase or snake_case keys) into the snake_case comparison shape. */
+    /**
+     * Normalizes a caller-supplied artifact (camelCase or snake_case keys) into the snake_case comparison
+     * shape.
+     *
+     * @param item caller-supplied artifact
+     * @param role "expected" or "current", for error messages
+     * @return the normalized artifact
+     * @throws ToolException INVALID_PARAMS when the item is not an object or has no key
+     */
     static Map<String, Object> coerceArtifact(Object item, String role) {
         Map<String, Object> payload = J.map(item);
         if (payload == null) {
@@ -109,6 +153,13 @@ public final class MethodologyWorkflows {
                 "source_recipe_id", optionalStr(J.or(payload.get("source_recipe_id"), payload.get("sourceRecipeId"))));
     }
 
+    /**
+     * Coerces every item with {@link #coerceArtifact}.
+     *
+     * @param items caller-supplied artifacts, or null
+     * @param role "expected" or "current"
+     * @return the normalized artifacts; empty for null
+     */
     private static List<Map<String, Object>> coerceAll(List<?> items, String role) {
         List<Map<String, Object>> out = new ArrayList<>();
         if (items != null) {
@@ -123,6 +174,11 @@ public final class MethodologyWorkflows {
      * Expected artifacts of a pack (all recipes) or one recipe, derived from the executable recipe
      * definitions materialized without parameters. Names that depend on a recipe parameter
      * (for example "{subject_name} Needs") are left null so only kind/parent are compared.
+     *
+     * @param packId methodology pack ID
+     * @param recipeId one recipe ID, or null for every recipe in the pack
+     * @return the expected artifacts in snake_case comparison shape
+     * @throws ToolException NOT_FOUND for an unknown pack or recipe
      */
     static List<Map<String, Object>> buildExpectedArtifacts(String packId, String recipeId) {
         Map<String, Object> pack = MethodologyRegistry.getPack(packId);
@@ -155,7 +211,12 @@ public final class MethodologyWorkflows {
         return expected;
     }
 
-    /** The diagram artifacts of an expected-artifact list. */
+    /**
+     * The diagram artifacts of an expected-artifact list.
+     *
+     * @param expected expected artifacts
+     * @return those whose kind is a diagram kind
+     */
     static List<Map<String, Object>> expectedDiagrams(List<Map<String, Object>> expected) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> item : expected) {
@@ -166,7 +227,13 @@ public final class MethodologyWorkflows {
         return out;
     }
 
-    // A single status per entry: the first reason category found, in severity order (missing before kind before name ...).
+    /**
+     * A single status for a comparison entry: the first reason category found, in severity order (missing
+     * before kind before name and so on).
+     *
+     * @param reasons mismatch reasons
+     * @return "match" when there are none, else a status such as "missing" or "mismatch"
+     */
     static String comparisonStatus(List<String> reasons) {
         if (reasons.isEmpty()) {
             return "match";
@@ -183,6 +250,13 @@ public final class MethodologyWorkflows {
         return "mismatch";
     }
 
+    /**
+     * Whether any reason mentions a word.
+     *
+     * @param reasons mismatch reasons
+     * @param word substring to look for
+     * @return whether any reason contains it
+     */
     private static boolean anyContains(List<String> reasons, String word) {
         for (String r : reasons) {
             if (r.contains(word)) {
@@ -192,11 +266,24 @@ public final class MethodologyWorkflows {
         return false;
     }
 
+    /**
+     * Display label of an artifact.
+     *
+     * @param artifact artifact map
+     * @return its name, else its key, as a string
+     */
     private static String nameOrKey(Map<String, Object> artifact) {
         return J.str(J.or(artifact.get("name"), artifact.get("key")));
     }
 
-    /** Preview-only fix suggestions for one comparison entry, one per mismatch reason. */
+    /**
+     * Preview-only fix suggestions for one comparison entry, one per mismatch reason.
+     *
+     * @param expected the expected artifact
+     * @param actual the matching current artifact, or null when missing
+     * @param reasons mismatch reasons
+     * @return the suggested actions
+     */
     static List<Map<String, Object>> suggestedActions(Map<String, Object> expected, Map<String, Object> actual,
                                                       List<String> reasons) {
         List<Map<String, Object>> actions = new ArrayList<>();
@@ -232,7 +319,13 @@ public final class MethodologyWorkflows {
         return actions;
     }
 
-    // Appends actions to the patch plan with sequential "methodology:N" step IDs.
+    /**
+     * Appends actions to the patch plan as preview steps with sequential "methodology:N" step IDs.
+     *
+     * @param patchPlan plan to append to
+     * @param actions actions to add
+     * @param reason reason recorded on each step
+     */
     private static void addSteps(List<Object> patchPlan, List<Map<String, Object>> actions, String reason) {
         for (Map<String, Object> action : actions) {
             Map<String, Object> step = obj("stepId", "methodology:" + (patchPlan.size() + 1));
@@ -256,7 +349,14 @@ public final class MethodologyWorkflows {
 
     // ------------------------------------------------------------------ comparison
 
-    /** Compare current artifacts against an expected artifact list (dry run: diff plus preview patch plan). */
+    /**
+     * Compare current artifacts against an expected artifact list (dry run: diff plus preview patch plan).
+     *
+     * @param expectedArtifacts expected artifacts, camelCase or snake_case
+     * @param currentArtifacts current artifacts, camelCase or snake_case
+     * @return the per-artifact comparison, summary counts and preview patch plan
+     * @throws ToolException INVALID_PARAMS for a malformed artifact
+     */
     public static Map<String, Object> compareAgainstExpectedArtifactList(List<?> expectedArtifacts, List<?> currentArtifacts) {
         List<Map<String, Object>> expectedItems = coerceAll(expectedArtifacts, "expected");
         List<Map<String, Object>> actualItems = coerceAll(currentArtifacts, "current");
@@ -371,9 +471,16 @@ public final class MethodologyWorkflows {
         return expectedArtifacts != null ? coerceAll(expectedArtifacts, "expected") : buildExpectedArtifacts(packId, recipeId);
     }
 
-    /*
+    /**
      * Dry-run validation: artifact comparison plus workflow guidance. Ready requires both a clean
      * comparison and a recipe that is ready to execute; recommended actions merge both sources.
+     *
+     * @param packId methodology pack ID
+     * @param recipeId one recipe ID, or null for every recipe in the pack
+     * @param currentArtifacts current artifacts
+     * @param expectedArtifacts expected artifacts, or null to derive them from the pack
+     * @return ready flag, comparison, workflow guidance and recommended actions
+     * @throws ToolException NOT_FOUND for an unknown pack or recipe, INVALID_PARAMS for a malformed artifact
      */
     public static Map<String, Object> validateMethodologyPackage(String packId, String recipeId, List<?> currentArtifacts,
                                                                  List<?> expectedArtifacts) {
@@ -402,7 +509,12 @@ public final class MethodologyWorkflows {
                 "dryRun", true);
     }
 
-    /** Export format without leading dots (".png" -> "png"); defaults to png. */
+    /**
+     * Export format without leading dots (".png" -> "png"); defaults to png.
+     *
+     * @param format export format, or null
+     * @return the format without leading dots
+     */
     static String stripDot(String format) {
         String f = format == null ? "png" : format;
         int i = 0;
@@ -412,9 +524,17 @@ public final class MethodologyWorkflows {
         return f.substring(i);
     }
 
-    /*
+    /**
      * Dry-run export plan: one item per expected diagram, "ready" only when the diagram exists and
      * matches its expectation; output file names are slugs of the diagram names.
+     *
+     * @param packId methodology pack ID
+     * @param recipeId one recipe ID, or null for every recipe in the pack
+     * @param currentArtifacts current artifacts
+     * @param expectedArtifacts expected artifacts, or null to derive them from the pack
+     * @param exportFormat image format, such as png
+     * @return the export plan with one item per expected diagram
+     * @throws ToolException NOT_FOUND for an unknown pack or recipe, INVALID_PARAMS for a malformed artifact
      */
     public static Map<String, Object> exportRequiredDiagrams(String packId, String recipeId, List<?> currentArtifacts,
                                                              List<?> expectedArtifacts, String exportFormat) {
@@ -468,9 +588,21 @@ public final class MethodologyWorkflows {
                 "dryRun", true);
     }
 
-    /*
+    /**
      * Dry-run deck plan: a title slide, one slide per export item (blocked ones included, with reasons
      * as notes) and an appendix slide. Reuses a given export plan instead of recomputing it.
+     *
+     * @param packId methodology pack ID
+     * @param recipeId one recipe ID, or null for every recipe in the pack
+     * @param currentArtifacts current artifacts
+     * @param expectedArtifacts expected artifacts, or null to derive them from the pack
+     * @param exportPlan an existing export plan to reuse, or null to compute one
+     * @param title deck title, or null for a default
+     * @param pptxName PPTX file name, or null for a default
+     * @param pdfName PDF file name, or null for a default
+     * @param exportFormat image format, such as png
+     * @return the presentation plan and readiness
+     * @throws ToolException NOT_FOUND for an unknown pack or recipe, INVALID_PARAMS for a malformed artifact
      */
     public static Map<String, Object> assemblePptPdf(String packId, String recipeId, List<?> currentArtifacts,
                                                      List<?> expectedArtifacts, Map<String, Object> exportPlan,
@@ -515,12 +647,30 @@ public final class MethodologyWorkflows {
 
     // ------------------------------------------------------------------ live variants
 
-    /** Serialized snapshot (snake_case). */
+    /**
+     * Serialized snapshot (snake_case).
+     *
+     * @param artifact a snapshot
+     * @return its map form
+     */
     static Map<String, Object> artifactSnapshotToMap(ArtifactSnapshot artifact) {
         return artifact.toMap();
     }
 
-    /** Discover live artifacts for a pack or recipe (seeded with the workspace and any given artifacts). */
+    /**
+     * Discover live artifacts for a pack or recipe (seeded with the workspace and any given artifacts).
+     *
+     * <p>Recipes are discovered in pack order and each pass sees the artifacts found by earlier recipes.
+     * Read-only.
+     *
+     * @param packId methodology pack ID
+     * @param recipeId one recipe ID, or null for every recipe in the pack
+     * @param rootPackageId package to search under, or null to use the root_package_id recipe parameter
+     * @param currentArtifacts already-known artifacts to seed with, or null
+     * @param recipeParameters recipe parameter values, or null
+     * @param bridge model access
+     * @return the discovered artifacts in snake_case form
+     */
     public static List<Map<String, Object>> discoverCurrentArtifacts(String packId, String recipeId, String rootPackageId,
                                                                      List<Map<String, Object>> currentArtifacts,
                                                                      Map<String, Object> recipeParameters, Bridge bridge) {
@@ -576,7 +726,17 @@ public final class MethodologyWorkflows {
         return discoverCurrentArtifacts(packId, recipeId, rootPackageId, null, null, bridge);
     }
 
-    // cameo_validate_methodology_package: package validation against live (or given) artifacts; never writes.
+    /**
+     * cameo_validate_methodology_package: package validation against live (or given) artifacts. Never writes.
+     *
+     * @param packId methodology pack ID
+     * @param recipeId one recipe ID, or null for every recipe in the pack
+     * @param rootPackageId package to discover artifacts under, when currentArtifacts is null
+     * @param currentArtifacts artifacts to validate, or null to discover them
+     * @param expectedArtifacts expected artifacts, or null to derive them from the pack
+     * @param bridge model access
+     * @return the validation result plus currentArtifacts
+     */
     public static Map<String, Object> validateMethodologyPackageLive(String packId, String recipeId, String rootPackageId,
                                                                      List<?> currentArtifacts, List<?> expectedArtifacts,
                                                                      Bridge bridge) {
@@ -587,9 +747,23 @@ public final class MethodologyWorkflows {
         return result;
     }
 
-    /*
+    /**
      * cameo_export_required_diagrams: plans the export, and when output_dir is given also renders every
      * ready diagram through cameo_get_diagram_image and writes it there. Blocked diagrams are listed, not exported.
+     *
+     * <p>Existing files with the same name are overwritten.
+     *
+     * @param packId methodology pack ID
+     * @param recipeId one recipe ID, or null for every recipe in the pack
+     * @param rootPackageId package to discover artifacts under, when currentArtifacts is null
+     * @param currentArtifacts artifacts to use, or null to discover them
+     * @param expectedArtifacts expected artifacts, or null to derive them from the pack
+     * @param exportFormat image format, such as png
+     * @param outputDir folder to write images to, or null or empty for a dry run
+     * @param bridge model access
+     * @return the export plan, plus exports and counts when files were written
+     * @throws ToolException TOOL_FAILED when the bridge returns no image
+     * @throws Exception from the bridge or when writing files
      */
     public static Map<String, Object> exportRequiredDiagramsLive(String packId, String recipeId, String rootPackageId,
                                                                  List<?> currentArtifacts, List<?> expectedArtifacts,
@@ -631,7 +805,15 @@ public final class MethodologyWorkflows {
         return plan;
     }
 
-    // The MIME decoder tolerates line breaks in the base64 payload.
+    /**
+     * Decodes the base64 image of a cameo_get_diagram_image response. The MIME decoder tolerates line breaks
+     * in the payload.
+     *
+     * @param payload the image tool's response, or null
+     * @return the image bytes
+     * @throws ToolException TOOL_FAILED when no image string is present
+     * @throws IllegalArgumentException for invalid base64
+     */
     static byte[] decodeExportedImage(Map<String, Object> payload) {
         Object image = payload == null ? null : payload.get("image");
         if (!(image instanceof String) || ((String) image).isEmpty()) {
@@ -640,9 +822,23 @@ public final class MethodologyWorkflows {
         return Base64.getMimeDecoder().decode((String) image);
     }
 
-    /*
+    /**
      * cameo_assemble_ppt_pdf: exports the diagrams, then builds the PDF and PPTX from the exported
      * raster images when output_dir is given. No files are created when nothing could be exported.
+     *
+     * @param packId methodology pack ID
+     * @param recipeId one recipe ID, or null for every recipe in the pack
+     * @param rootPackageId package to discover artifacts under, when currentArtifacts is null
+     * @param currentArtifacts artifacts to use, or null to discover them
+     * @param expectedArtifacts expected artifacts, or null to derive them from the pack
+     * @param outputDir folder for images, PDF and PPTX, or null or empty for a dry run
+     * @param title deck title, or null for a default
+     * @param pptxName PPTX file name, or null for a default
+     * @param pdfName PDF file name, or null for a default
+     * @param exportFormat image format; must be a raster format to build the files
+     * @param bridge model access
+     * @return the presentation plan plus createdFiles and ready
+     * @throws Exception from export, image loading or writing files
      */
     public static Map<String, Object> assemblePptPdfLive(String packId, String recipeId, String rootPackageId,
                                                          List<?> currentArtifacts, List<?> expectedArtifacts,

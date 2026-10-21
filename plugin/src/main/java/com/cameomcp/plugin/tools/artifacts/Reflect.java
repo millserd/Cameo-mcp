@@ -11,22 +11,48 @@ import java.lang.reflect.Modifier;
  */
 public final class Reflect {
 
+    /** Not instantiable; all members are static. */
     private Reflect() {
     }
 
-    /** Invoke a public instance method; NoSuchMethodException when no compatible overload exists. */
+    /**
+     * Invoke a public instance method; NoSuchMethodException when no compatible overload exists.
+     *
+     * @param target the object to call on
+     * @param name the method name
+     * @param args the arguments
+     * @return the method's result
+     * @throws NoSuchMethodException when no compatible overload exists
+     * @throws Exception what the method throws, unwrapped
+     */
     public static Object invoke(Object target, String name, Object... args) throws Exception {
         Method m = find(target.getClass(), name, false, args);
         return call(m, target, args);
     }
 
-    /** Invoke a public static method. */
+    /**
+     * Invoke a public static method.
+     *
+     * @param type the class to call on
+     * @param name the method name
+     * @param args the arguments
+     * @return the method's result
+     * @throws NoSuchMethodException when no compatible overload exists
+     * @throws Exception what the method throws, unwrapped
+     */
     public static Object invokeStatic(Class<?> type, String name, Object... args) throws Exception {
         Method m = find(type, name, true, args);
         return call(m, null, args);
     }
 
-    /** Instance method result, or null when the method is missing or fails. */
+    /**
+     * Instance method result, or null when the method is missing or fails.
+     *
+     * @param target the object to call on
+     * @param name the method name
+     * @param args the arguments
+     * @return the result, or null
+     */
     public static Object tryInvoke(Object target, String name, Object... args) {
         try {
             return invoke(target, name, args);
@@ -35,7 +61,14 @@ public final class Reflect {
         }
     }
 
-    /** True when the type has a public method of that name and parameter count (types not checked). */
+    /**
+     * True when the type has a public method of that name and parameter count (types not checked).
+     *
+     * @param type the class
+     * @param name the method name
+     * @param arity the parameter count
+     * @return true when such a method exists
+     */
     public static boolean hasMethod(Class<?> type, String name, int arity) {
         for (Method m : type.getMethods()) {
             if (m.getName().equals(name) && m.getParameterCount() == arity) {
@@ -71,6 +104,13 @@ public final class Reflect {
     /**
      * First public method (including inherited ones) matching name, arity, static-ness and argument
      * compatibility; with several compatible overloads, getMethods() order decides, so it is not the "most specific".
+     *
+     * @param type the class
+     * @param name the method name
+     * @param wantStatic true for static methods, false for instance methods
+     * @param args the arguments to match
+     * @return the method
+     * @throws NoSuchMethodException when none matches
      */
     static Method find(Class<?> type, String name, boolean wantStatic, Object[] args) throws NoSuchMethodException {
         for (Method m : type.getMethods()) {
@@ -90,7 +130,13 @@ public final class Reflect {
         throw new NoSuchMethodException(type.getName() + "." + name + " with " + args.length + " argument(s)");
     }
 
-    /** Whether arg can be passed for param: null fits any reference type, primitives match their wrapper. */
+    /**
+     * Whether arg can be passed for param: null fits any reference type, primitives match their wrapper.
+     *
+     * @param param the parameter type
+     * @param arg the argument, may be null
+     * @return true when it fits
+     */
     static boolean compatible(Class<?> param, Object arg) {
         if (arg == null) {
             return !param.isPrimitive();
@@ -106,7 +152,12 @@ public final class Reflect {
         return false;
     }
 
-    /** Wrapper class for a primitive (void maps to Void); reference types are returned unchanged. */
+    /**
+     * Wrapper class for a primitive (void maps to Void); reference types are returned unchanged.
+     *
+     * @param c the class
+     * @return its wrapper class, or c itself
+     */
     static Class<?> box(Class<?> c) {
         if (!c.isPrimitive()) {
             return c;
