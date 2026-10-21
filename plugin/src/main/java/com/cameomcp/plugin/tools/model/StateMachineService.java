@@ -2,9 +2,9 @@ package com.cameomcp.plugin.tools.model;
 
 import com.cameomcp.mcp.Args;
 import com.cameomcp.plugin.cameo.Edt;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonNull;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
 import com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Element;
@@ -280,7 +280,7 @@ final class StateMachineService {
     }
 
     // One behavior as {id, name, body, language, humanType}.
-    private static com.google.gson.JsonElement behavior(Behavior b) {
+    private static com.cameomcp.json.tree.JsonElement behavior(Behavior b) {
         if (b == null) {
             return JsonNull.INSTANCE;
         }

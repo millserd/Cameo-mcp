@@ -4,9 +4,9 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 
 import java.io.File;

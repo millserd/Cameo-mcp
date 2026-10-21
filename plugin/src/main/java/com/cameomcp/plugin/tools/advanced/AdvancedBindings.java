@@ -2,9 +2,9 @@ package com.cameomcp.plugin.tools.advanced;
 
 import com.cameomcp.mcp.ToolRegistry;
 import com.cameomcp.plugin.tools.Bind;
-import com.cameomcp.plugin.tools.GsonTool;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.cameomcp.plugin.tools.TreeTool;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -15,9 +15,9 @@ public final class AdvancedBindings {
     private AdvancedBindings() {
     }
 
-    /** Bind with snake_case aliases for camelCase argument names (Args accepts both; Gson readers do not). */
-    private static void gson(ToolRegistry r, String name, GsonTool tool) {
-        Bind.gson(r, name, p -> tool.call(snakeAliases(p)));
+    /** Bind with snake_case aliases for camelCase argument names (Args accepts both; tree readers do not). */
+    private static void tree(ToolRegistry r, String name, TreeTool tool) {
+        Bind.tree(r, name, p -> tool.call(snakeAliases(p)));
     }
 
     /*
@@ -41,87 +41,87 @@ public final class AdvancedBindings {
         return p;
     }
 
-    /** Registers every advanced-family tool name against its service method. All go through {@link #gson}. */
+    /** Registers every advanced-family tool name against its service method. All go through {@link #tree}. */
     public static void bind(ToolRegistry r) {
         // validation
-        gson(r, "cameo_get_validation_capabilities", p -> ValidationService.capabilities());
-        gson(r, "cameo_list_validation_suites", p -> ValidationService.suites());
-        gson(r, "cameo_run_native_validation", ValidationService::runNative);
-        gson(r, "cameo_get_validation_result", ValidationService::result);
-        gson(r, "cameo_run_validation", ValidationService::runBounded);
+        tree(r, "cameo_get_validation_capabilities", p -> ValidationService.capabilities());
+        tree(r, "cameo_list_validation_suites", p -> ValidationService.suites());
+        tree(r, "cameo_run_native_validation", ValidationService::runNative);
+        tree(r, "cameo_get_validation_result", ValidationService::result);
+        tree(r, "cameo_run_validation", ValidationService::runBounded);
 
         // Report Wizard
-        gson(r, "cameo_get_report_capabilities", p -> ReportService.capabilities());
-        gson(r, "cameo_list_report_templates", p -> ReportService.templates());
-        gson(r, "cameo_generate_report_preview", ReportService::preview);
-        gson(r, "cameo_generate_report", ReportService::generate);
-        gson(r, "cameo_get_report_job", ReportService::job);
+        tree(r, "cameo_get_report_capabilities", p -> ReportService.capabilities());
+        tree(r, "cameo_list_report_templates", p -> ReportService.templates());
+        tree(r, "cameo_generate_report_preview", ReportService::preview);
+        tree(r, "cameo_generate_report", ReportService::generate);
+        tree(r, "cameo_get_report_job", ReportService::job);
 
         // requirements import/export
-        gson(r, "cameo_get_requirements_capabilities", p -> RequirementsService.requirementsCapabilities());
-        gson(r, "cameo_get_import_export_capabilities", p -> RequirementsService.capabilities());
-        gson(r, "cameo_export_requirements", RequirementsService::exportRequirements);
-        gson(r, "cameo_preview_requirements_import", p -> RequirementsService.importPreview(p,
+        tree(r, "cameo_get_requirements_capabilities", p -> RequirementsService.requirementsCapabilities());
+        tree(r, "cameo_get_import_export_capabilities", p -> RequirementsService.capabilities());
+        tree(r, "cameo_export_requirements", RequirementsService::exportRequirements);
+        tree(r, "cameo_preview_requirements_import", p -> RequirementsService.importPreview(p,
                 "Requirements import preview accepted. No model write was performed."));
-        gson(r, "cameo_apply_requirements_import", RequirementsService::apply);
-        gson(r, "cameo_export_requirements_preview", RequirementsService::exportRequirementsPreview);
-        gson(r, "cameo_import_requirements_preview", RequirementsService::importRequirementsPreview);
+        tree(r, "cameo_apply_requirements_import", RequirementsService::apply);
+        tree(r, "cameo_export_requirements_preview", RequirementsService::exportRequirementsPreview);
+        tree(r, "cameo_import_requirements_preview", RequirementsService::importRequirementsPreview);
 
         // simulation
-        gson(r, "cameo_get_simulation_capabilities", p -> SimulationService.capabilities());
-        gson(r, "cameo_list_simulation_configurations", p -> SimulationService.configurations());
-        gson(r, "cameo_run_simulation_preview", SimulationService::preview);
-        gson(r, "cameo_run_simulation", SimulationService::run);
-        gson(r, "cameo_get_simulation_result", SimulationService::result);
-        gson(r, "cameo_terminate_simulation", SimulationService::terminate);
+        tree(r, "cameo_get_simulation_capabilities", p -> SimulationService.capabilities());
+        tree(r, "cameo_list_simulation_configurations", p -> SimulationService.configurations());
+        tree(r, "cameo_run_simulation_preview", SimulationService::preview);
+        tree(r, "cameo_run_simulation", SimulationService::run);
+        tree(r, "cameo_get_simulation_result", SimulationService::result);
+        tree(r, "cameo_terminate_simulation", SimulationService::terminate);
 
         // teamwork
-        gson(r, "cameo_get_teamwork_capabilities", p -> TeamworkService.capabilities());
-        gson(r, "cameo_get_teamwork_project", p -> TeamworkService.project());
+        tree(r, "cameo_get_teamwork_capabilities", p -> TeamworkService.capabilities());
+        tree(r, "cameo_get_teamwork_project", p -> TeamworkService.project());
         // Teamwork commit/update are preview-only: the second argument just labels which operation is previewed.
-        gson(r, "cameo_preview_teamwork_commit", p -> TeamworkService.preview(p, "commit"));
-        gson(r, "cameo_preview_teamwork_update", p -> TeamworkService.preview(p, "update"));
-        gson(r, "cameo_list_teamwork_descriptors", p -> TeamworkService.descriptors());
+        tree(r, "cameo_preview_teamwork_commit", p -> TeamworkService.preview(p, "commit"));
+        tree(r, "cameo_preview_teamwork_update", p -> TeamworkService.preview(p, "update"));
+        tree(r, "cameo_list_teamwork_descriptors", p -> TeamworkService.descriptors());
         // Branches, history and locks have no typed readback yet; placeholder() reports project mode and a probe-required status.
-        gson(r, "cameo_list_teamwork_branches", p -> TeamworkService.placeholder("branches"));
-        gson(r, "cameo_get_teamwork_history", p -> TeamworkService.placeholder("history"));
-        gson(r, "cameo_get_teamwork_locks", p -> TeamworkService.placeholder("locks"));
+        tree(r, "cameo_list_teamwork_branches", p -> TeamworkService.placeholder("branches"));
+        tree(r, "cameo_get_teamwork_history", p -> TeamworkService.placeholder("history"));
+        tree(r, "cameo_get_teamwork_locks", p -> TeamworkService.placeholder("locks"));
 
         // DataHub
-        gson(r, "cameo_get_datahub_capabilities", p -> ProductServices.dataHubCapabilities());
-        gson(r, "cameo_list_datahub_sources", p -> ProductServices.dataHubSources());
-        gson(r, "cameo_preview_datahub_sync", ProductServices::dataHubSyncPreview);
+        tree(r, "cameo_get_datahub_capabilities", p -> ProductServices.dataHubCapabilities());
+        tree(r, "cameo_list_datahub_sources", p -> ProductServices.dataHubSources());
+        tree(r, "cameo_preview_datahub_sync", ProductServices::dataHubSyncPreview);
 
         // criteria
-        gson(r, "cameo_get_criteria_capabilities", p -> CriteriaService.capabilities());
-        gson(r, "cameo_list_criteria_templates", CriteriaService::templates);
-        gson(r, "cameo_build_criteria_expression", CriteriaService::build);
-        gson(r, "cameo_parse_criteria_expression", CriteriaService::parse);
-        gson(r, "cameo_apply_criteria_template", CriteriaService::apply);
-        gson(r, "cameo_capture_criteria_template_from_diff", CriteriaService::capture);
+        tree(r, "cameo_get_criteria_capabilities", p -> CriteriaService.capabilities());
+        tree(r, "cameo_list_criteria_templates", CriteriaService::templates);
+        tree(r, "cameo_build_criteria_expression", CriteriaService::build);
+        tree(r, "cameo_parse_criteria_expression", CriteriaService::parse);
+        tree(r, "cameo_apply_criteria_template", CriteriaService::apply);
+        tree(r, "cameo_capture_criteria_template_from_diff", CriteriaService::capture);
 
         // profiles
-        gson(r, "cameo_get_profile_capabilities", p -> ProductServices.profileCapabilities());
-        gson(r, "cameo_export_profile_summary", p -> ProductServices.profileSummary());
-        gson(r, "cameo_preview_profile_operation", ProductServices::profilePreview);
+        tree(r, "cameo_get_profile_capabilities", p -> ProductServices.profileCapabilities());
+        tree(r, "cameo_export_profile_summary", p -> ProductServices.profileSummary());
+        tree(r, "cameo_preview_profile_operation", ProductServices::profilePreview);
 
         // variants
-        gson(r, "cameo_get_variant_capabilities", p -> ProductServices.variantCapabilities());
-        gson(r, "cameo_analyze_variants_preview", ProductServices::analyzeVariants);
-        gson(r, "cameo_install_variant_pattern_preview", p -> ProductServices.variantPreview(p, "install-pattern"));
-        gson(r, "cameo_export_variant_configuration", p -> ProductServices.variantPreview(p, "export-configuration"));
+        tree(r, "cameo_get_variant_capabilities", p -> ProductServices.variantCapabilities());
+        tree(r, "cameo_analyze_variants_preview", ProductServices::analyzeVariants);
+        tree(r, "cameo_install_variant_pattern_preview", p -> ProductServices.variantPreview(p, "install-pattern"));
+        tree(r, "cameo_export_variant_configuration", p -> ProductServices.variantPreview(p, "export-configuration"));
 
         // safety / cyber extensions
-        gson(r, "cameo_get_extension_capabilities", p -> ProductServices.extensionCapabilities());
-        gson(r, "cameo_scan_extensions", ProductServices::scanExtensions);
-        gson(r, "cameo_list_extension_profiles", p -> ProductServices.extensionProfiles());
-        gson(r, "cameo_install_extension_pattern_preview", ProductServices::extensionInstallPreview);
-        gson(r, "cameo_refuse_compliance_claim", ProductServices::refuseComplianceClaim);
+        tree(r, "cameo_get_extension_capabilities", p -> ProductServices.extensionCapabilities());
+        tree(r, "cameo_scan_extensions", ProductServices::scanExtensions);
+        tree(r, "cameo_list_extension_profiles", p -> ProductServices.extensionProfiles());
+        tree(r, "cameo_install_extension_pattern_preview", ProductServices::extensionInstallPreview);
+        tree(r, "cameo_refuse_compliance_claim", ProductServices::refuseComplianceClaim);
 
         // typed diagrams
-        gson(r, "cameo_get_typed_diagram_capabilities", p -> TypedDiagramService.capabilities());
-        gson(r, "cameo_list_typed_diagrams", TypedDiagramService::list);
-        gson(r, "cameo_inspect_typed_diagram", TypedDiagramService::inspect);
-        gson(r, "cameo_preview_typed_diagram_operation", TypedDiagramService::preview);
+        tree(r, "cameo_get_typed_diagram_capabilities", p -> TypedDiagramService.capabilities());
+        tree(r, "cameo_list_typed_diagrams", TypedDiagramService::list);
+        tree(r, "cameo_inspect_typed_diagram", TypedDiagramService::inspect);
+        tree(r, "cameo_preview_typed_diagram_operation", TypedDiagramService::preview);
     }
 }

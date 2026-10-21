@@ -7,7 +7,7 @@ import com.cameomcp.mcp.ToolRegistry;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.Gs;
 import com.cameomcp.plugin.tools.OptionalModules;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.util.Map;
 
@@ -22,7 +22,7 @@ import static com.cameomcp.plugin.tools.artifacts.ArtifactSupport.RELATION_MAP_S
  */
 public final class ArtifactBindings {
 
-    /** A tool body taking canonicalized snake_case params and returning Gson JSON. */
+    /** A tool body taking canonicalized snake_case params and returning a JSON tree. */
     @FunctionalInterface
     private interface Impl {
         JsonObject call(JsonObject params) throws Exception;
@@ -91,9 +91,9 @@ public final class ArtifactBindings {
                 out(OptionalModules.call(service, operation, ArtifactSupport.params(a, c))));
     }
 
-    /** Converts the Gson result to the plain Map the registry serializes; null becomes {}. */
+    /** Converts the tree result to the plain Map the registry serializes; null becomes {}. */
     private static Map<?, ?> out(JsonObject result) {
-        return result == null ? Json.obj() : (Map<?, ?>) Gs.fromGson(result);
+        return result == null ? Json.obj() : (Map<?, ?>) Gs.fromTree(result);
     }
 
     /**

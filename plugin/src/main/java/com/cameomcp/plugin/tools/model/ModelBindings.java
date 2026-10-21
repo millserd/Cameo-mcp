@@ -3,7 +3,7 @@ package com.cameomcp.plugin.tools.model;
 import com.cameomcp.mcp.ToolRegistry;
 import com.cameomcp.mcp.ToolResult;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 
 /** Binds the model family (see {@code com.cameomcp.catalog.ModelTools}). */
 public final class ModelBindings {
@@ -11,15 +11,15 @@ public final class ModelBindings {
     private ModelBindings() {
     }
 
-    // A model tool written against Gson: takes the core Args, returns a Gson object.
+    // A model tool written against JSON trees: takes the core Args, returns a JSON tree object.
     @FunctionalInterface
     private interface Impl {
         JsonObject run(com.cameomcp.mcp.Args a) throws Exception;
     }
 
-    // Adapts an Impl to a core handler by converting the Gson result back to plain JSON values.
+    // Adapts an Impl to a core handler by converting the tree result back to plain JSON values.
     private static void bind(ToolRegistry r, String name, Impl impl) {
-        r.bind(name, (a, c) -> Gs.fromGson(impl.run(a)));
+        r.bind(name, (a, c) -> Gs.fromTree(impl.run(a)));
     }
 
     /** Binds every model-family tool to its service method. */
@@ -60,7 +60,7 @@ public final class ModelBindings {
         // A macro that fails still returns its output and log; flag the result as an error so the agent notices.
         r.bind("cameo_execute_macro", (a, c) -> {
             JsonObject out = MacroService.execute(a);
-            ToolResult result = ToolResult.of(Gs.fromGson(out));
+            ToolResult result = ToolResult.of(Gs.fromTree(out));
             return out.has("success") && !out.get("success").getAsBoolean() ? result.markError() : result;
         });
         bind(r, "cameo_list_macro_engines", a -> MacroService.listEngines());

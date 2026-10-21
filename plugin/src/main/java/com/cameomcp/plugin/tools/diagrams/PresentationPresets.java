@@ -1,7 +1,7 @@
 package com.cameomcp.plugin.tools.diagrams;
 
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.util.Arrays;
 import java.util.Collections;

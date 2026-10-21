@@ -1,9 +1,9 @@
 package com.cameomcp.plugin.tools.diagrams;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonNull;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

@@ -4,8 +4,8 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Element;
 import com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Property;
@@ -26,7 +26,7 @@ final class InterfaceFlowReader {
 
     /**
      * Validates the ID list, then reads all interface blocks and flow properties in a single
-     * EDT read transaction and converts the Gson result into plain maps for the analysis code.
+     * EDT read transaction and converts the tree result into plain maps for the analysis code.
      */
     @SuppressWarnings("unchecked")
     static Map<String, Object> read(List<String> interfaceIds) throws Exception {
@@ -35,7 +35,7 @@ final class InterfaceFlowReader {
                     + "Use cameo_query_elements(stereotype=\"InterfaceBlock\") to find them.");
         }
         JsonObject response = Edt.read(project -> readIn(project, interfaceIds));
-        return (Map<String, Object>) Gs.fromGson(response);
+        return (Map<String, Object>) Gs.fromTree(response);
     }
 
     // Runs on the EDT. Each ID must resolve to a Class (InterfaceBlock or Block); owned attributes

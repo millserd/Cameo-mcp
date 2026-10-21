@@ -5,8 +5,8 @@ import com.cameomcp.catalog.Catalog;
 import com.cameomcp.catalog.Sysml2Tools;
 import com.cameomcp.mcp.ToolRegistry;
 import com.cameomcp.mcp.ToolSpec;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

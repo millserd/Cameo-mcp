@@ -3,18 +3,19 @@
 ## Layout
 
 ```
-core/     Pure Java, no Cameo: JSON (com.cameomcp.json), MCP protocol + HTTP transport
+core/     Pure Java, no Cameo, no third-party libraries: JSON (com.cameomcp.json, plus the
+          com.cameomcp.json.tree classes the plugin builds results with), MCP protocol + HTTP transport
           (com.cameomcp.mcp), and the tool catalog (com.cameomcp.catalog). Unit-testable anywhere.
 plugin/   The Cameo plugin. src/main/java: runtime, UI, Cameo helpers, tool implementations.
           src/optional/java: code that needs APIs of optional Cameo plugins (Dependency Matrix,
           Generic Table, Relation Map); shipped as cameo-mcp-optional.jar and loaded through
           OptionalModules so the plugin still loads when those plugins are missing.
-stdio/    cameo-mcp-stdio.jar: stdio <-> HTTP launcher for stdio-only MCP clients.
+stdio/    cameo-mcp-stdio.jar: stdio <-> HTTP launcher for stdio-only MCP clients, and the
+          installer (--install / --uninstall).
 stubs/    Compile-only stand-ins for the Cameo OpenAPI, verified against the 2024x and 2026x
           javadoc. Never packaged. See stubs/README.md and stubs/API-DIFFERENCES.md.
 devtools/ compile-check.sh and jars for fast checks without Gradle.
 docs/     AGENT-GUIDE.md (served to agents as cameo://guide), this file.
-install/  Installers for Windows / macOS / Linux.
 ```
 
 ## How a tool is wired

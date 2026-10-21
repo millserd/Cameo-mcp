@@ -5,7 +5,7 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.cameomcp.plugin.tools.GsonService;
+import com.cameomcp.plugin.tools.TreeService;
 import com.cameomcp.plugin.tools.artifacts.ArtifactSupport;
 import com.cameomcp.plugin.tools.artifacts.CriteriaTemplates;
 import com.cameomcp.plugin.tools.artifacts.JsonDiff;
@@ -13,10 +13,10 @@ import com.cameomcp.plugin.tools.artifacts.PresentationJson;
 import com.cameomcp.plugin.tools.artifacts.PropertyJson;
 import com.cameomcp.plugin.tools.artifacts.Reflect;
 import com.cameomcp.plugin.tools.artifacts.TraceabilityGraph;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonParser;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.export.image.ImageExporter;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
@@ -46,7 +46,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Native Relation Maps through the Relation Map plugin API (GraphSettings and the map display). */
-public final class RelationMapService implements GsonService {
+public final class RelationMapService implements TreeService {
 
     // Swing display class of an open Relation Map; only named for diagnostics in the "attempts" output,
     // the display itself is reached through RelationMapManager by reflection.

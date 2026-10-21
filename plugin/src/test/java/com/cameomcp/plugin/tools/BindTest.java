@@ -1,7 +1,7 @@
 // family: server
 package com.cameomcp.plugin.tools;
 
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

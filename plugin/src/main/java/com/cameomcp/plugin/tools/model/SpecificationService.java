@@ -5,10 +5,10 @@ import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.Edt;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonPrimitive;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.openapi.uml.ModelElementsManager;
 import com.nomagic.uml2.ext.jmi.helpers.StereotypesHelper;
@@ -272,8 +272,8 @@ final class SpecificationService {
         if (!hasProps && !hasConstraints) {
             throw ToolException.invalid("Give a non-empty 'properties' and/or 'constraints' object.");
         }
-        JsonObject gprops = hasProps ? Gs.toGson(props) : new JsonObject();
-        JsonObject gconstraints = hasConstraints ? Gs.toGson(constraints) : new JsonObject();
+        JsonObject gprops = hasProps ? Gs.toTree(props) : new JsonObject();
+        JsonObject gconstraints = hasConstraints ? Gs.toTree(constraints) : new JsonObject();
         return Edt.write("Set specification", project -> {
             Element element = ModelSupport.element(project, id, "element_id");
             ModelSupport.requireEditable(element, "Element");
@@ -435,7 +435,7 @@ final class SpecificationService {
                 if (!(element instanceof MultiplicityElement)) {
                     return false;
                 }
-                Object raw = value == null || value.isJsonNull() ? null : Gs.fromGson(value);
+                Object raw = value == null || value.isJsonNull() ? null : Gs.fromTree(value);
                 if ("lower".equals(name)) {
                     Integer lower = ModelText.parseLower(raw);
                     if (lower == null) {

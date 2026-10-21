@@ -1,11 +1,11 @@
 package com.cameomcp.plugin.tools.advanced;
 
 import com.cameomcp.mcp.ToolException;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonParser;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonParseException;
+import com.cameomcp.json.tree.JsonParser;
 
 import java.util.Arrays;
 import java.util.Collections;

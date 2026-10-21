@@ -1,7 +1,7 @@
 package com.cameomcp.plugin.tools.artifacts;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 
 import java.util.Collection;
 import java.util.Collections;

@@ -1,11 +1,11 @@
 package com.cameomcp.plugin.tools.artifacts;
 
 import com.cameomcp.plugin.cameo.ElementJson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonNull;
+import com.cameomcp.json.tree.JsonObject;
+import com.cameomcp.json.tree.JsonPrimitive;
 import com.nomagic.magicdraw.properties.Property;
 import com.nomagic.magicdraw.properties.PropertyManager;
 import com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Element;

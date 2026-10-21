@@ -1,8 +1,8 @@
 package com.cameomcp.plugin.tools.artifacts;
 
 import com.cameomcp.plugin.cameo.Edt;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.uml.symbols.DiagramPresentationElement;
 import com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Diagram;
 import com.nomagic.uml2.ext.magicdraw.classes.mdkernel.Element;

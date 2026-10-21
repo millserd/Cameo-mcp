@@ -5,9 +5,9 @@ import com.cameomcp.mcp.ToolContext;
 import com.cameomcp.mcp.ToolException;
 import com.cameomcp.plugin.cameo.ElementJson;
 import com.cameomcp.plugin.cameo.Gs;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonArray;
+import com.cameomcp.json.tree.JsonElement;
+import com.cameomcp.json.tree.JsonObject;
 import com.nomagic.magicdraw.core.Project;
 import com.nomagic.magicdraw.uml.ClassTypes;
 import com.nomagic.magicdraw.uml.symbols.DiagramPresentationElement;
@@ -44,7 +44,7 @@ public final class ArtifactSupport {
     // ------------------------------------------------------------------ parameters
 
     /**
-     * The tool arguments as a Gson object keyed by the spec's snake_case names: a camelCase
+     * The tool arguments as a JSON tree object keyed by the spec's snake_case names: a camelCase
      * spelling sent by the client is copied to the canonical key, so implementations only
      * read snake_case. JSON nulls are dropped.
      */
@@ -83,7 +83,7 @@ public final class ArtifactSupport {
             // A string that looks like a JSON array (some clients stringify arrays) is parsed as one.
             if (s.startsWith("[")) {
                 try {
-                    JsonElement parsed = com.google.gson.JsonParser.parseString(s);
+                    JsonElement parsed = com.cameomcp.json.tree.JsonParser.parseString(s);
                     if (parsed.isJsonArray()) {
                         for (JsonElement item : parsed.getAsJsonArray()) {
                             if (item != null && !item.isJsonNull()) {

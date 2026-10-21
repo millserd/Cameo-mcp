@@ -1,7 +1,7 @@
 // family: diagrams
 package com.cameomcp.plugin.tools.diagrams;
 
-import com.google.gson.JsonObject;
+import com.cameomcp.json.tree.JsonObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

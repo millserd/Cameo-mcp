@@ -21,22 +21,18 @@ sourceSets {
 }
 
 configurations {
-    bundled
     optionalCompileOnly.extendsFrom compileOnly
 }
 
 dependencies {
     implementation project(':core')
-    bundled 'com.google.code.gson:gson:2.10.1'
-    compileOnly 'com.google.code.gson:gson:2.10.1'
     if (useRealCameo) {
-        compileOnly fileTree(dir: "${cameoHome}/lib", include: ['**/*.jar'], exclude: ['**/gson-*.jar'])
+        compileOnly fileTree(dir: "${cameoHome}/lib", include: ['**/*.jar'])
         optionalCompileOnly fileTree(dir: "${cameoHome}/plugins", include: ['**/*.jar'])
     } else {
         compileOnly project(':stubs')
     }
     testImplementation project(':core')
-    testImplementation 'com.google.code.gson:gson:2.10.1'
     testImplementation(useRealCameo ? fileTree(dir: "${cameoHome}/lib", include: ['**/*.jar']) : project(':stubs'))
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.3'
@@ -74,7 +70,6 @@ tasks.register('assemblePlugin', Copy) {
     from(project(':stdio').tasks.named('jar'))
     from(rootProject.file('README.md'))
     from(rootProject.file('docs/AGENT-GUIDE.md'))
-    into('lib') { from configurations.bundled }
     doFirst { delete out }
 }
 
