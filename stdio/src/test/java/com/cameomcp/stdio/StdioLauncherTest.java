@@ -114,4 +114,18 @@ class StdioLauncherTest {
         }
         assertTrue(buf.toString(StandardCharsets.UTF_8).contains("nothing is listening"));
     }
+
+    /** --print-config emits a parseable mcpServers block with Windows paths escaped, extra options and the token. */
+    @Test
+    void printConfigBuildsClientBlock() {
+        String json = StdioLauncher.printConfig("C:\\Java\\bin\\java.exe", "C:\\Cameo\\cameo-mcp-stdio.jar",
+                java.util.Arrays.asList("--port", "18741"), "secret");
+        Map<String, Object> cameo = JsonPath.map(Json.parseObject(json), "mcpServers", "cameo");
+        assertEquals("C:\\Java\\bin\\java.exe", cameo.get("command"));
+        assertEquals(java.util.Arrays.asList("-jar", "C:\\Cameo\\cameo-mcp-stdio.jar", "--port", "18741"), cameo.get("args"));
+        assertEquals("secret", JsonPath.str(cameo, "env", "CAMEO_MCP_TOKEN"));
+        Map<String, Object> plain = JsonPath.map(Json.parseObject(
+                StdioLauncher.printConfig("/usr/bin/java", "/x.jar", Collections.emptyList(), null)), "mcpServers", "cameo");
+        assertNull(plain.get("env"));
+    }
 }

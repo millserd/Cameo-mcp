@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `java -jar cameo-mcp-stdio.jar --print-config` prints a ready-to-paste `mcpServers` block for
+  this machine, with the running Java and the jar's own path filled in. Docs cover agents in
+  sandboxes, VMs and WSL that cannot reach the host's `127.0.0.1`.
 - Docs: an architecture graphic (`docs/how-it-works.svg`) in the README, and an agent skill
   (`skills/cameo-mcp/SKILL.md`, also in the release zip) that tells any AI agent to ask for the
   server address and port, then connect to any host and port and use the tools.

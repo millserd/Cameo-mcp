@@ -64,6 +64,7 @@ If it fails:
 |---|---|
 | Connection refused / timeout | Cameo is not running, the server is stopped, or the port is different. Check **MCP > MCP Server Status** in Cameo (Start Server, Test connection). |
 | Works on the Cameo PC but not from another machine | The server binds to `127.0.0.1` by default. In **MCP > MCP Server Status > Settings** set Bind address to `0.0.0.0` (or the PC's address) **and** set a token, then restart the server. Or use an SSH tunnel: `ssh -L 18740:127.0.0.1:18740 user@cameo-pc`, then connect to `127.0.0.1:18740`. Firewalls must allow the port. |
+| Connection refused from your shell, but Cameo shows the server running | Your shell probably runs in a sandbox, VM, container or WSL on the Cameo PC, where `127.0.0.1` is the sandbox itself, not Windows. Best fix: have the user register the stdio launcher (option B) in the MCP client's own config on the Cameo PC, so the client starts it on Windows with Cameo's `java.exe`. From WSL2 alone: turn on mirrored networking (`networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`), or run the launcher through Windows Java (`/mnt/c/.../jre/bin/java.exe -jar 'C:\...\cameo-mcp-stdio.jar'`). Do not ask the user to bind to `0.0.0.0` just for this. |
 | `401` from `/mcp` | Missing or wrong token. Ask the user for the token shown in the status window. |
 | `403 Origin not allowed` | You sent a browser `Origin` header from a non-local page. Send requests without an `Origin` header. |
 | `cameo.project` is `null` | Ask the user to open or create a project in Cameo. |
@@ -93,14 +94,18 @@ new server. The tools then appear with names like `cameo_status`.
 
 ### B. Your client only starts local stdio servers
 
-Run the bundled launcher with Java (Cameo's own `jre/bin/java` works). The jar is in the plugin
+Run the bundled launcher with Java 11 or newer: Cameo's own `jre/bin/java` if the install has one, otherwise the Java named by `JAVA_HOME` in `<Cameo install>/bin/<product>.properties` (no-install builds have no `jre` folder). The jar is in the plugin
 folder: `<Cameo install>/plugins/com.cameomcp.plugin/cameo-mcp-stdio.jar`.
+
+Quickest: ask the user to run `<java> -jar <plugin folder>/cameo-mcp-stdio.jar --print-config`
+(plus `--host`/`--port`/`--token` if not default) on the Cameo PC and paste the printed block into
+the client's config. It fills in that machine's Java and jar paths. By hand it looks like this:
 
 ```json
 {
   "mcpServers": {
     "cameo": {
-      "command": "<Cameo install>/jre/bin/java",
+      "command": "<Java home>/bin/java",
       "args": ["-jar", "<Cameo install>/plugins/com.cameomcp.plugin/cameo-mcp-stdio.jar",
                "--host", "<host>", "--port", "<port>"],
       "env": { "CAMEO_MCP_TOKEN": "<token>" }

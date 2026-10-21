@@ -82,7 +82,10 @@ token and paths filled in, ready to copy.
 ```
 
 **stdio-only clients** (desktop chat apps and other clients without HTTP support): run the bundled launcher with Cameo's Java.
-The jar is in the plugin folder.
+The jar is in the plugin folder. Easiest: run it once with the Java you want the client to use,
+`"<java>" -jar "<plugin folder>\cameo-mcp-stdio.jar" --print-config`, and paste the block it prints
+(add `--port`/`--host`/`--token` to include them). Or write it by hand. Installs without a `jre` folder (no-install builds) name their Java as
+`JAVA_HOME` in `bin\<product>.properties`; use that `bin\java.exe` as `command`.
 
 ```json
 {
@@ -98,6 +101,13 @@ The jar is in the plugin folder.
 The launcher answers `tools/list` even while Cameo is closed, returns a clear "start Cameo" error
 for tool calls until it is up, and reconnects on its own when Cameo starts or restarts.
 `java -jar cameo-mcp-stdio.jar --diagnose` checks the connection from a terminal.
+
+**Agents whose shell runs in a sandbox, VM, container or WSL** get "connection refused" at
+`127.0.0.1:18740` even when Cameo shows the server running, because their `127.0.0.1` is not the
+Windows host. Register the launcher above in the MCP client's own config instead, so the client
+starts it on Windows. From WSL2 you can also turn on mirrored networking (`networkingMode=mirrored`
+under `[wsl2]` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`) or start the launcher with
+Windows `java.exe` from the WSL shell.
 
 ## Agent skill
 
