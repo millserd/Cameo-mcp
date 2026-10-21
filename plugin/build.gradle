@@ -72,6 +72,8 @@ tasks.register('assemblePlugin', Copy) {
     from(rootProject.file('docs/AGENT-GUIDE.md'))
     // The agent skill, so agents on the Cameo machine find it at plugins/<id>/skills/cameo-mcp/SKILL.md.
     into('skills') { from(rootProject.file('skills')) }
+    // SKILL.md shows this graphic via ../../docs/how-it-works.svg, so keep that path working.
+    into('docs') { from(rootProject.file('docs/how-it-works.svg')) }
     doFirst { delete out }
 }
 
